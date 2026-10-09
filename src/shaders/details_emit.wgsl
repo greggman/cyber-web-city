@@ -502,7 +502,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
           // Mechanical floor: a louvre band over the double-height floor and,
           // on the flight corridors, a maintenance catwalk on the ledge.
           if (style == ST_GLASS && y + 2.0 * fh < s.pos.y + s.size.y) {
-            emit(T_LOUVRE, spot(s, fc, 0.0, y + 0.6), vec3f(w, 2.0 * fh - 1.2, 1.0), 0.5, rgba(darkMetal * 1.8), 0u, 0u, 1.0, false);
+            emit(T_LOUVRE, spot(s, fc, 0.0, y + 0.6), vec3f(w, 2.0 * fh - 1.2, 1.0), 0.5, rgba(darkMetal * 1.1), 0u, 0u, 1.0, false);
             if ((s.flags & 128u) != 0u) {
               emit(T_CATWALK, spot(s, fc, 0.0, y + 0.3), vec3f(w, 1.0, 1.0), 0.5, rgba(darkMetal * 2.2), 0u, 0u, 1.0, false);
             }

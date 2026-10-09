@@ -15,11 +15,11 @@
 // warm brown, Slum green, Market magenta, Corporate clean amber.
 fn district_tint(d: u32) -> vec3f {
   switch d {
-    case 0u: { return vec3f(0.82, 0.92, 1.18); }
-    case 1u: { return vec3f(1.15, 0.96, 0.8); }
-    case 2u: { return vec3f(0.86, 1.12, 0.9); }
-    case 3u: { return vec3f(1.16, 0.84, 1.14); }
-    case 4u: { return vec3f(1.18, 1.0, 0.72); }
+    case 0u: { return vec3f(0.65, 0.85, 1.35); }
+    case 1u: { return vec3f(1.3, 0.95, 0.65); }
+    case 2u: { return vec3f(0.75, 1.25, 0.8); }
+    case 3u: { return vec3f(1.3, 0.7, 1.25); }
+    case 4u: { return vec3f(1.35, 1.0, 0.55); }
     default: { return vec3f(1.0); }
   }
 }
@@ -84,7 +84,10 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   var fog = fog_amount(frame.camPos, world);
   if (frame.debugView != 0u) { fog = 0.0; }
   // The haze picks up the district's light (fades out over open sky).
-  let fogged = mix(c, fog_color(dir, world.y) * haze_tint(world.xz), fog);
+  // Local haze only: far away the patches of superblocks would read as
+  // blocks, so the tint fades out with distance.
+  let tintK = 0.75 * (1.0 - smoothstep(500.0, 2200.0, distance(world, frame.camPos)));
+  let fogged = mix(c, fog_color(dir, world.y) * mix(vec3f(1.0), haze_tint(world.xz), tintK), fog);
   let lin = linear_depth(depth, frame.near);
   return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin), 1.0);
 }

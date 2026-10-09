@@ -262,14 +262,15 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   if (bx.x < 0.0 || cls == BAY_S || cls == BAY_C) { win = 0.0; }
   if (cls == BAY_C) {
     // Stair core: a glass-block slot, cool-lit, with landings half a floor off.
-    let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * (1.0 - 0.5 * aa_box(fract(cell.y + 0.5), 0.0, 0.06, dpx.y));
+    // Dark slab line at every floor so it reads as glass block, not a tube.
+    let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * (1.0 - 0.85 * aa_box(fract(cell.y), 0.0, 0.1, dpx.y));
     let blocks = mix(1.0, 0.6, step(0.85, fract(c.facade.y * 4.0)) * detail(vec2f(0.25), c.fw));
     // Landings are lit unevenly (dead tubes, timers), dim fluorescent green.
     // Continuous slot; landings vary a little in brightness, never on/off
     // (on/off per floor read as a dashed line).
     let landing = hash3_u(c.seed ^ 0x2545f491u, u_of(bx.x), u_of(cell.y + 0.5));
     let on = 0.7 + 0.3 * u2f(landing);
-    (*sf).emissive += vec3f(0.55, 0.8, 0.65) * 0.12 * slot * blocks * on;
+    (*sf).emissive += vec3f(0.55, 0.8, 0.65) * 0.035 * slot * blocks * on;
   }
   let roomId = floor(id.x / ws.roomCells);
   let floorId = u_of(id.y);
@@ -291,7 +292,7 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
   let lc = light_color(kind, u2f_rot(hRoom, 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f_rot(hRoom, 9u), 2.5));
   // Panes of one room differ a little (blinds angle, lamps, furniture).
-  let pane = 0.7 + 0.6 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), floorId);
+  let pane = 0.5 + 0.8 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), floorId);
   var em = vec3f(0.0);
   var reveal = 0.0;
   // Light spilling out of a lit window onto the wall/sill around it.
@@ -604,7 +605,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).reflectivity = 0.3;
   } else if (style == ST_GLASS) {
     let r = win_rect(s, BAY_W);
-    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 4.0, 9.0, 0.12, 1.5, 0.35, 0.0);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 2.0, 9.0, 0.12, 1.5, 0.35, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let glass = mix(vec3f(0.02, 0.035, 0.05), vec3f(0.03, 0.05, 0.06), hash11(c.seed));
     // Mullions (vertical) and transoms catch neon specular; spandrels are
