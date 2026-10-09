@@ -331,6 +331,41 @@ function nacelle(name: string, c: Vec3, R: number, L: number): Part[] {
       mirror: true,
       tessellation: REV(8, 36),
     },
+    ...[0.3, 0.56].map((a): Part => ({
+      name: `${name}-band`,
+      surface: orient(
+        rev([
+          [0.995, a - 0.008],
+          [1.016, a - 0.005],
+          [1.016, a + 0.005],
+          [0.995, a + 0.008],
+        ]),
+        [1, 0, 0],
+        0.5,
+        0,
+      ),
+      material: 'metal',
+      color: TRIM,
+      mirror: true,
+      tessellation: REV(4, 36),
+    })),
+    {
+      name: `${name}-hub`,
+      surface: orient(
+        rev([
+          [0, -0.02],
+          [0.1, -0.01],
+          [0.2, 0.04],
+          [0.22, 0.07],
+        ]),
+        [0, 0, -1],
+        0.2,
+        0,
+      ),
+      material: 'chrome',
+      mirror: true,
+      tessellation: REV(6, 24),
+    },
     {
       name: `${name}-cone`,
       surface: cone,
@@ -549,16 +584,22 @@ function interior(parts: Part[]) {
   parts.push({
     name: 'parcel-shelf',
     surface: orient(shelf, [0, 1, 0]),
-    material: 'carbon',
+    material: 'plastic',
+    color: [0.03, 0.03, 0.033],
     mirror: true,
     tessellation: {segmentsU: 2, segmentsV: 12},
   });
   parts.push({
     name: 'shelf-light',
-    surface: superBox([0, shelfY + 0.004, bz + 0.03], [0.6, 0.006, 0.012], 0.3, {
-      nu: 7,
-      nv: 9,
-    }),
+    surface: superBox(
+      [0, shelfY + 0.004, bz + 0.03],
+      [0.6, 0.006, 0.012],
+      0.3,
+      {
+        nu: 7,
+        nv: 9,
+      },
+    ),
     material: 'emissive',
     emissive: [0.3, 2.5, 3],
     tessellation: {segmentsU: 6, segmentsV: 8},
@@ -669,21 +710,37 @@ function interior(parts: Part[]) {
     material: 'emissive',
     emissive: [0.3, 1.6, 2.4],
   });
-  db('dash-vent', [0.66, 0.88, dashFaceZ + 0.002], [0.1, 0.028, 0.008], {
-    material: 'metal',
-    color: [0.02, 0.02, 0.022],
-  }, true);
+  db(
+    'dash-vent',
+    [0.66, 0.88, dashFaceZ + 0.002],
+    [0.1, 0.028, 0.008],
+    {
+      material: 'metal',
+      color: [0.02, 0.02, 0.022],
+    },
+    true,
+  );
   for (let i = 0; i < 5; i++) {
-    db('switch', [0.12 + i * 0.05, 0.86, dashFaceZ + 0.006], [0.012, 0.008, 0.006], {
-      material: 'emissive',
-      emissive: i % 2 ? [3, 1.2, 0.2] : [0.3, 2, 2.5],
-    });
+    db(
+      'switch',
+      [0.12 + i * 0.05, 0.86, dashFaceZ + 0.006],
+      [0.012, 0.008, 0.006],
+      {
+        material: 'emissive',
+        emissive: i % 2 ? [3, 1.2, 0.2] : [0.3, 2, 2.5],
+      },
+    );
   }
   for (let i = 0; i < 3; i++) {
-    db('console-button', [-0.05 + i * 0.05, 0.805, -0.35], [0.014, 0.006, 0.014], {
-      material: 'emissive',
-      emissive: i === 1 ? [3, 0.4, 0.2] : [0.4, 2, 2.5],
-    });
+    db(
+      'console-button',
+      [-0.05 + i * 0.05, 0.805, -0.35],
+      [0.014, 0.006, 0.014],
+      {
+        material: 'emissive',
+        emissive: i === 1 ? [3, 0.4, 0.2] : [0.4, 2, 2.5],
+      },
+    );
   }
 
   // Center console between the seats.
@@ -1209,18 +1266,29 @@ export function buildSpinner(): Model {
     12,
     true,
   );
-  for (let i = 0; i < 4; i++) {
-    nb(
-      'grille-slat',
-      [0, 0.64 + i * 0.042, zN - 0.012],
-      [0.34, 0.009, 0.014],
-      0.3,
-      {
-        material: 'metal',
-        color: [0.3, 0.31, 0.33],
-      },
-      8,
-    );
+  // Center light array in a dark recessed frame.
+  nb(
+    'array-frame',
+    [0, 0.7, zN - 0.004],
+    [0.34, 0.075, 0.012],
+    0.2,
+    {material: 'metal', color: [0.02, 0.02, 0.022]},
+    12,
+  );
+  for (let r = 0; r < 2; r++) {
+    for (let i = 0; i < 6; i++) {
+      nb(
+        'array-lamp',
+        [-0.27 + i * 0.108, 0.665 + r * 0.07, zN - 0.014],
+        [0.04, 0.022, 0.006],
+        0.3,
+        {
+          material: 'emissive',
+          emissive: r === 0 && (i === 0 || i === 5) ? AMBER : scale(HEAD, 0.6),
+        },
+        4,
+      );
+    }
   }
   nb(
     'lamp-bezel',

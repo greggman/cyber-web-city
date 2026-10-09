@@ -7,19 +7,10 @@
 // - pipe(): circular tubes swept along a polyline.
 // - conform(): a patch that hugs another surface at an offset (lights, vents,
 //   panels and decals that sit exactly on a body).
-// - orient(): flips a surface so its front face points a given way.
+// - orient()/outward(): flip a surface so its front face points a given way.
+// - disc(), ruled(), pointCurve(): small building blocks for caps and fans.
 import {NurbsCurve, NurbsSurface, clampedKnots, sweep} from '../nurbs/nurbs';
-import type {Part} from '../nurbs/model';
-import {
-  add,
-  cross,
-  dot,
-  length,
-  normalize,
-  scale,
-  sub,
-  type Vec3,
-} from '../math/vec';
+import {add, cross, dot, normalize, scale, sub, type Vec3} from '../math/vec';
 
 /**
  * Monotone cubic (Fritsch-Carlson) interpolation through [x, y] keys, so
@@ -276,11 +267,3 @@ export function pointCurve(c: NurbsCurve, p: Vec3): NurbsCurve {
     c.knots,
   );
 }
-
-/** Area-weighted check helper: distance from point to a polyline (unused). */
-export function dist(a: Vec3, b: Vec3): number {
-  return length(sub(a, b));
-}
-
-/** Convenience for building parts lists. */
-export type PartList = Part[];
