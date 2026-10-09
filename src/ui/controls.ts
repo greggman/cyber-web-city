@@ -93,6 +93,11 @@ const CAMERA_ICON =
 const GEAR_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8l1.6 2.4 2.8-.7.7 2.8 2.4 1.6-1.2 2.6 1.2 2.6-2.4 1.6-.7 2.8-2.8-.7L12 21.2l-1.6-2.4-2.8.7-.7-2.8-2.4-1.6 1.2-2.6-1.2-2.6 2.4-1.6.7-2.8 2.8.7z"/></svg>';
 
+const SOUND_ON_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18 6.5a7.6 7.6 0 0 1 0 11"/></svg>';
+const SOUND_OFF_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5"/></svg>';
+
 const CSS = `
 .ui-btn {
   position: fixed; top: 10px; width: 38px; height: 38px; padding: 0;
@@ -108,6 +113,10 @@ const CSS = `
 .ui-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 #ui-cam-btn { left: 10px; }
 #ui-gear-btn { right: 10px; }
+#ui-sound-btn { right: 56px; }
+/* Invite a click while silent. */
+#ui-sound-btn.off { color: #f9f; border-color: rgba(255, 120, 255, 0.55); animation: ui-pulse 2.4s ease-in-out infinite; }
+@keyframes ui-pulse { 50% { box-shadow: 0 0 12px rgba(255, 110, 255, 0.6); } }
 .ui-panel {
   position: fixed; top: 54px; z-index: 10; min-width: 210px; max-width: calc(100vw - 20px);
   max-height: calc(100vh - 70px); overflow-y: auto; padding: 8px;
@@ -200,6 +209,17 @@ export class Controls {
     this.toast.setAttribute('role', 'status');
     document.body.appendChild(this.toast);
 
+    // Sound button: shows whether sound is actually playing (it starts off
+    // until a gesture unlocks audio); a click turns it on or off.
+    this.soundBtn = this.button('ui-sound-btn', 'Sound on', SOUND_OFF_ICON);
+    this.soundBtn.removeAttribute('aria-expanded');
+    this.soundBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      this.closeAll();
+      this.onSoundClick();
+    });
+    this.updateSound(false);
+
     // Settings button + panel.
     const gearBtn = this.button('ui-gear-btn', 'Settings', GEAR_ICON);
     const gearPanel = this.panel('ui-gear-panel', 'Settings');
@@ -229,6 +249,9 @@ export class Controls {
 
     this.panels = [[gearBtn, gearPanel]];
     for (const [btn, panel] of this.panels) {
+      // Not 'elsewhere' for the close-on-pointerdown below, which would
+      // close the panel just before this click reopened it.
+      btn.addEventListener('pointerdown', e => e.stopPropagation());
       btn.addEventListener('click', e => {
         e.stopPropagation();
         this.toggleOpen(panel, Boolean(panel.hidden));
@@ -362,6 +385,23 @@ export class Controls {
     }
   }
 
+  /** Called when the sound button is clicked (main.ts toggles audio). */
+  onSoundClick: () => void = () => {};
+  private soundBtn: HTMLButtonElement;
+  private soundShown: boolean | null = null;
+
+  /** Shows the sound button as on (playing) or off. Cheap to call often. */
+  updateSound(playing: boolean) {
+    if (playing === this.soundShown) return;
+    this.soundShown = playing;
+    this.soundBtn.innerHTML = playing ? SOUND_ON_ICON : SOUND_OFF_ICON;
+    this.soundBtn.classList.toggle('off', !playing);
+    const label = playing ? 'Sound off' : 'Sound on';
+    this.soundBtn.title = label;
+    this.soundBtn.setAttribute('aria-label', label);
+    this.soundBtn.setAttribute('aria-pressed', String(playing));
+  }
+
   /** Syncs the controls with the state (call after keyboard changes). */
   refresh() {
     for (const [k, input] of this.inputs) {
@@ -377,6 +417,7 @@ export class Controls {
 
   setVisible(v: boolean) {
     this.camBtn.style.display = v ? '' : 'none';
+    this.soundBtn.style.display = v ? '' : 'none';
     for (const [b, p] of this.panels) {
       b.style.display = v ? '' : 'none';
       if (!v) p.hidden = true;

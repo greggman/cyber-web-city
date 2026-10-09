@@ -134,4 +134,41 @@ await withPage('index.html?t=40&mute=1', async page => {
   const s = await page.evaluate(() => window.__stats.startupMs);
   console.log(`  startup ${Math.round(s.total)} ms (city arrived ${Math.round(s.cityArrived)}, shaders static ${Math.round(s.static)})`);
 });
+// Sound button: starts showing off; a click starts the sound, another
+// turns it off.
+await withPage('index.html?t=40', async page => {
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => window.__debug?.audioRunning, {timeout: 60000});
+  await sleep(500);
+  const state = () =>
+    page.evaluate(() => ({
+      off: document.getElementById('ui-sound-btn')?.classList.contains('off'),
+      shown: (document.getElementById('ui-sound-btn')?.getBoundingClientRect().width ?? 0) > 0,
+      running: window.__debug.audioRunning(),
+    }));
+  const s0 = await state();
+  check(s0.shown && s0.off && !s0.running, `sound button visible and off at start (${JSON.stringify(s0)})`);
+  await page.screenshot({path: 'out/ui/sound-off.png'});
+  await page.click('#ui-sound-btn');
+  await sleep(400);
+  const s1 = await state();
+  check(!s1.off && s1.running, `one click starts the sound (${JSON.stringify(s1)})`);
+  await page.screenshot({path: 'out/ui/sound-on.png'});
+  await page.click('#ui-sound-btn');
+  await sleep(400);
+  const s2 = await state();
+  check(s2.off, `second click turns it off (${JSON.stringify(s2)})`);
+});
+// The settings button toggles: a second click closes the panel.
+await withPage('index.html?t=40&mute=1', async page => {
+  const open = () => page.evaluate(() => !document.getElementById('ui-gear-panel').hidden);
+  await page.click('#ui-gear-btn');
+  await sleep(200);
+  const a = await open();
+  await page.click('#ui-gear-btn');
+  await sleep(200);
+  const b = await open();
+  check(a && !b, `settings button opens then closes the panel (${a} -> ${b})`);
+});
 process.exit(failed ? 1 : 0);

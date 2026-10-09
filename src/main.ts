@@ -322,7 +322,9 @@ async function main() {
   // them, in the capture phase (UI buttons stop propagation), until the
   // context is actually running.
   const gestures = ['pointerdown', 'touchend', 'click', 'keydown'];
-  const startAudio = () => {
+  const startAudio = (e?: Event) => {
+    // The sound button decides for itself (main sets onSoundClick).
+    if ((e?.target as Element | null)?.closest?.('#ui-sound-btn')) return;
     if (!ui.sound) return;
     audio.start();
     if (audio.running) {
@@ -396,6 +398,12 @@ async function main() {
     ] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
+  controls.onSoundClick = () => {
+    // Silent (not yet unlocked, or muted): turn it on; playing: off.
+    ui.sound = !(ui.sound && audio.running);
+    apply('sound');
+    controls.refresh();
+  };
   (window as unknown as {__ui: UiState}).__ui = ui; // for test/ui.mjs
   // Screenshot/test runs (paused=1, nohelp=1 or ui=0) hide the overlay UI.
   if (ui.paused || params.get('nohelp') === '1' || params.get('ui') === '0') {
@@ -658,6 +666,7 @@ async function main() {
         camera.fovY,
       ]);
     }
+    controls.updateSound(ui.sound && audio.running);
     if (ui.hud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
