@@ -1,5 +1,6 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
 import {Rng} from '../math/random';
+import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
   AVENUE_W,
@@ -380,6 +381,77 @@ export function generateCity(seed: number): CityData {
             z1: z + w / 2,
             y0: y,
             y1: y + h,
+          });
+        }
+      }
+    }
+  }
+
+  // Rooftop clutter: AC units, water tanks, antennas, billboard frames.
+  {
+    const rng = new Rng(seed, 31337);
+    const ctx: BuildCtx = {
+      segs: segments,
+      rng,
+      district: 0,
+      slots,
+      roofs,
+      avenueSides: [false, false, false, false],
+    };
+    for (const [x, y, z, size] of roofs) {
+      if (size < 8) continue;
+      const n = rng.int(2, Math.min(9, 2 + Math.floor(size / 10)));
+      for (let k = 0; k < n; k++) {
+        const px = x + rng.range(-0.35, 0.35) * size;
+        const pz = z + rng.range(-0.35, 0.35) * size;
+        const kind = rng.weighted([4, 2, 2, 0.6]);
+        if (kind === 0) {
+          seg(ctx, {
+            x: px,
+            z: pz,
+            y,
+            w: rng.range(2, 6),
+            d: rng.range(2, 6),
+            h: rng.range(1.5, 4),
+            style: Style.MetalPanel,
+            flags: SegFlags.NoWindows,
+          });
+        } else if (kind === 1) {
+          const r = rng.range(2.5, 5);
+          seg(ctx, {
+            x: px,
+            z: pz,
+            y,
+            w: r,
+            d: r,
+            h: rng.range(3, 7),
+            shape: Shape.Cylinder,
+            style: Style.MetalPanel,
+            flags: SegFlags.NoWindows,
+          });
+        } else if (kind === 2) {
+          seg(ctx, {
+            x: px,
+            z: pz,
+            y,
+            w: 0.6,
+            d: 0.6,
+            h: rng.range(6, 25),
+            style: Style.Structure,
+            flags: SegFlags.RoofBeacon,
+          });
+        } else {
+          // Rooftop billboard frame (lit).
+          seg(ctx, {
+            x: px,
+            z: pz,
+            y: y + 4,
+            w: rng.range(10, 20),
+            d: 1,
+            h: rng.range(5, 9),
+            rotY: rng.int(0, 2) * (Math.PI / 2),
+            style: Style.LedFacade,
+            colorB: neon(rng),
           });
         }
       }

@@ -45,8 +45,10 @@ fn fog_amount(camPos: vec3f, worldPos: vec3f) -> f32 {
 }
 
 fn fog_color(dir: vec3f, worldY: f32) -> vec3f {
-  let low = frame.fogColor * 1.3;
-  let high = frame.fogColor * 0.6;
-  let c = mix(low, high, smoothstep(-0.3, 0.5, normalize(dir).y));
+  // Brightest toward the horizon smog band, darker looking down into the
+  // canyons or up at the sky.
+  let y = normalize(dir).y;
+  let horizon = exp(-abs(y) * 5.0);
+  let c = frame.fogColor * (0.45 + 0.9 * horizon) * mix(1.0, 0.7, saturate(-y));
   return c * frame.cityGlow;
 }

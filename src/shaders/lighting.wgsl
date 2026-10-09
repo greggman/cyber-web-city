@@ -18,6 +18,15 @@ fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
   return mix(ground * depthBoost, sky, n.y * 0.5 + 0.5);
 }
 
+// What glossy surfaces reflect before SSR: a dim city below and a faintly
+// glowing smog layer at the horizon.
+fn reflection_env(r: vec3f) -> vec3f {
+  let horizon = exp(-abs(r.y) * 6.0);
+  let below = vec3f(0.025, 0.014, 0.012) * (1.0 - smoothstep(-0.2, 0.0, r.y));
+  let above = vec3f(0.012, 0.010, 0.022) * smoothstep(0.0, 0.3, r.y);
+  return (below + above + vec3f(0.09, 0.04, 0.06) * horizon) * frame.cityGlow;
+}
+
 fn ggx_d(nh: f32, a: f32) -> f32 {
   let a2 = a * a;
   let d = nh * nh * (a2 - 1.0) + 1.0;
@@ -67,7 +76,22 @@ fn shade_surface(sf: Surface, world: vec3f) -> vec3f {
   var c = diffuse * ambient_light(sf.normal, world.y);
   // Cheap ambient specular so glass and wet surfaces aren't flat.
   let fres = pow(1.0 - saturate(dot(sf.normal, V)), 5.0);
-  c += (0.04 + 0.96 * fres) * ambient_light(reflect(-V, sf.normal), world.y) * (1.0 - sf.roughness) * 0.6 * sf.reflectivity;
-  c += light_clustered(world, sf.normal, V, sf.albedo, sf.roughness, sf.metallic);
-  return c + sf.emissive;
+  c += (0.04 + 0.96 * fres) * reflection_env(reflect(-V, sf.normal)) * (1.0 - sf.roughness * 0.7) * sf.reflectivity;
+  let lit = light_clustered(world, sf.normal, V, sf.albedo, sf.roughness, sf.metallic);
+  if (frame.debugView != 0u) {
+    switch frame.debugView {
+      case 1u: { return sf.albedo; }
+      case 2u: { return sf.normal * 0.5 + 0.5; }
+      case 3u: { return sf.emissive; }
+      case 4u: { return lit; }
+      case 5u: { return c; }
+      case 6u: {
+        let viewZ = -(frame.view * vec4f(world, 1.0)).z;
+        let n = f32(clusterCounts[cluster_index(g_fragCoord.xy, viewZ, frame.invResolution)]);
+        return mix(vec3f(0.0, 0.0, 0.3), vec3f(1.0, 0.2, 0.0), n / 32.0) * step(0.5, n) + vec3f(0.02);
+      }
+      default: {}
+    }
+  }
+  return c + lit + sf.emissive;
 }

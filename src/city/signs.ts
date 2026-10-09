@@ -134,7 +134,7 @@ export function generateSigns(
       };
       signs.push(sign);
       const area = Math.sqrt(w * h);
-      const intensity = (lightbox ? 7 : 4) * Math.min(3, area / 6);
+      const intensity = (lightbox ? 3 : 2) * Math.min(2.5, area / 6);
       const lp: [number, number, number] = [
         slot.x + right[0] * along + normal[0] * (out + 3 + w * 0.2),
         yc,
@@ -142,7 +142,7 @@ export function generateSigns(
       ];
       lights.push({
         pos: lp,
-        radius: 16 + area * 2.2,
+        radius: 14 + area * 1.6,
         color: [col[0] * intensity, col[1] * intensity, col[2] * intensity],
       });
     }

@@ -142,7 +142,7 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
   let lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
-  let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.3 + 1.2 * pow(u2f(hRoom >> 9u), 2.0));
+  let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.06 + 1.6 * pow(u2f(hRoom >> 9u), 4.0));
   var em = vec3f(0.0);
   if (det > 0.0 && win > 0.0) {
     let fr = vec2f((fract(id.x / ws.roomCells) + f.x / ws.roomCells), (f.y - ws.winY0) / (ws.winY1 - ws.winY0));
@@ -167,8 +167,10 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
     }
   }
   // Average emission for distant windows.
-  // Zones keep their identity at a distance so far facades stay patchy.
-  let avg = ws.litFrac * (0.4 + 1.2 * zone) * 0.6 * tint * ws.brightness * 0.45 * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  // Smooth per-building average for distant facades (no blocky zones),
+  // with a faint per-floor variation that survives a little longer.
+  let floorVar = 0.75 + 0.5 * hash21(c.seed ^ 0x2545f491u, floorId);
+  let avg = ws.litFrac * 0.11 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
   (*sf).emissive += mix(avg, em * win, det);
   return win * det + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
 }
@@ -192,11 +194,10 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
     v *= step(0.25, fract(p.y / 6.0));
     col = select(colA, colB, (u32(bar) % 3u) == 0u);
   } else if (mode == 2u) {
-    // Ripples from a moving center.
-    let ctr = vec2f(sin(t * 0.2) * 40.0, c.facade.y - fract(t * 0.05) * 200.0);
-    let d = length(p - vec2f(ctr.x, p.y + (p.y - ctr.y) * 0.0));
-    v = 0.5 + 0.5 * sin(d * 0.15 - t * 3.0);
-    col = mix(colA, colB, 0.5 + 0.5 * sin(p.y * 0.02 - t));
+    // Scanning horizontal bands with a bright leading edge.
+    let band = fract(p.y / 40.0 - t * 0.35);
+    v = pow(band, 4.0) + 0.15 * step(0.5, fract(p.x / 2.4 + p.y / 2.4));
+    col = mix(colA, colB, step(0.5, fract(p.y / 80.0 - t * 0.175)));
   } else if (mode == 3u) {
     // Giant blocky glyphs (like characters in a sign).
     let g = floor(p / vec2f(18.0, 18.0));
@@ -214,9 +215,12 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
     v = pow(y, 6.0);
     col = colB;
   } else {
-    // Slow gradient sweep.
-    v = 0.6 + 0.4 * sin(p.x * 0.02 + p.y * 0.01 + t * 0.7);
-    col = mix(colA, colB, 0.5 + 0.5 * sin(p.x * 0.01 - t * 0.4));
+    // Twinkling pixel clusters (random LED blocks switching on and off).
+    let blk = floor(p / vec2f(3.0, 3.0));
+    let tick = floor(t * 2.0 + hash21(u32(blk.x * 7.0 + 3.0), u32(blk.y)) * 10.0);
+    let on = step(0.72, u2f(hash3_u(c.seed, u_of(blk.x * 31.0 + blk.y), u_of(tick))));
+    v = on * (0.5 + 0.5 * hash21(u_of(blk.x), u_of(blk.y)));
+    col = mix(colA, colB, hash21(u_of(blk.y), 9u));
   }
   // LED pixel grid visible up close.
   let det = detail(vec2f(pix, pix), c.fw);
@@ -238,8 +242,14 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   let style = s.style;
   var ws: WinStyle;
   let g = grime(c);
-  if (style == ST_GLASS) {
-    ws = WinStyle(1.6, s.floorH, 0.06, 0.94, 0.14, 0.98, 4.0, 9.0, 0.32, 1.6, 0.35, 0.0);
+  if ((s.flags & F_NOWIN) != 0u) {
+    let panel = fract(c.facade / vec2f(1.2, 1.0));
+    (*sf).albedo = vec3f(0.09, 0.09, 0.1) * (0.8 + 0.3 * step(0.1, panel.x)) * g;
+    (*sf).metallic = 0.6;
+    (*sf).roughness = 0.5;
+    (*sf).reflectivity = 0.3;
+  } else if (style == ST_GLASS) {
+    ws = WinStyle(1.6, s.floorH, 0.06, 0.94, 0.14, 0.98, 4.0, 9.0, 0.12, 2.4, 0.35, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let glass = mix(vec3f(0.02, 0.035, 0.05), vec3f(0.03, 0.05, 0.06), hash11(c.seed));
     (*sf).albedo = mix(vec3f(0.05, 0.055, 0.06) * g, glass, w);
@@ -247,7 +257,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).metallic = mix(0.8, 0.0, w);
     (*sf).reflectivity = mix(0.4, 0.9, w);
   } else if (style == ST_RESIDENTIAL) {
-    ws = WinStyle(3.4, s.floorH, 0.18, 0.82, 0.25, 0.85, 1.0, 5.0, 0.3, 1.25, 0.2, 0.45);
+    ws = WinStyle(3.4, s.floorH, 0.18, 0.82, 0.25, 0.85, 1.0, 5.0, 0.22, 1.6, 0.2, 0.45);
     let w = window_facade(c, ws, style, tint, sf);
     let concrete = mix(vec3f(0.16, 0.15, 0.14), vec3f(0.2, 0.17, 0.14), hash11(c.seed + 3u)) * g;
     // Balcony ledges.
@@ -257,7 +267,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).roughness = mix(0.8, 0.1, w);
     (*sf).reflectivity = mix(0.15, 0.6, w);
   } else if (style == ST_METAL) {
-    ws = WinStyle(3.0, s.floorH, 0.42, 0.58, 0.2, 0.9, 1.0, 4.0, 0.3, 1.3, 0.1, 0.0);
+    ws = WinStyle(3.0, s.floorH, 0.04, 0.96, 0.35, 0.7, 3.0, 6.0, 0.25, 1.2, 0.3, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let panel = fract(c.facade / vec2f(3.0, s.floorH));
     let seam = 1.0 - (1.0 - aa_box(panel.x, 0.0, 0.03, c.fw.x / 3.0)) * (1.0 - aa_box(panel.y, 0.0, 0.03, c.fw.y / s.floorH));
@@ -320,12 +330,23 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
       (*sf).roughness = 0.2;
       (*sf).reflectivity = 0.5;
     } else {
-      ws = WinStyle(2.0, 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.5, 1.4, 0.3, 0.0);
+      ws = WinStyle(2.0, 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
       let w = window_facade(c, ws, ST_GLASS, tint, sf);
       (*sf).albedo = mix(vec3f(0.08) * g, vec3f(0.02, 0.03, 0.04), w);
       (*sf).roughness = mix(0.6, 0.05, w);
       (*sf).reflectivity = mix(0.2, 0.8, w);
     }
+  } else if (style == ST_LED && s.shape == 5u) {
+    // Spheres: latitude rings and meridians like a lit globe.
+    let lat = fract(c.facade.y / 6.0 - c.time * 0.2);
+    let ang = atan2(c.n.z, c.n.x);
+    let mer = abs(fract(ang / TAU * 24.0 + c.time * 0.02) - 0.5);
+    let rings = smoothstep(0.12, 0.0, abs(lat - 0.5));
+    let lines = smoothstep(0.06, 0.0, mer);
+    (*sf).albedo = vec3f(0.03);
+    (*sf).roughness = 0.2;
+    (*sf).reflectivity = 0.5;
+    (*sf).emissive += mix(accent, tint, rings) * (rings * 2.5 + lines * 1.5 + 0.25);
   } else if (style == ST_LED) {
     let led = led_pattern(c, tint, accent);
     (*sf).albedo = vec3f(0.02);

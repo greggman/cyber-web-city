@@ -14,6 +14,11 @@ const SHOTS = [
   ['skyline-020', 'cam=skyline&t=20'],
   ['skyline-200', 'cam=skyline&t=200'],
 ];
+// Extra shots can be appended: SHOTS_EXTRA="name:query,name:query"
+for (const e of (process.env.SHOTS_EXTRA ?? '').split(',').filter(Boolean)) {
+  const [n, q] = e.split(':');
+  SHOTS.push([n, q]);
+}
 fs.mkdirSync(outDir, {recursive: true});
 let failed = false;
 const report = [];

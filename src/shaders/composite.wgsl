@@ -20,6 +20,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
     return vec4f(sky_color(dir, frame.time), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;
-  let fog = fog_amount(frame.camPos, world);
+  var fog = fog_amount(frame.camPos, world);
+  if (frame.debugView != 0u) { fog = 0.0; }
   return vec4f(mix(c, fog_color(dir, world.y), fog), 1.0);
 }
