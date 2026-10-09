@@ -86,7 +86,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   // The haze picks up the district's light (fades out over open sky).
   // Local haze only: far away the patches of superblocks would read as
   // blocks, so the tint fades out with distance.
-  let tintK = mix(0.75, 0.4, smoothstep(500.0, 2200.0, distance(world, frame.camPos)));
+  let tintK = mix(0.75, 0.6, smoothstep(500.0, 2200.0, distance(world, frame.camPos)));
   let fogged = mix(c, fog_color(dir, world.y) * mix(vec3f(1.0), haze_tint(world.xz), tintK), fog);
   let lin = linear_depth(depth, frame.near);
   return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin), 1.0);

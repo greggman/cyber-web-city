@@ -171,8 +171,9 @@ export function addRooftopMassing(segments: SegmentList, seed: number) {
         color: packColor(1, rng.range(0.55, 0.8), rng.range(0.3, 0.5)),
       });
     }
-    // Billboard frame on legs (lit panel on the outward face).
-    if (rng.chance(0.18)) {
+    // Billboard frame on legs (lit panel on the outward face); never on
+    // a helipad roof.
+    if (rng.chance(0.18) && !helipad) {
       const alongX = rng.chance(0.5);
       const w = (alongX ? tx : tz) * rng.range(0.4, 0.7);
       const h = w * rng.range(0.3, 0.45);
