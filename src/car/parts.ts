@@ -267,3 +267,90 @@ export function pointCurve(c: NurbsCurve, p: Vec3): NurbsCurve {
     c.knots,
   );
 }
+
+/**
+ * Like conform(), but the patch is mapped through f(a, b) -> [u, v] so it
+ * can be any shape in the surface's parameter space (wedges, tapers).
+ */
+export function conformMap(
+  s: NurbsSurface,
+  f: (a: number, b: number) => [number, number],
+  off: number,
+  nu = 6,
+  nv = 6,
+  bump?: (a: number, b: number) => number,
+): NurbsSurface {
+  return grid(nu, nv, (a, b) => {
+    const [u, v] = f(a, b);
+    const d = off + (bump ? bump(a, b) : 0);
+    return add(s.evaluate(u, v), scale(s.normal(u, v), d));
+  });
+}
+
+/**
+ * A thin tube lying in a surface (half sunk), following a polyline in the
+ * surface's (u, v) space: reads as a panel-line groove or a seam.
+ */
+export function surfaceLine(
+  s: NurbsSurface,
+  uv: [number, number][],
+  r = 0.0035,
+  sink = 0.0015,
+): NurbsSurface {
+  const pts = uv.map(([u, v]) =>
+    add(s.evaluate(u, v), scale(s.normal(u, v), -sink)),
+  );
+  return pipe(pts, r);
+}
+
+/** Parameter t in [0, 1] where f(c(t)) first crosses zero (by bisection). */
+export function paramWhere(c: NurbsCurve, f: (p: Vec3) => number): number {
+  const n = 48;
+  let prev = f(c.evaluate(0));
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const cur = f(c.evaluate(t));
+    if (Math.sign(cur) !== Math.sign(prev)) {
+      let lo = (i - 1) / n;
+      let hi = t;
+      for (let k = 0; k < 30; k++) {
+        const m = (lo + hi) / 2;
+        if (Math.sign(f(c.evaluate(m))) === Math.sign(prev)) lo = m;
+        else hi = m;
+      }
+      return (lo + hi) / 2;
+    }
+    prev = cur;
+  }
+  return 1;
+}
+
+/**
+ * Closed rounded-rectangle curve (quadratic B-spline) centered at c in the
+ * plane spanned by unit vectors X and Y, half sizes hx, hy. Starts and ends
+ * at the middle of the +Y side.
+ */
+export function roundRect(
+  c: Vec3,
+  X: Vec3,
+  Y: Vec3,
+  hx: number,
+  hy: number,
+): NurbsCurve {
+  const p = (a: number, b: number) =>
+    add(c, add(scale(X, a * hx), scale(Y, b * hy)));
+  return NurbsCurve.fromPoints(
+    [
+      p(0, 1),
+      p(1, 1),
+      p(1, 0),
+      p(1, -1),
+      p(0, -1),
+      p(-1, -1),
+      p(-1, 0),
+      p(-1, 1),
+      p(0, 1),
+    ],
+    2,
+  );
+}
