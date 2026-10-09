@@ -17,6 +17,8 @@ export interface Screen {
   width: number;
   height: number;
   tile: number;
+  /** Segment the screen hangs on (-1 unknown): facade details avoid it. */
+  seg: number;
 }
 
 export interface Hologram {
@@ -101,6 +103,7 @@ export function generateAds(
       width: w,
       height: h,
       tile: rng.int(0, AD_TILES),
+      seg: s.seg,
     });
   }
   const holograms: Hologram[] = [];

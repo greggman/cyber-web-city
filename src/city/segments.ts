@@ -148,7 +148,8 @@ export class SegmentList {
   }
 
   /** Reorders segments by a key (e.g. spatial chunk) for culling locality. */
-  sortBy(key: (i: number) => number) {
+  /** Reorders segments; returns the new index of each old index. */
+  sortBy(key: (i: number) => number): Uint32Array {
     const order = Array.from({length: this.count}, (_, i) => i);
     const keys = order.map(key);
     order.sort((a, b) => keys[a] - keys[b]);
@@ -158,5 +159,8 @@ export class SegmentList {
     }
     this.f32 = n;
     this.u32 = new Uint32Array(n.buffer);
+    const newIndex = new Uint32Array(order.length);
+    for (let i = 0; i < order.length; i++) newIndex[order[i]] = i;
+    return newIndex;
   }
 }

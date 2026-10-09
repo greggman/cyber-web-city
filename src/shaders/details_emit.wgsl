@@ -70,6 +70,26 @@ struct DispatchArgs { x: atomic<u32>, y: u32, z: u32 };
 @group(0) @binding(5) var<storage, read_write> instances: array<Inst>;
 @group(0) @binding(6) var<storage, read> types: array<TypeInfo, 14>;
 @group(0) @binding(7) var hiz: texture_2d<f32>;
+// Ad screens hang just off the wall: details under them would poke through.
+// segRange[segment] = (first, count) into blockers.
+struct Blocker { pos: vec3f, hw: f32, right: vec3f, hh: f32, normal: vec3f, _p: f32 };
+@group(0) @binding(8) var<storage, read> segRange: array<vec2u>;
+@group(0) @binding(9) var<storage, read> blockers: array<Blocker>;
+
+var<private> g_si: u32;
+
+fn blocked(c: vec3f, r: f32) -> bool {
+  let rg = segRange[g_si];
+  for (var k = rg.x; k < rg.x + rg.y; k++) {
+    let b = blockers[k];
+    let d = c - b.pos;
+    let dn = dot(d, b.normal);
+    if (abs(dot(d, b.right)) < b.hw + r && abs(d.y) < b.hh + r && dn > -4.0 - r && dn < 4.0 + r) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Max distance (m) at which each type is generated (scaled by quality).
 fn type_range(t: u32) -> f32 {
@@ -234,6 +254,7 @@ fn emit(t: u32, sp: Spot, scl_in: vec3f, ycen: f32, color: u32, accent: u32, fla
   let d = distance(center, P.camPos) - radius;
   if (d > lim) { return; }
   if (!in_frustum(center, radius)) { return; }
+  if (blocked(center, radius)) { return; }
   // Extrude out of the wall (or grow) as the camera approaches.
   let fade = smoothstep(lim, lim * 0.82, d);
   var scl = scl_in;
@@ -291,6 +312,7 @@ fn grid_for(s: Segment, row: i32) -> Grid {
 @compute @workgroup_size(64)
 fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li: u32) {
   let si = near[wg.x];
+  g_si = si;
   let s = segments[si];
   let fh = s.floorH;
   let j0 = i32(ceil(s.pos.y / fh));

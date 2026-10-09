@@ -760,13 +760,14 @@ export function generateCity(seed: number): CityData {
   }
 
   // Sort segments spatially for culling locality.
-  segments.sortBy(k => {
+  const newIndex = segments.sortBy(k => {
     const s = segments.get(k);
     if (s.style === Style.Ground) return -1;
     const cx = Math.floor((s.x + CITY_HALF_SIZE) / 600);
     const cz = Math.floor((s.z + CITY_HALF_SIZE) / 600);
     return cx * 1000 + cz;
   });
+  for (const sl of slots) if (sl.seg >= 0) sl.seg = newIndex[sl.seg];
   return {seed, segments, slots, roofs, obstacles, landmarks, cables};
 }
 

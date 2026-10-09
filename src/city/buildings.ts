@@ -24,6 +24,8 @@ export interface FacadeSlot {
   district: number;
   /** True when this facade faces an avenue (visible from the sky lanes). */
   avenue: boolean;
+  /** Segment the facade belongs to (-1 if unknown). */
+  seg: number;
 }
 
 export interface BuildCtx {
@@ -132,6 +134,7 @@ function addSlots(
   d: number,
   y0: number,
   y1: number,
+  seg = ctx.segs.count - 1,
 ) {
   const sides: [number, number, number, number, number, boolean][] = [
     [cx - w / 2, cz, -1, 0, d, ctx.avenueSides[0]],
@@ -150,6 +153,7 @@ function addSlots(
       height: y1 - y0,
       district: ctx.district,
       avenue,
+      seg,
     });
   }
 }
@@ -767,7 +771,7 @@ export function pyramid(ctx: BuildCtx, lot: Lot, H: number) {
     style: Style.NeonRing,
     colorB,
   });
-  addSlots(ctx, cx, cz, w0, w0, 10, H * 0.25);
+  addSlots(ctx, cx, cz, w0, w0, 10, H * 0.25, -1);
   ctx.roofs.push([cx, H, cz, w0 * 0.1]);
 }
 

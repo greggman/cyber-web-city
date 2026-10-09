@@ -107,6 +107,7 @@ async function main() {
     isClear: makeClearanceTest(city.segments),
     duration: flight.duration,
   };
+  renderer.details.setBlockers(adData.screens);
   const ads = new AdSystem(
     gpu.device,
     adData.tiles,

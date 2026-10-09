@@ -20,6 +20,16 @@ import {DEPTH_FORMAT, GEOMETRY_TARGETS} from './targets';
 import emitWgsl from '../shaders/details_emit.wgsl';
 import drawWgsl from '../shaders/details.wgsl';
 
+/** A world-space rect hanging on a segment face (see `Screen`). */
+export interface Blocker {
+  pos: Vec3;
+  right: Vec3;
+  normal: Vec3;
+  width: number;
+  height: number;
+  seg: number;
+}
+
 const INST_BYTES = 64;
 const PARAMS_BYTES = 192;
 const MAX_NEAR = 4096;
@@ -52,6 +62,8 @@ export class DetailRenderer {
   private hizSize: [number, number] = [1, 1];
   private segmentBuffer!: GPUBuffer;
   private segCount = 0;
+  private segRange!: GPUBuffer;
+  private blockers!: GPUBuffer;
   enabled = true;
   /** Generation distance multiplier (quality). */
   distScale = 1;
@@ -131,6 +143,8 @@ export class DetailRenderer {
       ['c', 'storage-rw'],
       ['c', 'storage-ro'],
       ['c', 'tex-unfilterable'],
+      ['c', 'storage-ro'],
+      ['c', 'storage-ro'],
     ]);
   }
 
@@ -143,6 +157,7 @@ export class DetailRenderer {
     const d = this.device;
     this.segmentBuffer = segmentBuffer;
     this.segCount = segCount;
+    this.uploadBlockers([]);
     // Merge the meshes.
     const meshes = buildDetailMeshes();
     const verts: number[] = [];
@@ -280,10 +295,49 @@ export class DetailRenderer {
           {binding: 5, resource: {buffer: this.instances}},
           {binding: 6, resource: {buffer: this.typeInfo}},
           {binding: 7, resource: this.hizView},
+          {binding: 8, resource: {buffer: this.segRange}},
+          {binding: 9, resource: {buffer: this.blockers}},
         ],
       });
     this.computeBg = make('details/select', this.dispatch);
     this.emitBg = make('details/emit', this.dummyArgs);
+  }
+
+  /** Rects (ad screens) on segment faces that details must keep clear of. */
+  setBlockers(rects: Blocker[]) {
+    this.uploadBlockers(rects);
+    this.rebuildComputeBg();
+  }
+
+  private uploadBlockers(rects: Blocker[]) {
+    const sorted = rects
+      .filter(r => r.seg >= 0 && r.seg < this.segCount)
+      .sort((a, b) => a.seg - b.seg);
+    const range = new Uint32Array(Math.max(this.segCount, 1) * 2);
+    const data = new Float32Array(Math.max(sorted.length, 1) * 12);
+    sorted.forEach((r, i) => {
+      if (range[r.seg * 2 + 1] === 0) range[r.seg * 2] = i;
+      range[r.seg * 2 + 1]++;
+      data.set(
+        [...r.pos, r.width / 2, ...r.right, r.height / 2, ...r.normal, 0],
+        i * 12,
+      );
+    });
+    this.segRange?.destroy();
+    this.blockers?.destroy();
+    const U = GPUBufferUsage.STORAGE;
+    this.segRange = createBufferWithData(
+      this.device,
+      'details/segRange',
+      range,
+      U,
+    );
+    this.blockers = createBufferWithData(
+      this.device,
+      'details/blockers',
+      data,
+      U,
+    );
   }
 
   setHiz(view: GPUTextureView, mips: number, width: number, height: number) {
