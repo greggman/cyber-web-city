@@ -38,6 +38,9 @@ export const DETAIL_TYPES = [
   {name: 'tank', cap: 12000},
   {name: 'dish', cap: 8000},
   {name: 'ventstack', cap: 20000},
+  {name: 'laundry', cap: 60000},
+  {name: 'louvre', cap: 20000},
+  {name: 'catwalk', cap: 20000},
 ] as const;
 
 export interface DetailMesh {
@@ -460,6 +463,54 @@ function ventStack(): DetailMesh {
   return b.mesh();
 }
 
+function laundry(): DetailMesh {
+  // Three drying poles 1.6 m out from the window head, with clothes
+  // hanging from them (meters; ART_BIBLE.md 5, part 16).
+  const b = new B();
+  const xs = [-0.55, 0, 0.55];
+  for (const x of xs) {
+    b.box(x - 0.015, x + 0.015, -0.015, 0.015, 0, 1.6, Part.Dark);
+  }
+  b.box(-0.6, 0.6, -0.03, 0.03, 0, 0.06, Part.Dark); // bracket
+  // Clothes: a few hanging pieces of different sizes on the poles.
+  const cloth: [number, number, number, number][] = [
+    [-0.55, 0.45, 0.32, 0.55],
+    [-0.55, 1.1, 0.28, 0.4],
+    [0, 0.7, 0.4, 0.7],
+    [0, 1.35, 0.22, 0.35],
+    [0.55, 0.35, 0.3, 0.45],
+    [0.55, 0.95, 0.36, 0.6],
+  ];
+  for (const [x, z, w, h] of cloth) {
+    b.box(x - 0.01, x + 0.01, -h, -0.02, z - w / 2, z + w / 2, Part.Fabric);
+  }
+  return b.mesh();
+}
+
+function louvre(): DetailMesh {
+  // Louvre band (unit width and height, meters deep): 40 tilted blades in
+  // front of a dark recess.
+  const b = new B();
+  b.box(-0.5, 0.5, 0, 1, 0, 0.02, Part.Dark);
+  for (let k = 0; k < 40; k++) {
+    const y = (k + 0.5) / 40;
+    b.box(-0.5, 0.5, y - 0.004, y + 0.004, 0.02, 0.16, Part.Body);
+  }
+  return b.mesh();
+}
+
+function catwalk(): DetailMesh {
+  // Maintenance catwalk (unit width, meters): grating deck, toe board and
+  // two rails 1 m out.
+  const b = new B();
+  b.box(-0.5, 0.5, 0, 0.05, 0, 1.0, Part.Dark);
+  b.box(-0.5, 0.5, 0.05, 0.15, 0.96, 1.0, Part.Body);
+  b.box(-0.5, 0.5, 1.05, 1.1, 0.96, 1.0, Part.Body);
+  b.box(-0.5, 0.5, 0.55, 0.59, 0.97, 1.0, Part.Body);
+  b.box(-0.5, 0.5, -0.3, 0.0, 0.0, 0.08, Part.Dark); // bracket strip
+  return b.mesh();
+}
+
 export function buildDetailMeshes(): DetailMesh[] {
   const ledgeMesh = ledge();
   const finMesh = fin();
@@ -478,5 +529,8 @@ export function buildDetailMeshes(): DetailMesh[] {
     tank(),
     dish(),
     ventStack(),
+    laundry(),
+    louvre(),
+    catwalk(),
   ];
 }

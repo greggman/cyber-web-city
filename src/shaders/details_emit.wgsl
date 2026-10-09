@@ -24,6 +24,9 @@ const T_HVAC = 10u;
 const T_TANK = 11u;
 const T_DISH = 12u;
 const T_VENTSTACK = 13u;
+const T_LAUNDRY = 14u;
+const T_LOUVRE = 15u;
+const T_CATWALK = 16u;
 const NT = 14u;
 
 // Styles (src/city/segments.ts).
@@ -66,9 +69,9 @@ struct DispatchArgs { x: atomic<u32>, y: u32, z: u32 };
 @group(0) @binding(1) var<storage, read> segments: array<Segment>;
 @group(0) @binding(2) var<storage, read_write> near: array<u32>;
 @group(0) @binding(3) var<storage, read_write> dispatch: DispatchArgs;
-@group(0) @binding(4) var<storage, read_write> draws: array<DrawArgs, 14>;
+@group(0) @binding(4) var<storage, read_write> draws: array<DrawArgs, 17>;
 @group(0) @binding(5) var<storage, read_write> instances: array<Inst>;
-@group(0) @binding(6) var<storage, read> types: array<TypeInfo, 14>;
+@group(0) @binding(6) var<storage, read> types: array<TypeInfo, 17>;
 @group(0) @binding(7) var hiz: texture_2d<f32>;
 // Ad screens hang just off the wall: details under them would poke through.
 // segRange[segment] = (first, count) into blockers.
@@ -97,7 +100,7 @@ fn type_range(t: u32) -> f32 {
     case T_STALL: { return 300.0; }
     case T_HVAC, T_TANK: { return 700.0; }
     case T_DISH, T_VENTSTACK: { return 450.0; }
-    case T_LEDGE, T_FIN, T_PIPE: { return 650.0; }
+    case T_LEDGE, T_FIN, T_PIPE, T_LOUVRE, T_CATWALK: { return 650.0; }
     case T_CANOPY, T_BALCONY, T_CAGE, T_AWNING: { return 360.0; }
     default: { return 240.0; }
   }
@@ -288,6 +291,12 @@ fn emit(t: u32, sp: Spot, scl_in: vec3f, ycen: f32, color: u32, accent: u32, fla
 }
 
 fn rgba(c: vec3f) -> u32 { return pack4x8unorm(vec4f(c, 1.0)); }
+
+// Muted, varied clothing colours for laundry.
+fn laundry_color(h: u32) -> u32 {
+  let c = vec3f(f32(h & 255u), f32((h >> 8u) & 255u), f32((h >> 16u) & 255u)) / 255.0;
+  return rgba(mix(c, vec3f(0.6), 0.3));
+}
 
 fn neon_accent(h: u32) -> u32 {
   let k = h % 6u;
@@ -490,6 +499,14 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
           d = 0.9;
           th = 0.55;
           col = darkMetal * 1.6;
+          // Mechanical floor: a louvre band over the double-height floor and,
+          // on the flight corridors, a maintenance catwalk on the ledge.
+          if (style == ST_GLASS && y + 2.0 * fh < s.pos.y + s.size.y) {
+            emit(T_LOUVRE, spot(s, fc, 0.0, y + 0.6), vec3f(w, 2.0 * fh - 1.2, 1.0), 0.5, rgba(darkMetal * 1.8), 0u, 0u, 1.0, false);
+            if ((s.flags & 128u) != 0u) {
+              emit(T_CATWALK, spot(s, fc, 0.0, y + 0.3), vec3f(w, 1.0, 1.0), 0.5, rgba(darkMetal * 2.2), 0u, 0u, 1.0, false);
+            }
+          }
         } else if (style == ST_GLASS || style == ST_METAL || style == ST_PODIUM) {
           col = darkMetal * 1.3;
         }
@@ -641,6 +658,8 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
             }
             if (u2f_rot(hu, 17u) < 0.12) {
               emit(T_CAGE, spot(s, fc, winCx, (winY0 + winY1) * 0.5), vec3f(winW * 1.08, (winY1 - winY0) * 1.06, 1.0), 0.0, rgba(concrete), neon_accent(hu >> 5u), 0u, rank, false);
+            } else if (u2f_rot(hu, 21u) < 0.4) {
+              emit(T_LAUNDRY, spot(s, fc, winCx, winY1 - 0.05), vec3f(1.0), -0.4, rgba(vec3f(0.2)), laundry_color(hu), 0u, rank, true);
             }
           }
         } else if (style == ST_SLUM) {
@@ -650,6 +669,9 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
               emit(T_CAGE, spot(s, fc, winCx, (winY0 + winY1) * 0.5), vec3f(winW * 1.08, (winY1 - winY0) * 1.06, 1.0), 0.0, rgba(concrete), neon_accent(hc >> 5u), 0u, rank, false);
             }
           } else if (ct < 0.6) {
+            if (pu > 0.7 && u2f_rot(hu, 21u) < 0.6) {
+              emit(T_LAUNDRY, spot(s, fc, winCx, winY1 - 0.05), vec3f(1.0), -0.4, rgba(vec3f(0.2)), laundry_color(hu), 0u, rank, true);
+            }
             if (pu < 0.7) {
               emit(T_AWNING, spot(s, fc, winCx, winY1 + 0.12), vec3f(winW + 0.4, 1.0, 1.0), -0.3, rgba(concrete), neon_accent(hc >> 5u), 0u, rank, false);
             }
