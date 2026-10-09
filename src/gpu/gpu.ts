@@ -232,3 +232,17 @@ export function bindGroup(
     entries: resources.map((resource, binding) => ({binding, resource})),
   });
 }
+
+// Resources replaced mid-frame (e.g. on a window resize) may already be
+// referenced by commands recorded earlier in the same frame; destroying
+// them immediately makes the submit invalid. They are destroyed after the
+// frame's submit instead (flushDeferredDestroys, called by the renderer).
+const graveyard: (GPUTexture | GPUBuffer)[] = [];
+
+export function deferDestroy(r: GPUTexture | GPUBuffer | null | undefined) {
+  if (r) graveyard.push(r);
+}
+
+export function flushDeferredDestroys() {
+  for (const r of graveyard.splice(0)) r.destroy();
+}

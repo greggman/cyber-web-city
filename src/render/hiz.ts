@@ -5,6 +5,7 @@ import {
   createComputePipeline,
   createShaderModule,
   createTexture,
+  deferDestroy,
 } from '../gpu/gpu';
 import type {Targets} from './targets';
 import hizWgsl from '../shaders/hiz.wgsl';
@@ -45,7 +46,7 @@ export class HiZ {
   /** Returns true when the pyramid was recreated (consumers must rebind). */
   private rebuild(t: Targets): boolean {
     if (this.version === t.version) return false;
-    this.tex?.destroy();
+    deferDestroy(this.tex);
     const w = Math.max(1, t.width >> 1);
     const h = Math.max(1, t.height >> 1);
     this.mips = Math.floor(Math.log2(Math.max(w, h))) + 1;

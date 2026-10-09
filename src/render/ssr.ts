@@ -1,5 +1,10 @@
 // Screen-space reflections at half resolution, added onto the lit image.
-import {bindGroup, createSampler, createTexture} from '../gpu/gpu';
+import {
+  bindGroup,
+  createSampler,
+  createTexture,
+  deferDestroy,
+} from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import {HDR_FORMAT, type Targets} from './targets';
@@ -62,7 +67,7 @@ export class Ssr {
   }
 
   private rebuild(t: Targets) {
-    this.tex?.destroy();
+    deferDestroy(this.tex);
     this.tex = createTexture(this.device, {
       label: 'ssr/half',
       size: [Math.max(1, t.width >> 1), Math.max(1, t.height >> 1)],

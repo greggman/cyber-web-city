@@ -1,6 +1,11 @@
 // Half-resolution SSAO from the depth prepass (see shaders/ssao.wgsl).
 // Scene shaders that bind `aoLayout` at group 2 multiply ambient light by it.
-import {bindGroup, createSampler, createTexture} from '../gpu/gpu';
+import {
+  bindGroup,
+  createSampler,
+  createTexture,
+  deferDestroy,
+} from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import type {Targets} from './targets';
@@ -91,8 +96,8 @@ export class Ssao {
   }
 
   private rebuild(t: Targets) {
-    this.tex?.destroy();
-    this.raw?.destroy();
+    deferDestroy(this.tex);
+    deferDestroy(this.raw);
     this.raw = createTexture(this.device, {
       label: 'ssao/half/raw',
       size: [Math.max(1, t.width >> 1), Math.max(1, t.height >> 1)],

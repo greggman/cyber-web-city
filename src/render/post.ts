@@ -4,6 +4,7 @@ import {
   createBuffer,
   createSampler,
   createTexture,
+  deferDestroy,
 } from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
@@ -154,8 +155,9 @@ export class Post {
 
   private rebuild(t: Targets) {
     const d = this.device;
-    for (const x of [...this.history, this.bloom, ...this.streak]) x?.destroy();
-    for (const p of this.params) p.destroy();
+    for (const x of [...this.history, this.bloom, ...this.streak])
+      deferDestroy(x);
+    for (const p of this.params) deferDestroy(p);
     this.params = [];
     const w = t.width;
     const h = t.height;

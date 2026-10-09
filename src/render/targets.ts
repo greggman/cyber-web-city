@@ -1,5 +1,5 @@
 // Screen-sized render targets, recreated on resize.
-import {createTexture} from '../gpu/gpu';
+import {createTexture, deferDestroy} from '../gpu/gpu';
 
 export const HDR_FORMAT: GPUTextureFormat = 'rgba16float';
 export const NORMAL_FORMAT: GPUTextureFormat = 'rgba16float';
@@ -47,7 +47,7 @@ export class Targets {
       this.lit,
       this.litCopy,
     ]) {
-      t?.destroy();
+      deferDestroy(t);
     }
     this.width = width;
     this.height = height;

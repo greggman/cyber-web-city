@@ -9,7 +9,7 @@
 //  7. TAA                      jittered history resolve
 //  8. bloom + streaks
 //  9. tonemap + grade          to the swap chain
-import {bindGroup, type Gpu} from '../gpu/gpu';
+import {bindGroup, type Gpu, flushDeferredDestroys} from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import type {Camera} from '../camera/camera';
 import type {SegmentList} from '../city/segments';
@@ -457,6 +457,8 @@ export class Renderer {
     this.timer.endFrame(encoder);
     setActiveTimer(null);
     device.queue.submit([encoder.finish()]);
+    // Textures replaced by a resize this frame can go now.
+    flushDeferredDestroys();
     this.frameIndex++;
   }
 
