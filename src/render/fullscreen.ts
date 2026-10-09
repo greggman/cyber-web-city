@@ -1,3 +1,4 @@
+import {tw} from '../gpu/timer';
 // Helper for fullscreen-triangle passes.
 import {createRenderPipeline, createShaderModule} from '../gpu/gpu';
 import {pipelineLayout} from '../gpu/layout';
@@ -31,6 +32,7 @@ export function runFullscreen(
 ) {
   const pass = encoder.beginRenderPass({
     label,
+    timestampWrites: tw(label),
     colorAttachments: [
       {view: target, loadOp: load, storeOp: 'store', clearValue: [0, 0, 0, 0]},
     ],

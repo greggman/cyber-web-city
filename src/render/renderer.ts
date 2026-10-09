@@ -22,6 +22,9 @@ import {SignRenderer} from './signRenderer';
 import {LightClusters, type LightDesc} from './lightClusters';
 import {Post, taaJitter} from './post';
 import {Ssr} from './ssr';
+import {GpuTimer, setActiveTimer, tw} from '../gpu/timer';
+import {HiZ} from './hiz';
+import {Volumetrics} from './volumetrics';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import compositeWgsl from '../shaders/composite.wgsl';
 import tonemapWgsl from '../shaders/tonemap.wgsl';
@@ -37,6 +40,7 @@ export interface RenderSettings {
   debugView: number;
   quality: number;
   taa: boolean;
+  occlusion: boolean;
 }
 
 export interface SceneData {
@@ -55,6 +59,10 @@ export class Renderer {
   readonly signs: SignRenderer;
   readonly post: Post;
   readonly ssr: Ssr;
+  readonly hiz: HiZ;
+  readonly timer: GpuTimer;
+  readonly volume: Volumetrics;
+  private volSampler!: GPUSampler;
   lights!: LightClusters;
   readonly frameLayout: GPUBindGroupLayout;
   readonly sceneLayout: GPUBindGroupLayout;
@@ -88,6 +96,9 @@ export class Renderer {
     this.signs = new SignRenderer(device);
     this.post = new Post(device);
     this.ssr = new Ssr(device);
+    this.hiz = new HiZ(device);
+    this.timer = new GpuTimer(device, gpu.hasTimestamps);
+    this.volume = new Volumetrics(device);
     this.frameLayout = bgl(device, 'frame/layout', [['vfc', 'uniform']]);
     this.sceneLayout = bgl(device, 'scene/layout', [
       ['vfc', 'uniform'],
@@ -98,6 +109,8 @@ export class Renderer {
     this.compositeLayout = bgl(device, 'composite/layout', [
       ['f', 'tex-float'],
       ['f', 'tex-depth'],
+      ['f', 'tex-float-3d'],
+      ['f', 'sampler'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
       ['f', 'tex-float'],
@@ -143,6 +156,8 @@ export class Renderer {
       this.lights.init(this.frame.buffer),
       this.post.init(this.frameLayout),
       this.ssr.init(this.frameLayout),
+      this.hiz.init(),
+      this.volume.init(this.sceneLayout, 0.18),
     ]);
     this.compositePipeline = composite;
     this.tonemapPipeline = tonemap;
@@ -151,11 +166,19 @@ export class Renderer {
   private rebuildScreenBindGroups() {
     const device = this.gpu.device;
     const v = this.targets.views;
+    this.volSampler ??= device.createSampler({
+      label: 'composite/volumeSampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+      addressModeW: 'clamp-to-edge',
+    });
     this.compositeBindGroup = bindGroup(
       device,
       'composite',
       this.compositeLayout,
-      [v.color, v.depth],
+      [v.color, v.depth, this.volume.view, this.volSampler],
     );
     this.targetsVersion = this.targets.version;
     this.tonemapKey = '';
@@ -197,6 +220,8 @@ export class Renderer {
     });
 
     const encoder = device.createCommandEncoder({label: 'frame'});
+    this.timer.beginFrame();
+    setActiveTimer(this.timer);
     this.city.cull(
       encoder,
       this.frame.viewProjNoJitter,
@@ -209,10 +234,12 @@ export class Renderer {
     for (const hook of this.preLightHooks) hook(encoder);
     this.lights.run(encoder);
     for (const hook of this.computeHooks) hook(encoder);
+    this.volume.run(encoder, this.sceneBindGroup);
 
     const v = this.targets.views;
     const depthPass = encoder.beginRenderPass({
       label: 'depthPrepass',
+      timestampWrites: tw('depthPrepass'),
       colorAttachments: [],
       depthStencilAttachment: {
         view: v.depth,
@@ -223,9 +250,23 @@ export class Renderer {
     });
     this.city.drawDepth(depthPass);
     depthPass.end();
+    if (s.occlusion) {
+      if (this.hiz.build(encoder, this.targets)) {
+        this.city.setHiz(
+          this.hiz.view,
+          this.hiz.mips,
+          this.hiz.width,
+          this.hiz.height,
+        );
+      }
+      this.city.useHiz = true;
+    } else {
+      this.city.useHiz = false;
+    }
 
     const opaque = encoder.beginRenderPass({
       label: 'opaque',
+      timestampWrites: tw('opaque'),
       colorAttachments: [
         {
           view: v.color,
@@ -273,6 +314,7 @@ export class Renderer {
       );
       const tp = encoder.beginRenderPass({
         label: 'transparent',
+        timestampWrites: tw('transparent'),
         colorAttachments: [{view: v.lit, loadOp: 'load', storeOp: 'store'}],
         depthStencilAttachment: {view: v.depth, depthReadOnly: true},
       });
@@ -301,6 +343,9 @@ export class Renderer {
       this.frameBindGroup,
       this.tonemapBindGroup,
     ]);
+    this.city.sampleStats(encoder, this.frameIndex);
+    this.timer.endFrame(encoder);
+    setActiveTimer(null);
     device.queue.submit([encoder.finish()]);
     this.frameIndex++;
   }

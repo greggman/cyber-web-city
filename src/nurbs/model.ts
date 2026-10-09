@@ -18,7 +18,8 @@ export type MaterialName =
   | 'plastic'
   | 'leather' // interior upholstery
   | 'carbon'
-  | 'screen'; // animated display; screenId picks the content
+  | 'screen' // animated display; screenId picks the content
+  | 'glow'; // additive soft light volume (thruster/lift glow cones): uses emissive
 
 export const enum MaterialKind {
   Opaque = 0,
@@ -26,6 +27,7 @@ export const enum MaterialKind {
   Glass = 2,
   Emissive = 3,
   Screen = 4,
+  Glow = 5,
 }
 
 export interface Material {
@@ -127,6 +129,7 @@ const PRESETS: Record<
     roughness: 0.3,
     metallic: 0.2,
   },
+  glow: {kind: MaterialKind.Glow, color: [0, 0, 0], roughness: 1, metallic: 0},
   screen: {
     kind: MaterialKind.Screen,
     color: [0, 0, 0],
@@ -159,6 +162,8 @@ export interface ModelMesh {
   opaqueIndices: Uint32Array;
   /** Glass triangles (drawn in the transparent pass). */
   glassIndices: Uint32Array;
+  /** Additive glow triangles (drawn in the transparent pass). */
+  glowIndices: Uint32Array;
   materials: Float32Array;
   boundsMin: Vec3;
   boundsMax: Vec3;
@@ -170,6 +175,7 @@ export function buildModelMesh(model: Model, lodScale = 1): ModelMesh {
   const verts: number[] = [];
   const opaque: number[] = [];
   const glass: number[] = [];
+  const glow: number[] = [];
   const mats: number[] = [];
   const u32 = new Uint32Array(1);
   const f32 = new Float32Array(u32.buffer);
@@ -229,7 +235,12 @@ export function buildModelMesh(model: Model, lodScale = 1): ModelMesh {
             matBits,
           );
         }
-        const target = m.kind === MaterialKind.Glass ? glass : opaque;
+        const target =
+          m.kind === MaterialKind.Glass
+            ? glass
+            : m.kind === MaterialKind.Glow
+              ? glow
+              : opaque;
         for (let i = 0; i < mesh.indices.length; i += 3) {
           const a = base + mesh.indices[i];
           const b = base + mesh.indices[i + 1];
@@ -246,6 +257,7 @@ export function buildModelMesh(model: Model, lodScale = 1): ModelMesh {
     vertices: new Float32Array(verts),
     opaqueIndices: new Uint32Array(opaque),
     glassIndices: new Uint32Array(glass),
+    glowIndices: new Uint32Array(glow),
     materials: new Float32Array(mats),
     boundsMin: min,
     boundsMax: max,

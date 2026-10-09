@@ -1,4 +1,5 @@
 // GPU flying traffic: cull, light sprites, instanced near meshes, headlights.
+import {tw} from '../gpu/timer';
 import {
   bindGroup,
   createBuffer,
@@ -232,7 +233,10 @@ export class Traffic {
       (staticLights + this.lightBase) * LIGHT_FLOATS * 4,
       this.zeroLights,
     );
-    const pass = encoder.beginComputePass({label: 'traffic/cull'});
+    const pass = encoder.beginComputePass({
+      label: 'traffic/cull',
+      timestampWrites: tw('traffic/cull'),
+    });
     pass.setPipeline(this.cull);
     pass.setBindGroup(0, frameBg);
     pass.setBindGroup(1, this.computeBg);

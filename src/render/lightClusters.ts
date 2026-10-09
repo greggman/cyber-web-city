@@ -3,6 +3,7 @@
 // Static lights are uploaded once; dynamic lights (traffic, the player's car)
 // occupy a reserved range at the end of the same buffer and are written by
 // the CPU or compute passes each frame.
+import {tw} from '../gpu/timer';
 import {
   bindGroup,
   createBuffer,
@@ -162,7 +163,10 @@ export class LightClusters {
     ]);
     new Float32Array(info, 8, 1)[0] = maxDistance;
     this.device.queue.writeBuffer(this.info, 0, info);
-    const pass = encoder.beginComputePass({label: 'lights/cull'});
+    const pass = encoder.beginComputePass({
+      label: 'lights/cull',
+      timestampWrites: tw('lights/cull'),
+    });
     pass.setBindGroup(0, this.bg);
     pass.setPipeline(this.pReset);
     pass.dispatchWorkgroups(1);

@@ -33,7 +33,9 @@ export async function withPage(pagePath, fn, opts = {}) {
             ctx.errors.push(text);
           }
           ctx.logs.push(`[${msg.type()}] ${text}`);
-          if (opts.verbose || msg.type() === 'error' || msg.type() === 'warn') {
+          const n = (ctx.printed = (ctx.printed ?? 0) + 1);
+          if (n === 21) console.log('[harness] (further page messages suppressed)');
+          if (n <= 20 && (opts.verbose || msg.type() === 'error' || msg.type() === 'warn')) {
             console.log(`[page:${msg.type()}] ${text.slice(0, 2000)}`);
           }
         });

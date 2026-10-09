@@ -175,6 +175,37 @@ async function main() {
       },
       multisample: {count: sampleCount},
     });
+  const glowIb = createBufferWithData(
+    device,
+    'preview/glowIndices',
+    mesh.glowIndices.length ? mesh.glowIndices : new Uint32Array(3),
+    U.INDEX,
+  );
+  const glowPipe = await createRenderPipeline(device, {
+    label: 'preview/glow',
+    layout: pl,
+    vertex,
+    fragment: {
+      module,
+      entryPoint: 'fs_glow',
+      targets: [
+        {
+          format: hdr,
+          blend: {
+            color: {srcFactor: 'one', dstFactor: 'one'},
+            alpha: {srcFactor: 'zero', dstFactor: 'one'},
+          },
+        },
+      ],
+    },
+    primitive: {topology: 'triangle-list', cullMode: 'none'},
+    depthStencil: {
+      format: 'depth24plus',
+      depthWriteEnabled: false,
+      depthCompare: 'less',
+    },
+    multisample: {count: sampleCount},
+  });
   const glassBack = await glassFor('front');
   const glassFront = await glassFor('back');
   const bgPipe = await createRenderPipeline(device, {
@@ -359,6 +390,11 @@ async function main() {
     pass.setPipeline(opaque);
     pass.setIndexBuffer(ib, 'uint32');
     pass.drawIndexed(mesh.opaqueIndices.length);
+    if (mesh.glowIndices.length) {
+      pass.setIndexBuffer(glowIb, 'uint32');
+      pass.setPipeline(glowPipe);
+      pass.drawIndexed(mesh.glowIndices.length);
+    }
     if (mesh.glassIndices.length && !noCanopy) {
       pass.setIndexBuffer(gb, 'uint32');
       pass.setPipeline(glassBack);

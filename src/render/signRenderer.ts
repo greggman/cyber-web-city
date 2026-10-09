@@ -1,5 +1,6 @@
 // Draws neon signs as instanced procedural boxes, GPU-culled into an
 // indirect draw.
+import {tw} from '../gpu/timer';
 import {
   bindGroup,
   createBuffer,
@@ -129,7 +130,10 @@ export class SignRenderer {
     q.writeBuffer(this.cullParams, 0, p);
     q.writeBuffer(this.camBuf, 0, new Float32Array([...camPos, 0]));
     q.writeBuffer(this.args, 0, new Uint32Array([36, 0, 0, 0]));
-    const pass = encoder.beginComputePass({label: 'signs/cull'});
+    const pass = encoder.beginComputePass({
+      label: 'signs/cull',
+      timestampWrites: tw('signs/cull'),
+    });
     pass.setPipeline(this.cullPipeline);
     pass.setBindGroup(0, this.cullBg);
     pass.dispatchWorkgroups(Math.ceil(this.count / 64));

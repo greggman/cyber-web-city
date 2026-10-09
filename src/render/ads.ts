@@ -5,6 +5,7 @@
 // of others round-robin, then the atlas gets a mip chain so distant screens
 // don't alias. Screens sample the atlas; a compute pass turns each screen's
 // average color into an area-light proxy in the dynamic light range.
+import {tw} from '../gpu/timer';
 import {
   bindGroup,
   createBuffer,
@@ -380,7 +381,10 @@ export class AdSystem {
   writeLights(encoder: GPUCommandEncoder) {
     const n = Math.min(this.screens.length, this.lightSlots);
     if (n === 0) return;
-    const pass = encoder.beginComputePass({label: 'ads/screenLights'});
+    const pass = encoder.beginComputePass({
+      label: 'ads/screenLights',
+      timestampWrites: tw('ads/screenLights'),
+    });
     pass.setPipeline(this.lightPipe);
     pass.setBindGroup(0, this.lightBg);
     pass.dispatchWorkgroups(Math.ceil(n / 64));

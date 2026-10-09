@@ -6,6 +6,14 @@
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(1) @binding(0) var colorTex: texture_2d<f32>;
 @group(1) @binding(1) var depthTex: texture_depth_2d;
+@group(1) @binding(2) var volumeTex: texture_3d<f32>;
+@group(1) @binding(3) var volSampler: sampler;
+
+// Must match volumetric.wgsl.
+fn volume_light(uv: vec2f, viewZ: f32) -> vec3f {
+  let z = log(max(viewZ, 0.5) / 0.5) / log(1500.0 / 0.5);
+  return textureSampleLevel(volumeTex, volSampler, vec3f(uv, saturate(z)), 0.0).rgb;
+}
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32) -> FsOut { return fullscreen_vertex(vi); }
@@ -37,11 +45,12 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let dir = normalize(world - frame.camPos);
   if (depth <= 0.0) {
     let sky = sky_color(dir, frame.time);
-    return vec4f(sky + rain_sheets(i.uv, 1e5, sky), 1.0);
+    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;
   var fog = fog_amount(frame.camPos, world);
   if (frame.debugView != 0u) { fog = 0.0; }
   let fogged = mix(c, fog_color(dir, world.y), fog);
-  return vec4f(fogged + rain_sheets(i.uv, linear_depth(depth, frame.near), fogged), 1.0);
+  let lin = linear_depth(depth, frame.near);
+  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin), 1.0);
 }

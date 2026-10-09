@@ -1,4 +1,5 @@
 // Rain particles (see src/shaders/rain.wgsl).
+import {tw} from '../gpu/timer';
 import {
   bindGroup,
   createBuffer,
@@ -133,7 +134,10 @@ export class Rain {
 
   compute(encoder: GPUCommandEncoder, sceneBg: GPUBindGroup) {
     if (this.intensity <= 0) return;
-    const pass = encoder.beginComputePass({label: 'rain/update'});
+    const pass = encoder.beginComputePass({
+      label: 'rain/update',
+      timestampWrites: tw('rain/update'),
+    });
     pass.setPipeline(this.update);
     pass.setBindGroup(0, sceneBg);
     pass.setBindGroup(1, this.computeBg);

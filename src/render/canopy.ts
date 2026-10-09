@@ -1,5 +1,6 @@
 // Canopy droplets and condensation (see src/shaders/canopy.wgsl). Produces a
 // 512x512 texture in canopy uv space sampled by the car's glass shader.
+import {tw} from '../gpu/timer';
 import {
   createBuffer,
   createBufferWithData,
@@ -13,7 +14,7 @@ import {Rng} from '../math/random';
 import canopyWgsl from '../shaders/canopy.wgsl';
 
 const SIZE = 512;
-const DROPS = 1100;
+const DROPS = 650;
 
 export class Canopy {
   private params: GPUBuffer;
@@ -218,7 +219,10 @@ export class Canopy {
     const cur = this.flip;
     this.flip = 1 - this.flip;
 
-    const cp = encoder.beginComputePass({label: 'canopy/update'});
+    const cp = encoder.beginComputePass({
+      label: 'canopy/update',
+      timestampWrites: tw('canopy/update'),
+    });
     cp.setPipeline(this.update);
     cp.setBindGroup(0, this.bgs.update);
     cp.dispatchWorkgroups(Math.ceil(DROPS / 64));
