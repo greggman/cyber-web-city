@@ -2,6 +2,7 @@
 // window grids with interior mapping (fake rooms with parallax), blinds,
 // curtains and silhouettes, LED facades, edge strips, roofs and the ground.
 #include "lighting.wgsl"
+#include "warp.wgsl"
 
 struct Shaded { color: vec3f, normal: vec3f, roughness: f32, reflectivity: f32 };
 
@@ -469,7 +470,8 @@ fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
 fn shade_ground(c: Ctx, sf: ptr<function, Surface>) {
   let SUPERP = 300.0;
   let AVE = 64.0;
-  let p = c.world.xz;
+  // Road layout is defined in grid space (see warp.wgsl).
+  let p = unwarp2(c.world.xz);
   let g = p - round(p / SUPERP) * SUPERP; // offset from the nearest avenue centerlines
   let inAveX = abs(g.x) < AVE * 0.5;
   let inAveZ = abs(g.y) < AVE * 0.5;

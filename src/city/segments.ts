@@ -98,6 +98,20 @@ export class SegmentList {
     return this.count++;
   }
 
+  /** Moves/rotates segment i (used to warp the city into world space). */
+  setPose(i: number, x: number, z: number, rotY: number) {
+    const o = i * 16;
+    this.f32[o] = x;
+    this.f32[o + 2] = z;
+    this.f32[o + 3] = rotY;
+  }
+
+  setSize(i: number, sx: number, sz: number) {
+    const o = i * 16;
+    this.f32[o + 4] = sx;
+    this.f32[o + 6] = sz;
+  }
+
   get(i: number): Segment {
     const o = i * 16;
     const f = this.f32;

@@ -5,7 +5,7 @@ import {CITY_RADIUS_SUPERS, CITY_HALF_SIZE, SUPER} from './layout';
 /** Lane altitudes (m). The autopilot keeps to the avenue center (+-8 m). */
 const ALTITUDES = [60, 150, 235, 310, 400];
 /** Lateral offsets from the avenue centerline for each direction. */
-const OFFSETS = [17, 26];
+const OFFSETS = [12, 19];
 
 export interface TrafficData {
   lanes: Float32Array; // 8 floats each: origin.xyz, length, dir.xyz, pad

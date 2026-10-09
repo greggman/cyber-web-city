@@ -17,6 +17,7 @@ import {
   type Vec3,
 } from '../math/vec';
 import {CITY_RADIUS_SUPERS, SUPER} from '../city/layout';
+import {warp, warp3} from '../city/warp';
 import type {Obstacle} from '../city/generate';
 
 const CRUISE = 38; // m/s
@@ -139,7 +140,7 @@ export class FlightPath {
         });
       }
       alt = target;
-      this.intersections.push([na * SUPER, nb * SUPER]);
+      this.intersections.push(warp(na * SUPER, nb * SUPER));
       a = na;
       b = nb;
       // Turn left or right (or continue straight sometimes).
@@ -156,6 +157,8 @@ export class FlightPath {
         this.samples.push(catmull(P[i], P[i + 1], P[i + 2], P[i + 3], k / n));
       }
     }
+    // Planned in grid space; bend into world space with the city.
+    this.samples = this.samples.map(p => warp3(p));
     this.cum = [0];
     for (let i = 1; i < this.samples.length; i++) {
       this.cum.push(

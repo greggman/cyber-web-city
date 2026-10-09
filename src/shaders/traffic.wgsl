@@ -5,6 +5,7 @@
 // light slots. Sprites draw as motion-stretched head/tail lights.
 #include "scene.wgsl"
 #include "lighting.wgsl"
+#include "warp.wgsl"
 
 struct Vehicle { lane: u32, s0: f32, speed: f32, style: u32 };
 struct Lane { origin: vec3f, length: f32, dir: vec3f, _p: f32 };
@@ -36,10 +37,12 @@ fn vehicle_state(v: Vehicle, t: f32) -> VState {
   let L = lanes[v.lane];
   let s = (v.s0 + v.speed * t) % L.length;
   var o: VState;
-  o.pos = L.origin + L.dir * s;
+  // Lanes are straight in grid space; bend them with the city.
+  let g = L.origin + L.dir * s;
+  o.pos = warp_pos(g);
   // A gentle bob.
   o.pos.y += sin(t * 1.1 + v.s0) * 0.6;
-  o.dir = L.dir;
+  o.dir = warp_dir(g, L.dir);
   return o;
 }
 

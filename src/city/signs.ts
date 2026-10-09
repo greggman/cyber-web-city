@@ -1,6 +1,7 @@
 // Neon signs on facades, and the static lights of the city (signs, street
 // lamps). Brands are invented: random syllables, kana and CJK characters.
 import {Rng, hashFloat} from '../math/random';
+import {unwarp, warp3} from './warp';
 import type {LightDesc} from '../render/lightClusters';
 import {NEON, type FacadeSlot} from './buildings';
 import {AVENUE_W, CITY_RADIUS_SUPERS, District, SUPER} from './layout';
@@ -59,8 +60,9 @@ export function brandGlyphs(rng: Rng, vertical: boolean): number[] {
 
 /** Signs follow the same district palettes as the buildings. */
 function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
-  const i = Math.floor(slot.x / SUPER);
-  const j = Math.floor(slot.z / SUPER);
+  const [gu, gv] = unwarp(slot.x, slot.z);
+  const i = Math.floor(gu / SUPER);
+  const j = Math.floor(gv / SUPER);
   const h0 = Math.floor(
     hashFloat(seedForPalette, Math.floor(i / 3), Math.floor(j / 3), 5) * 8,
   );
@@ -194,12 +196,12 @@ export function generateSigns(
           ? [5, 2.6, 1.0]
           : [2.2, 3.4, 5];
         lights.push({
-          pos: [a * SUPER + off, 9, s + rng.range(0, 20)],
+          pos: warp3([a * SUPER + off, 9, s + rng.range(0, 20)]),
           radius: 55,
           color: c,
         });
         lights.push({
-          pos: [s + rng.range(0, 20), 9, a * SUPER + off],
+          pos: warp3([s + rng.range(0, 20), 9, a * SUPER + off]),
           radius: 55,
           color: c,
         });

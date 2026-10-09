@@ -1,5 +1,6 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
 import {Rng, hashFloat} from '../math/random';
+import {unwarp, warp, warpAngle} from './warp';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -46,6 +47,7 @@ export interface CityData {
   segments: SegmentList;
   slots: FacadeSlot[];
   roofs: [number, number, number, number][];
+  /** Avenue bridges, in GRID space (the flight path is planned there). */
   obstacles: Obstacle[];
   /** Tallest landmarks: [x, height, z]. */
   landmarks: [number, number, number][];
@@ -97,7 +99,6 @@ export function generateCity(seed: number): CityData {
   const landmarks: [number, number, number][] = [];
   const N = CITY_RADIUS_SUPERS;
   const half = AVENUE_W / 2;
-  const blockSize = (SUPER - AVENUE_W - STREET_W) / 2;
 
   // Ground: one huge slab whose top is y = 0.
   {
@@ -173,15 +174,26 @@ export function generateCity(seed: number): CityData {
 
       const blockHeights: number[] = [];
       const blockSegs: [number, number][] = [];
-      for (let bi = 0; bi < 2; bi++) {
-        for (let bj = 0; bj < 2; bj++) {
-          const bx0 = sx0 + bi * (blockSize + STREET_W);
-          const bz0 = sz0 + bj * (blockSize + STREET_W);
+      // Irregular blocks: the inner streets sit off-center, and sometimes one
+      // is missing so blocks merge into bigger ones.
+      const inner = SUPER - AVENUE_W;
+      const spans = (origin: number): [number, number][] => {
+        if (rng.chance(0.2)) return [[origin, origin + inner]];
+        const c = inner * rng.range(0.3, 0.7);
+        return [
+          [origin, origin + c - STREET_W / 2],
+          [origin + c + STREET_W / 2, origin + inner],
+        ];
+      };
+      const xs = spans(sx0);
+      const zs = spans(sz0);
+      for (let bi = 0; bi < xs.length; bi++) {
+        for (let bj = 0; bj < zs.length; bj++) {
           const block: Lot = {
-            x0: bx0,
-            z0: bz0,
-            x1: bx0 + blockSize,
-            z1: bz0 + blockSize,
+            x0: xs[bi][0],
+            z0: zs[bj][0],
+            x1: xs[bi][1],
+            z1: zs[bj][1],
           };
           const sideOnAvenue = (
             l: Lot,
@@ -307,18 +319,23 @@ export function generateCity(seed: number): CityData {
       for (let k = 0; k < nb; k++) {
         // Blocks are indexed bi * 2 + bj. Bridge across the z-street (between
         // bj = 0 and 1) or across the x-street (between bi = 0 and 1).
+        // alongX: the bridge crosses a street running along x (between the
+        // two z spans); otherwise one running along z.
         const alongX = rng.chance(0.5);
-        const side = rng.int(0, 2);
-        const [ia, ib] = alongX ? [side * 2, side * 2 + 1] : [side, side + 2];
+        if (alongX ? zs.length < 2 : xs.length < 2) continue;
+        const side = rng.int(0, alongX ? xs.length : zs.length);
+        const nz = zs.length;
+        const [ia, ib] = alongX
+          ? [side * nz, side * nz + 1]
+          : [side, nz + side];
         const top = Math.min(blockHeights[ia], blockHeights[ib]);
         if (top < 30) continue;
         const y = rng.range(12, Math.min(top - 10, 250));
         const h = rng.range(4, 8);
         const w = rng.range(5, 12);
-        const blockStart = alongX
-          ? sx0 + side * (blockSize + STREET_W)
-          : sz0 + side * (blockSize + STREET_W);
-        const along = blockStart + rng.range(10, blockSize - 10);
+        const [blockStart, blockEnd] = alongX ? xs[side] : zs[side];
+        if (blockEnd - blockStart < 30) continue;
+        const along = rng.range(blockStart + 10, blockEnd - 10);
         // Find the face nearest the street in each block at this height.
         const face = (bidx: number, sign: number): number | null => {
           let best: number | null = null;
@@ -525,6 +542,62 @@ export function generateCity(seed: number): CityData {
     }
   }
 
+  // Bend the grid-space city into world space (see warp.ts). Obstacles stay
+  // in grid space: the flight path is planned there and warped afterwards.
+  // Avenue corridors (flight path and traffic) must stay clear: after
+  // rotating to follow the warped streets, a building's corners are mapped
+  // back to grid space and the footprint shrinks until it stays CLEAR m
+  // from every avenue centerline.
+  const CLEAR = 26;
+  const aveDist = (t: number) => Math.abs(t - Math.round(t / SUPER) * SUPER);
+  for (let i = 0; i < segments.count; i++) {
+    const g = segments.get(i);
+    if (g.style === Style.Ground) continue;
+    const [x, z] = warp(g.x, g.z);
+    const rot = g.rotY + warpAngle(g.x, g.z);
+    segments.setPose(i, x, z, rot);
+    // Pieces that are meant to be over an avenue (bridges) are exempt.
+    if (aveDist(g.x) < CLEAR || aveDist(g.z) < CLEAR) continue;
+    const grow = Math.max(1, g.taper);
+    const hx = (g.sx / 2) * grow;
+    const hz = (g.sz / 2) * grow;
+    const reach = Math.hypot(hx, hz);
+    if (
+      aveDist(g.x) - reach * 1.3 > CLEAR &&
+      aveDist(g.z) - reach * 1.3 > CLEAR
+    )
+      continue;
+    const c = Math.cos(rot);
+    const sn = Math.sin(rot);
+    const fits = (k: number) => {
+      for (const [ex, ez] of [
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+      ]) {
+        const lx = ex * hx * k;
+        const lz = ez * hz * k;
+        const [u, v] = unwarp(x + c * lx - sn * lz, z + sn * lx + c * lz);
+        if (aveDist(u) < CLEAR || aveDist(v) < CLEAR) return false;
+      }
+      return true;
+    };
+    if (fits(1)) continue;
+    let k = 0.95;
+    while (k > 0.5 && !fits(k)) k -= 0.05;
+    segments.setSize(i, g.sx * k, g.sz * k);
+  }
+  for (const sl of slots) {
+    const a = warpAngle(sl.x, sl.z);
+    [sl.x, sl.z] = warp(sl.x, sl.z);
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    [sl.nx, sl.nz] = [c * sl.nx - sn * sl.nz, sn * sl.nx + c * sl.nz];
+  }
+  for (const r of roofs) [r[0], r[2]] = warp(r[0], r[2]);
+  for (const l of landmarks) [l[0], l[2]] = warp(l[0], l[2]);
+
   // Sort segments spatially for culling locality.
   segments.sortBy(k => {
     const s = segments.get(k);
@@ -582,9 +655,23 @@ export function makeClearanceTest(
           if (g.y >= y1 || g.y + g.sy <= y0) continue;
           // Ignore small rooftop clutter, antennas and spires.
           if (Math.max(g.sx, g.sz) < 14) continue;
-          const hx = g.sx / 2 + r;
-          const hz = g.sz / 2 + r;
-          if (Math.abs(x - g.x) < hx && Math.abs(z - g.z) < hz) return false;
+          // Test in the segment's rotated frame (tapers/twists: use the
+          // larger bottom footprint, rotated by the mid-height twist).
+          const a = -(g.rotY + g.twist * 0.5);
+          const dx = x - g.x;
+          const dz = z - g.z;
+          const lx = Math.cos(a) * dx - Math.sin(a) * dz;
+          const lz = Math.sin(a) * dx + Math.cos(a) * dz;
+          const round = g.shape === Shape.Cylinder || g.shape === Shape.Sphere;
+          if (round) {
+            if (Math.hypot(lx / (g.sx / 2 + r), lz / (g.sz / 2 + r)) < 1)
+              return false;
+          } else if (
+            Math.abs(lx) < g.sx / 2 + r &&
+            Math.abs(lz) < g.sz / 2 + r
+          ) {
+            return false;
+          }
         }
       }
     }

@@ -5,6 +5,7 @@ import type {Vec3} from '../math/vec';
 import type {FacadeSlot} from './buildings';
 import {NEON} from './buildings';
 import {District, SUPER} from './layout';
+import {unwarp, warp} from './warp';
 
 export const AD_TILES = 32;
 export const AD_SCENES = 8;
@@ -152,8 +153,11 @@ export function generateAds(
   }
   const routeGiants = giants.length;
   for (const [x, , z] of landmarks) {
-    const ix = Math.round(x / SUPER) * SUPER;
-    const iz = Math.round(z / SUPER) * SUPER;
+    const [gu, gv] = unwarp(x, z);
+    const [ix, iz] = warp(
+      Math.round(gu / SUPER) * SUPER,
+      Math.round(gv / SUPER) * SUPER,
+    );
     if (giants.length >= routeGiants + 8) break;
     if (giants.some(([gx, gz]) => Math.hypot(gx - ix, gz - iz) < 1500))
       continue;

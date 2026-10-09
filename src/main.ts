@@ -3,7 +3,7 @@
 // URL params:
 //   seed=N        world seed
 //   t=SECONDS     start time along the flight path
-//   cam=chase|pov|skyline camera mode (skyline: high establishing shot)
+//   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
 //   paused=1      freeze time (deterministic screenshots)
 //   anim=S        animation time S with the camera at t (flicker tests)
 //   hud=1         show stats
@@ -88,6 +88,7 @@ async function main() {
   (window as unknown as {__debug: unknown}).__debug = {
     holograms: adData.holograms,
     pose: (t: number) => flight.pose(t),
+    isClear: makeClearanceTest(city.segments),
     duration: flight.duration,
   };
   const ads = new AdSystem(
@@ -229,7 +230,12 @@ async function main() {
     const pose = flight.pose(time);
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = cameraMode;
-    if (inspect === 'screen' && adData.screens.length) {
+    if (camParam === 'map') {
+      // Top-down view over the car (layout inspection).
+      const p = pose.position;
+      camera.camToWorld = lookAtCamera([p[0], 3200, p[2] + 1], [p[0], 0, p[2]]);
+      camera.fovY = (50 * Math.PI) / 180;
+    } else if (inspect === 'screen' && adData.screens.length) {
       const sc = adData.screens[inspectN % adData.screens.length];
       const dist = Math.max(sc.width, sc.height) * 1.3;
       const eye: [number, number, number] = [
