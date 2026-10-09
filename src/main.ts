@@ -14,7 +14,12 @@ import {Camera} from './camera/camera';
 import {generateCity} from './city/generate';
 import {generateSigns} from './city/signs';
 import {FlightPath, ChaseCamera} from './camera/flight';
-import {lookAtCamera} from './math/vec';
+import {lookAtCamera, transformPoint, transformDir} from './math/vec';
+import {MODELS} from './car/models';
+import {buildModelMesh} from './nurbs/model';
+import {CarRenderer, carLights} from './render/carRenderer';
+import {packLights, LIGHT_FLOATS} from './render/lightClusters';
+import {DYNAMIC_LIGHTS} from './render/renderer';
 
 const loadmsg = document.getElementById('loadmsg')!;
 const errors = document.getElementById('errors')!;
@@ -42,6 +47,17 @@ async function main() {
   const renderer = new Renderer(gpu);
   loadmsg.textContent = 'Compiling shaders';
   await renderer.init({segments: city.segments, signs, lights});
+  const carEntry = MODELS.spinner;
+  const carMesh = buildModelMesh(carEntry.build());
+  const car = new CarRenderer(gpu.device);
+  await car.init(carMesh, renderer.sceneLayout);
+  renderer.opaqueDrawers.push(pass =>
+    car.drawOpaque(pass, renderer.sceneBindGroup, renderer.targets),
+  );
+  renderer.transparentDrawers.push(pass =>
+    car.drawGlass(pass, renderer.sceneBindGroup, renderer.targets),
+  );
+  const dynamicLights = new Float32Array(DYNAMIC_LIGHTS * LIGHT_FLOATS);
   const camera = new Camera();
   const chase = new ChaseCamera();
   const settings: RenderSettings = {
@@ -106,22 +122,21 @@ async function main() {
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
       camera.fovY = (55 * Math.PI) / 180;
     } else {
-      const eye = pose.position;
+      // Cockpit: the driver's eye, looking slightly down over the dash.
+      const m = pose.matrix;
+      const eye = transformPoint(m, carEntry.driverEye);
+      const sway = Math.sin(time * 0.6) * 0.03;
+      const look = transformDir(m, [sway, -0.12, -1]);
       camera.camToWorld = lookAtCamera(
-        [
-          eye[0] + pose.up[0] * 1.2,
-          eye[1] + pose.up[1] * 1.2,
-          eye[2] + pose.up[2] * 1.2,
-        ],
-        [
-          eye[0] + pose.forward[0] * 50,
-          eye[1] + pose.forward[1] * 50 - 3,
-          eye[2] + pose.forward[2] * 50,
-        ],
+        eye,
+        [eye[0] + look[0] * 10, eye[1] + look[1] * 10, eye[2] + look[2] * 10],
         pose.up,
       );
       camera.fovY = (70 * Math.PI) / 180;
     }
+    const cl = carLights(pose.matrix, time);
+    packLights(cl, dynamicLights);
+    renderer.lights.writeDynamic(dynamicLights, DYNAMIC_LIGHTS);
     renderer.render(camera, time, dt, settings);
     if (showHud) {
       hud.textContent =

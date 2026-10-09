@@ -143,7 +143,8 @@ fn shade(i: VOut, front: bool) -> vec4f {
     c += (0.04 + 0.96 * fres) * env(r) * 0.6;
   }
   if (kind == 2u) {
-    let alpha = mix(m.param, 1.0, fres * 0.9);
+    // A minimum sheen so clear glass still reads in flat studio light.
+    let alpha = mix(max(m.param, 0.12), 1.0, fres * 0.9);
     let gc = (0.04 + 0.96 * fres) * env(r) + m.color * m.param * 0.2;
     return vec4f(gc, alpha);
   }

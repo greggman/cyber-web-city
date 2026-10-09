@@ -253,6 +253,11 @@ export class Renderer {
     ]);
 
     if (this.transparentDrawers.length) {
+      encoder.copyTextureToTexture(
+        {texture: this.targets.lit},
+        {texture: this.targets.litCopy},
+        [width, height],
+      );
       const tp = encoder.beginRenderPass({
         label: 'transparent',
         colorAttachments: [{view: v.lit, loadOp: 'load', storeOp: 'store'}],

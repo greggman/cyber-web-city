@@ -23,12 +23,14 @@ export class Targets {
   velocity!: GPUTexture;
   depth!: GPUTexture;
   lit!: GPUTexture; // after sky/fog/reflections composite
+  litCopy!: GPUTexture; // copy of lit for refraction in the transparent pass
   views!: {
     color: GPUTextureView;
     normal: GPUTextureView;
     velocity: GPUTextureView;
     depth: GPUTextureView;
     lit: GPUTextureView;
+    litCopy: GPUTextureView;
   };
 
   constructor(private readonly device: GPUDevice) {}
@@ -43,6 +45,7 @@ export class Targets {
       this.velocity,
       this.depth,
       this.lit,
+      this.litCopy,
     ]) {
       t?.destroy();
     }
@@ -87,12 +90,19 @@ export class Targets {
         GPUTextureUsage.COPY_SRC |
         GPUTextureUsage.COPY_DST,
     });
+    this.litCopy = createTexture(d, {
+      label: 'targets/litCopy',
+      size,
+      format: HDR_FORMAT,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
     this.views = {
       color: this.color.createView({label: 'targets/color/view'}),
       normal: this.normal.createView({label: 'targets/normal/view'}),
       velocity: this.velocity.createView({label: 'targets/velocity/view'}),
       depth: this.depth.createView({label: 'targets/depth/view'}),
       lit: this.lit.createView({label: 'targets/lit/view'}),
+      litCopy: this.litCopy.createView({label: 'targets/litCopy/view'}),
     };
     return true;
   }

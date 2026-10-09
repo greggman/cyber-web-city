@@ -965,8 +965,6 @@ export function buildSpinner(): Model {
     name: 'canopy',
     surface: orient(canopy, [0, 1, 0]),
     material: 'glass',
-    // Slightly bright tint: a faint sheen so the bubble reads in flat light.
-    color: [16, 18, 21],
     doubleSided: true,
     tessellation: {segmentsU: 30, segmentsV: 32},
   });
