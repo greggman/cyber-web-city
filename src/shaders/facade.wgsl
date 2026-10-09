@@ -133,6 +133,22 @@ struct WinStyle {
   curtains: f32,     // probability of colored curtains
 };
 
+// How deep windows sit in the wall (m) per style: curtain walls are nearly
+// flush, concrete residential/slum blocks have deep reveals.
+// Ambient occlusion inside a window reveal (set by window_facade; applied
+// after the style sets the wall albedo).
+var<private> g_revealAO: f32 = 1.0;
+
+fn recess_for(kind: u32) -> f32 {
+  switch kind {
+    case ST_GLASS: { return 0.14; }
+    case ST_RESIDENTIAL: { return 0.5; }
+    case ST_SLUM: { return 0.42; }
+    case ST_METAL: { return 0.3; }
+    default: { return 0.25; }
+  }
+}
+
 fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function, Surface>) -> f32 {
   let cell = vec2f(c.facade.x / ws.cellW, c.facade.y / ws.floorH);
   let id = floor(cell);
@@ -148,8 +164,36 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
   let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.06 + 1.6 * pow(u2f(hRoom >> 9u), 4.0));
   var em = vec3f(0.0);
+  var reveal = 0.0;
   if (det > 0.0 && win > 0.0) {
-    let fr = vec2f((fract(id.x / ws.roomCells) + f.x / ws.roomCells), (f.y - ws.winY0) / (ws.winY1 - ws.winY0));
+    // Recessed window: trace the view ray into the opening. It either
+    // reaches the glass (look into the room from the hit point: parallax)
+    // or hits the side/top/bottom of the opening (the reveal).
+    let D = recess_for(kind);
+    let v = c.viewT;
+    let vz = max(v.z, 0.05);
+    let lp = f * vec2f(ws.cellW, ws.floorH);
+    let r0 = vec2f(ws.winX0 * ws.cellW, ws.winY0 * ws.floorH);
+    let r1 = vec2f(ws.winX1 * ws.cellW, ws.winY1 * ws.floorH);
+    var hit = lp + v.xy * (D / vz);
+    if (any(hit < r0) || any(hit > r1)) {
+      // Which side does the ray leave the opening through first?
+      let tx = select((r0.x - lp.x) / min(v.x, -1e-4), (r1.x - lp.x) / max(v.x, 1e-4), v.x > 0.0);
+      let ty = select((r0.y - lp.y) / min(v.y, -1e-4), (r1.y - lp.y) / max(v.y, 1e-4), v.y > 0.0);
+      let ts = max(min(tx, ty), 0.0);
+      let depth = ts * vz;
+      let nT = select(vec2f(0.0, -sign(v.y)), vec2f(-sign(v.x), 0.0), tx < ty);
+      // The reveal faces across the opening (tangent-space normal nT).
+      (*sf).normal = normalize(c.t * nT.x + c.b * nT.y + c.n * 0.15);
+      reveal = det * win;
+      // Darker deeper in; the room light spills onto it when lit.
+      g_revealAO = 1.0 - 0.55 * saturate(depth / D);
+      em = lc * lit * 0.12 * (0.4 + 0.6 * saturate(depth / D));
+      hit = lp + v.xy * ts;
+    }
+    let fr = vec2f(
+      (fract(id.x / ws.roomCells) + clamp(hit.x / ws.cellW, 0.0, 1.0) / ws.roomCells),
+      (hit.y / ws.floorH - ws.winY0) / (ws.winY1 - ws.winY0));
     var inner = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, lc, kind);
     // Blinds / curtains on the upper part of the window.
     let hb = u2f(hRoom >> 21u);
@@ -163,9 +207,9 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
       let open = 0.15 + 0.3 * u2f(hRoom >> 27u);
       inner = mix(inner, lc * cc * 0.6 * folds, step(open, abs(fr.x - 0.5) * 2.0));
     }
-    em = inner * lit;
+    if (reveal == 0.0) { em = inner * lit; }
     // Unlit windows: occasional TV flicker.
-    if (lit < 0.5 && u2f(hRoom >> 3u) < 0.015) {
+    if (reveal == 0.0 && lit < 0.5 && u2f(hRoom >> 3u) < 0.015) {
       let flick = 0.75 + 0.25 * sin(c.time * (1.5 + 2.0 * u2f(hRoom)) + f32(hRoom & 255u));
       em = vec3f(0.25, 0.35, 0.9) * flick * 0.6 * smoothstep(0.0, 1.0, 1.0 - fr.y);
     }
@@ -176,7 +220,8 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   let floorVar = 0.75 + 0.5 * hash21(c.seed ^ 0x2545f491u, floorId);
   let avg = ws.litFrac * 0.11 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
   (*sf).emissive += mix(avg, em * win, det);
-  return win * det + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  // Reveal pixels are wall material, not glass.
+  return win * det * (1.0 - step(0.001, reveal)) + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
 }
 
 // LED facade animations.
@@ -588,6 +633,7 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     let vd = normalize(world - frame.camPos);
     c.viewT = vec3f(dot(vd, c.t), dot(vd, c.b), -dot(vd, n));
     shade_wall(c, s, &sf);
+    sf.albedo *= g_revealAO;
     apply_wet(c, &sf, false);
     // Vertical LED strips on box edges.
     if ((s.flags & F_EDGE) != 0u) {
