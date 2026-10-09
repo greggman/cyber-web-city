@@ -86,7 +86,7 @@ function prism(
         } else {
           const a = ((i + k) / sides) * Math.PI * 2;
           const circ = (Math.PI * 0.5) / (Math.PI * 2);
-          f = [a * circ, a * circ];
+          f = [-a * circ, -a * circ];
         }
         row.push(b.vertex([x, y, z], n, f));
       }
@@ -134,7 +134,7 @@ function sphere(name: string, seg: number, rings: number): MeshData {
         Math.sin(phi) * Math.sin(th),
       ];
       const a = th * 0.25;
-      row.push(b.vertex([n[0] * 0.5, 0.5 + n[1] * 0.5, n[2] * 0.5], n, [a, a]));
+      row.push(b.vertex([n[0] * 0.5, 0.5 + n[1] * 0.5, n[2] * 0.5], n, [-a, -a]));
     }
     grid.push(row);
   }

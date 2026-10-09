@@ -112,9 +112,11 @@ fn velocity_from(clipCur: vec4f, clipPrev: vec4f) -> vec2f {
 
 @fragment
 fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
+  // Derivatives must be taken in uniform control flow, before any branching.
+  let fw = fwidth(i.facade);
   let s = segments[i.seg];
   let n = normalize(i.normal);
-  let sh = shade_facade(s, i.world, n, i.facade, i.local, i.capUv);
+  let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv);
   var o: GOut;
   o.color = vec4f(sh.color, 1.0);
   o.normal = vec4f(encode_normal(sh.normal), sh.roughness, sh.reflectivity);
