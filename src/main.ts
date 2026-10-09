@@ -21,6 +21,7 @@ import {CarRenderer, carLights} from './render/carRenderer';
 import {packLights, LIGHT_FLOATS} from './render/lightClusters';
 import {DYNAMIC_LIGHTS} from './render/renderer';
 import {Rain} from './render/rain';
+import {Canopy} from './render/canopy';
 
 const loadmsg = document.getElementById('loadmsg')!;
 const errors = document.getElementById('errors')!;
@@ -65,6 +66,20 @@ async function main() {
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
   renderer.transparentDrawers.push(p =>
     rain.render(p, renderer.sceneBindGroup),
+  );
+  const canopy = new Canopy(gpu.device);
+  await canopy.init();
+  car.setCanopyFx(canopy.fxView);
+  const canopyState = {dt: 0, time: 0, speed: 0, pov: false};
+  renderer.computeHooks.push(e =>
+    canopy.run(
+      e,
+      canopyState.dt,
+      canopyState.time,
+      canopyState.speed,
+      rain.intensity,
+      canopyState.pov,
+    ),
   );
   const camera = new Camera();
   const chase = new ChaseCamera();
@@ -145,6 +160,12 @@ async function main() {
     const cl = carLights(pose.matrix, time);
     packLights(cl, dynamicLights);
     renderer.lights.writeDynamic(dynamicLights, DYNAMIC_LIGHTS);
+    Object.assign(canopyState, {
+      dt: Math.max(dt, paused ? 1 / 60 : 0),
+      time,
+      speed: pose.speed,
+      pov: cameraMode === 1,
+    });
     rain.setFrame(camera.position, camera.forward, [
       pose.forward[0] * pose.speed,
       pose.forward[1] * pose.speed,

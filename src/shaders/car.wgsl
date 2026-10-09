@@ -151,7 +151,7 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     var acc = behind;
     for (var k = 0; k < 6; k++) {
       let a = f32(k) * 1.047;
-      acc += textureSampleLevel(sceneColor, linearSampler, screenUv + vec2f(cos(a), sin(a)) * 0.012 * fog, 0.0).rgb;
+      acc += textureSampleLevel(sceneColor, linearSampler, screenUv + vec2f(cos(a), sin(a)) * 0.03 * fog, 0.0).rgb;
     }
     behind = mix(behind, acc / 7.0, fog);
   }
@@ -165,7 +165,7 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let refl = reflection_env(reflect(-v, n)) + light_clustered(i.world, n, v, vec3f(0.0), 0.05, 0.0);
   let tint = mix(vec3f(1.0), saturate3(m.color), saturate(m.param * 4.0));
   let transmit = (1.0 - fres) * (1.0 - m.param);
-  let condensation = vec3f(0.06, 0.07, 0.08) * fog + behind * fog * 0.15;
+  let condensation = vec3f(0.05, 0.055, 0.065) * fog + behind * fog * 0.35;
   // A little extra sheen at grazing angles so the canopy reads as glass.
   let rim = smoothstep(0.55, 0.0, nv) * vec3f(0.05, 0.06, 0.08);
   let c = refl * (fres * 2.0 + 0.03) + condensation + rim;
