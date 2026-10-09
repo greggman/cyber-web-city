@@ -251,7 +251,12 @@ export function carLights(m: Mat4, time: number): LightDesc[] {
   const P = (p: Vec3) => transformPoint(m, p);
   const D = (d: Vec3) => transformDir(m, d);
   const fwd = D([0, 0, -1]);
-  const flick = 0.9 + 0.1 * Math.sin(time * 37);
+  // Irregular flicker of the lift glow (several incommensurate rates).
+  const flick =
+    0.78 +
+    0.1 * Math.sin(time * 37) +
+    0.08 * Math.sin(time * 23.7 + 1.3) +
+    0.04 * Math.sin(time * 71.1);
   return [
     {
       pos: P([-0.6, 0.7, -2.9]),
@@ -274,7 +279,7 @@ export function carLights(m: Mat4, time: number): LightDesc[] {
     {
       pos: P([0, -0.4, 0]),
       radius: 7,
-      color: [0.8 * flick, 2.0 * flick, 4.0 * flick],
+      color: [4.0 * flick, 1.6 * flick, 0.35 * flick], // amber underglow
     },
   ];
 }

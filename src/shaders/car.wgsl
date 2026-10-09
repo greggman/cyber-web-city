@@ -53,9 +53,10 @@ fn screen_content(id: u32, uv: vec2f, tint: vec3f) -> vec3f {
     // Nav map: scrolling street grid with a route and our position.
     let p = uv * 8.0 + vec2f(0.0, t * 0.6);
     let g = abs(fract(p) - 0.5);
-    c = vec3f(0.0, 0.35, 0.55) * (1.0 - smoothstep(0.0, 0.05, min(g.x, g.y)));
+    // Amber monochrome CRT (ART_BIBLE.md 15.6).
+    c = vec3f(0.45, 0.2, 0.03) * (1.0 - smoothstep(0.0, 0.05, min(g.x, g.y)));
     let blocks = step(0.5, hashf2(floor(p))) * 0.15;
-    c += vec3f(0.05, 0.12, 0.2) * blocks;
+    c += vec3f(0.18, 0.08, 0.02) * blocks;
     let route = abs(uv.x - 0.5 - 0.15 * sin(uv.y * 5.0 + t * 0.3));
     c += vec3f(1.0, 0.35, 0.05) * (1.0 - smoothstep(0.0, 0.02, route));
     c += vec3f(1.0) * smoothstep(0.04, 0.0, length(uv - vec2f(0.5, 0.25)));
@@ -65,8 +66,9 @@ fn screen_content(id: u32, uv: vec2f, tint: vec3f) -> vec3f {
     let r = length(p);
     let ang = atan2(p.y, p.x);
     let fill = step(ang, -PI + (sin(t * 0.3) * 0.5 + 0.5) * TAU);
-    c = vec3f(0.1, 1.0, 0.65) * step(abs(r - 0.7), 0.05) * fill;
-    c += vec3f(0.02, 0.15, 0.1) * step(abs(r - 0.7), 0.08);
+    // The one dim green-phosphor gauge.
+    c = vec3f(0.25, 0.75, 0.3) * 0.6 * step(abs(r - 0.7), 0.05) * fill;
+    c += vec3f(0.02, 0.08, 0.03) * step(abs(r - 0.7), 0.08);
     let bars = step(fract(uv.x * 10.0), 0.6) * step(uv.y, 0.25 + 0.2 * hash11(u32(uv.x * 10.0) + u32(t * 4.0)));
     c += vec3f(1.0, 0.6, 0.1) * bars * step(r, 0.5);
   } else {
@@ -207,6 +209,11 @@ fn fs_glow(i: VOut) -> @location(0) vec4f {
   let v = normalize(frame.camPos - i.world);
   let facing = pow(abs(dot(n, v)), 1.5);
   let fade = pow(1.0 - saturate(i.uv.y), 1.6);
-  let flick = 0.9 + 0.1 * sin(frame.time * 23.0 + i.uv.x * 12.0);
-  return vec4f(m.emissive * facing * fade * flick * 0.35, 0.0);
+  // Turbulent flicker: irregular overall pulsing plus bright bands that
+  // run down the plume, so the propulsion never looks static.
+  let t = frame.time;
+  let pulse = 0.72 + 0.28 * vnoise2(vec2f(t * 9.0, i.uv.x * 2.0 + f32(i.mat)));
+  let bands = 0.8 + 0.4 * vnoise2(vec2f(i.uv.x * 6.0, i.uv.y * 7.0 - t * 14.0));
+  let stutter = 1.0 - 0.25 * step(0.93, hashf2(vec2f(floor(t * 20.0), f32(i.mat))));
+  return vec4f(m.emissive * facing * fade * pulse * bands * stutter * 0.35, 0.0);
 }

@@ -703,7 +703,7 @@ function interior(all: Part[]) {
       'dash-accent',
       [0, 0.72, -0.6],
       [0.6, 0.004, 0.004],
-      {material: 'emissive', emissive: [0.3, 1.6, 2.4]},
+      {material: 'emissive', emissive: [2.4, 1.0, 0.2]},
       {seg: 6},
     ),
   );
@@ -797,7 +797,7 @@ function interior(all: Part[]) {
         [0.014, 0.006, 0.014],
         {
           material: 'emissive',
-          emissive: i === 1 ? [3, 0.4, 0.2] : [0.4, 2, 2.5],
+          emissive: i === 1 ? [3, 0.4, 0.2] : [2.4, 1.0, 0.2],
         },
         {seg: 4},
       ),
@@ -1067,13 +1067,13 @@ function exhaust(): Part[] {
       tessellation: REV(8, 32),
     },
   ];
-  // Radial emissive gradient on the back wall: hot blue-white core out to a
-  // dim rim.
+  // Radial emissive gradient on the back wall: a white-hot core out to a
+  // dim amber rim (thrust is sodium-amber: ART_BIBLE.md 15.6).
   const rings: [number, number, Vec3][] = [
-    [0.0, 0.42, [5, 9, 16]],
-    [0.42, 0.62, [2.2, 4.5, 11]],
-    [0.62, 0.8, [0.8, 1.8, 5]],
-    [0.8, 0.985, [0.15, 0.35, 1.2]],
+    [0.0, 0.42, [16, 12, 8]],
+    [0.42, 0.62, [11, 5.5, 1.6]],
+    [0.62, 0.8, [5, 1.8, 0.4]],
+    [0.8, 0.985, [1.2, 0.35, 0.08]],
   ];
   for (const [r0, r1, e] of rings) {
     parts.push({
@@ -1325,7 +1325,8 @@ export function buildSpinner(): Model {
         0.2,
       ),
       material: 'glow',
-      emissive: [1.5, 3, 6],
+      // White-hot core, warm (ART_BIBLE.md 15.6: thrust is sodium-amber).
+      emissive: [6, 4.2, 2.4],
       mirror: true,
       tessellation: {segmentsU: 24, segmentsV: 8},
     });
