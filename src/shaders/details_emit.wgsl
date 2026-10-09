@@ -256,7 +256,9 @@ fn emit(t: u32, sp: Spot, scl_in: vec3f, ycen: f32, color: u32, accent: u32, fla
   let ay = normalize(cross(sp.n, sp.t));
   let center = sp.pos + ay * (ycen * scl_in.y) + sp.n * (0.5 * scl_in.z);
   let radius = 0.5 * length(scl_in) + 0.5;
-  let lim = type_range(t) * P.distScale * (0.55 + 0.45 * rank);
+  // Hero faces (on the flight corridors) keep their kit 1.5x further out.
+  let hero = select(1.0, 1.5, (segments[g_si].flags & 128u) != 0u);
+  let lim = type_range(t) * P.distScale * hero * (0.55 + 0.45 * rank);
   let d = distance(center, P.camPos) - radius;
   if (d > lim) { return; }
   if (!in_frustum(center, radius)) { return; }
@@ -317,7 +319,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
   let bodyHash = hash_u(s.seed ^ 0x3c6ef372u);
   let concrete = mix(vec3f(0.2, 0.19, 0.18), vec3f(0.27, 0.24, 0.2), u2f(bodyHash));
   let darkMetal = vec3f(0.07, 0.075, 0.085);
-  let cellRange = 360.0 * P.distScale;
+  let cellRange = 360.0 * P.distScale * select(1.0, 1.5, (s.flags & 128u) != 0u);
 
   // ---- Rooftops (ART_BIBLE.md 9): composed around the core penthouse
   // (rooftops.ts places it: roof_core()), not scattered. HVAC units in a

@@ -266,6 +266,16 @@ export function generateCity(seed: number): CityData {
               if (fl !== g.flags) segments.setFlags(k, fl);
             }
             edgeUsed ||= usedEdges;
+            // Hero dressing: buildings whose footprint comes within 60 m of
+            // an avenue centreline (the flight corridors) get the denser kit.
+            const ave = (t: number) =>
+              Math.abs(t - Math.round(t / SUPER) * SUPER);
+            for (let k = s0; k < segments.count; k++) {
+              const g = segments.get(k);
+              const near = Math.min(ave(g.x) - g.sx / 2, ave(g.z) - g.sz / 2);
+              if (near < 60)
+                segments.setFlags(k, segments.getFlags(k) | SegFlags.Hero);
+            }
           };
           switch (info.district) {
             case District.Core: {

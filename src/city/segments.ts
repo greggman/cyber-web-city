@@ -28,6 +28,7 @@ export const enum SegFlags {
   TopGlow = 16, // glowing crown/top edge
   RoofExposed = 32, // roof (mostly) open: rooftop kitbash goes here
   RoofRing = 64, // the roof's center is built on: kitbash only around the edge
+  Hero = 128, // faces the flight corridor: denser kit (ART_BIBLE.md 8)
 }
 
 export interface Segment {

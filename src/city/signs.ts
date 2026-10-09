@@ -92,14 +92,23 @@ export function generateSigns(
       busy ? (slot.avenue ? rng.int(2, 8) : rng.int(0, 2)) : rng.int(1, 3),
       Math.ceil(slot.height / 18),
     );
+    // Hero dressing: one tall corner blade per 60 m of avenue frontage, at
+    // 40-120 m, on the corner bay (ART_BIBLE.md 8).
+    const heroBlades =
+      slot.avenue && slot.height > 70
+        ? Math.max(1, Math.floor(slot.width / 60))
+        : 0;
     // right x up = normal (right-handed), so text reads left to right.
     const right: [number, number, number] = [slot.nz, 0, -slot.nx];
     const slotLights: LightDesc[] = [];
     const normal: [number, number, number] = [slot.nx, 0, slot.nz];
-    for (let k = 0; k < count; k++) {
-      const kind = busy
-        ? (rng.weighted([3, 4, 2, 1]) as SignKind)
-        : (rng.weighted([5, 1, 2, 0.5]) as SignKind);
+    for (let k = 0; k < count + heroBlades; k++) {
+      const hero = k >= count;
+      const kind = hero
+        ? SignKind.Blade
+        : busy
+          ? (rng.weighted([3, 4, 2, 1]) as SignKind)
+          : (rng.weighted([5, 1, 2, 0.5]) as SignKind);
       let w: number;
       let h: number;
       let thick = 0.6;
@@ -108,7 +117,7 @@ export function generateSigns(
         h = w * rng.range(0.18, 0.32);
       } else if (kind === SignKind.Blade) {
         w = rng.range(3.5, 8);
-        h = rng.range(12, 45);
+        h = hero ? rng.range(30, 60) : rng.range(12, 45);
         thick = 0.8;
       } else if (kind === SignKind.Column) {
         w = rng.range(3.5, 7);
@@ -119,14 +128,23 @@ export function generateSigns(
       }
       const maxY =
         slot.y + Math.max(10, Math.min(slot.height - h / 2 - 2, 420));
-      const yc =
+      let yc =
         slot.y +
         h / 2 +
         3 +
         Math.pow(rng.next(), 1.6) * Math.max(0, maxY - slot.y - h / 2 - 3);
-      const along =
+      let along =
         rng.range(-0.5, 0.5) *
         Math.max(0, slot.width - (kind === SignKind.Blade ? 4 : w) - 4);
+      if (hero) {
+        const lo = Math.max(slot.y + h / 2 + 2, 40 + h / 2);
+        const hi = Math.min(slot.y + slot.height - h / 2 - 2, 120 + h / 2);
+        if (hi < lo) continue;
+        yc = rng.range(lo, hi);
+        const corner = k - count;
+        const side = corner % 2 === 0 ? -1 : 1;
+        along = side * (slot.width / 2 - 3 - Math.floor(corner / 2) * 60);
+      }
       const out = kind === SignKind.Blade ? w / 2 + 0.3 : thick / 2 + 0.15;
       const pos: [number, number, number] = [
         slot.x + right[0] * along + normal[0] * out,
