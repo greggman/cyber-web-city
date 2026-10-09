@@ -36,7 +36,7 @@ export interface Sign {
   thickness: number;
 }
 
-function brandGlyphs(rng: Rng, vertical: boolean): number[] {
+export function brandGlyphs(rng: Rng, vertical: boolean): number[] {
   const n = vertical ? rng.int(2, 6) : rng.int(3, 8);
   const script = rng.weighted(vertical ? [1, 2, 5] : [4, 2, 3]);
   const out: number[] = [];

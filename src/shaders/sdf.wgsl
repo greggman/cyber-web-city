@@ -105,19 +105,29 @@ fn sd_face(p_in: vec3f, t: f32, id: ptr<function, u32>) -> f32 {
   return d;
 }
 
-// A koi fish swimming along +x (length ~1).
+// A koi fish swimming along +x (length ~1.2): tapered body, forked tail,
+// dorsal and pectoral fins, with a swimming wave down the body.
 fn sd_koi(p_in: vec3f, t: f32) -> f32 {
   var p = p_in;
-  let wave = sin(p.x * 5.0 - t * 6.0) * 0.06 * (0.5 + p.x + 0.5);
-  p.z -= wave;
-  var d = sd_ellipsoid(p, vec3f(0.5, 0.14, 0.11));
-  // Tail fin.
-  let tp = p - vec3f(-0.55, 0.0, 0.0);
-  let fin = sd_ellipsoid(rot_z(tp, 0.0), vec3f(0.12, 0.16, 0.015));
-  d = smin(d, fin, 0.05);
-  // Side fins.
-  d = smin(d, sd_ellipsoid(p - vec3f(0.15, -0.08, 0.12), vec3f(0.08, 0.02, 0.08)), 0.03);
-  d = smin(d, sd_ellipsoid(p - vec3f(0.15, -0.08, -0.12), vec3f(0.08, 0.02, 0.08)), 0.03);
+  let k = saturate((0.5 - p.x) / 1.1); // 0 at head, 1 at tail
+  p.z -= sin(p.x * 4.0 - t * 6.0) * 0.08 * k * k;
+  // Body: radius tapers toward the tail.
+  let r = mix(0.16, 0.035, smoothstep(0.0, 1.0, k));
+  let bx = clamp(p.x, -0.55, 0.45);
+  var d = length(vec3f(p.x - bx, p.y / 1.1, p.z / 0.85)) - r * (1.0 - 0.6 * smoothstep(0.35, 0.5, p.x));
+  // Forked tail.
+  let tp = p - vec3f(-0.62, 0.0, 0.0);
+  let fork = abs(tp.y) - 0.04 - (-tp.x) * 0.9;
+  let tail = max(max(sd_box(tp, vec3f(0.14, 0.22, 0.012)), fork), -(abs(tp.y) - 0.02 + tp.x * 1.5));
+  d = smin(d, tail, 0.04);
+  // Dorsal fin.
+  let df = sd_box(rot_z(p - vec3f(-0.05, 0.15, 0.0), 0.25), vec3f(0.18, 0.06, 0.008));
+  d = smin(d, df, 0.03);
+  // Pectoral fins.
+  for (var s = -1.0; s <= 1.0; s += 2.0) {
+    let pf = sd_ellipsoid(rot_x(p - vec3f(0.2, -0.07, 0.13 * s), 0.6 * s), vec3f(0.1, 0.012, 0.07));
+    d = smin(d, pf, 0.02);
+  }
   return d;
 }
 

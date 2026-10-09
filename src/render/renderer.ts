@@ -75,6 +75,8 @@ export class Renderer {
   opaqueDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   transparentDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   computeHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
+  /** Run before light culling (e.g. GPU-written dynamic lights). */
+  preLightHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
   /** Run after opaque + composite (depth available), before transparents. */
   postOpaqueHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
 
@@ -203,6 +205,7 @@ export class Renderer {
       height,
       camera.fovY,
     );
+    for (const hook of this.preLightHooks) hook(encoder);
     this.lights.run(encoder);
     for (const hook of this.computeHooks) hook(encoder);
 

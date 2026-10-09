@@ -12,7 +12,9 @@ import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
 import {generateCity} from './city/generate';
-import {generateSigns} from './city/signs';
+import {generateSigns, brandGlyphs} from './city/signs';
+import {generateAds} from './city/ads';
+import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
 import {FlightPath, ChaseCamera} from './camera/flight';
 import {lookAtCamera, transformPoint, transformDir} from './math/vec';
 import {MODELS} from './car/models';
@@ -59,7 +61,35 @@ async function main() {
   renderer.transparentDrawers.push(pass =>
     car.drawGlass(pass, renderer.sceneBindGroup, renderer.targets),
   );
-  const dynamicLights = new Float32Array(DYNAMIC_LIGHTS * LIGHT_FLOATS);
+  // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
+  // 1024+ traffic (GPU).
+  const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
+  void DYNAMIC_LIGHTS;
+  const adData = generateAds(seed, city.slots, city.roofs, city.landmarks, r =>
+    brandGlyphs(r, false),
+  );
+  const ads = new AdSystem(
+    gpu.device,
+    adData.tiles,
+    adData.screens,
+    adData.holograms,
+    renderer.lights.staticCount + SCREEN_LIGHT_SLOT,
+    SCREEN_LIGHT_SLOTS,
+  );
+  await ads.init(
+    renderer.sceneLayout,
+    renderer.signs.glyphAtlas,
+    renderer.lights.lightBuffer,
+  );
+  const adState = {time: 0};
+  renderer.preLightHooks.push(e => {
+    ads.update(e, renderer.frame.camPos, adState.time);
+    ads.writeLights(e);
+  });
+  renderer.opaqueDrawers.push(p => ads.drawScreens(p, renderer.sceneBindGroup));
+  renderer.transparentDrawers.unshift(p =>
+    ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
+  );
   const rain = new Rain(gpu.device);
   await rain.init(renderer.sceneLayout);
   rain.intensity = Number(params.get('rain') ?? 1);
@@ -100,6 +130,10 @@ async function main() {
   }
   const camParam = params.get('cam');
   let cameraMode = camParam === 'pov' ? 1 : camParam === 'skyline' ? 2 : 0;
+  // Inspection cameras: cam=screen&n=K or cam=holo&n=K frame an ad/hologram.
+  const inspect =
+    camParam === 'screen' || camParam === 'holo' ? camParam : null;
+  const inspectN = Number(params.get('n') ?? 0);
   let paused = params.get('paused') === '1';
   let showHud = params.get('hud') === '1';
   let time = Number(params.get('t') ?? 0);
@@ -131,7 +165,34 @@ async function main() {
     const pose = flight.pose(time);
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = cameraMode;
-    if (cameraMode === 2) {
+    if (inspect === 'screen' && adData.screens.length) {
+      const sc = adData.screens[inspectN % adData.screens.length];
+      const dist = Math.max(sc.width, sc.height) * 1.3;
+      const eye: [number, number, number] = [
+        sc.pos[0] + sc.normal[0] * dist + sc.right[0] * dist * 0.3,
+        sc.pos[1] + dist * 0.05,
+        sc.pos[2] + sc.normal[2] * dist + sc.right[2] * dist * 0.3,
+      ];
+      camera.camToWorld = lookAtCamera(eye, sc.pos);
+      camera.fovY = (50 * Math.PI) / 180;
+    } else if (inspect === 'holo' && adData.holograms.length) {
+      const h = adData.holograms[inspectN % adData.holograms.length];
+      const c: [number, number, number] = [
+        h.pos[0],
+        h.pos[1] + h.scale,
+        h.pos[2],
+      ];
+      const a = time * 0.05;
+      camera.camToWorld = lookAtCamera(
+        [
+          c[0] + Math.cos(a) * h.scale * 4,
+          c[1] + h.scale * 0.3,
+          c[2] + Math.sin(a) * h.scale * 4,
+        ],
+        c,
+      );
+      camera.fovY = (50 * Math.PI) / 180;
+    } else if (cameraMode === 2) {
       // Establishing shot: slowly orbit high above the car's area.
       const a = time * 0.02;
       const p = pose.position;
@@ -159,7 +220,8 @@ async function main() {
     }
     const cl = carLights(pose.matrix, time);
     packLights(cl, dynamicLights);
-    renderer.lights.writeDynamic(dynamicLights, DYNAMIC_LIGHTS);
+    renderer.lights.writeDynamic(dynamicLights, 16);
+    adState.time = time;
     Object.assign(canopyState, {
       dt: Math.max(dt, paused ? 1 / 60 : 0),
       time,

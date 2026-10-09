@@ -16,6 +16,7 @@ export class SignRenderer {
   private pipeline!: GPURenderPipeline;
   private bg!: GPUBindGroup;
   private count = 0;
+  glyphAtlas!: GPUTexture;
 
   constructor(private readonly device: GPUDevice) {}
 
@@ -29,6 +30,7 @@ export class SignRenderer {
       GPUBufferUsage.STORAGE,
     );
     const atlas = createGlyphAtlas(d);
+    this.glyphAtlas = atlas;
     const sampler = createSampler(d, {
       label: 'signs/sampler',
       magFilter: 'linear',
