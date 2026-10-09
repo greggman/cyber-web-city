@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Car Preview</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #loadmsg { position: fixed; left: 8px; bottom: 8px; color: #7ff; font: 12px ui-monospace, monospace; }
+      #loadmsg.done { display: none; }
+      #hud { position: fixed; left: 8px; top: 8px; color: #cfe; font: 11px/1.3 ui-monospace, monospace; white-space: pre; }
+      #errors { position: fixed; left: 8px; right: 8px; bottom: 8px; color: #f66; background: rgba(0,0,0,.8);
+        font: 12px ui-monospace, monospace; white-space: pre-wrap; display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="loadmsg">Loading</div>
+    <div id="hud"></div>
+    <div id="errors"></div>
+    <script type="module" src="car-preview.js"></script>
+  </body>
+</html>
