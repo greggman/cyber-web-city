@@ -113,6 +113,12 @@ export class SegmentList {
     return this.u32[i * 16 + 14];
   }
 
+  /** Replaces the accent colour's rgb, keeping its alpha (typology) byte. */
+  setAccent(i: number, rgb: number) {
+    const o = i * 16 + 13;
+    this.u32[o] = ((this.u32[o] & 0xff000000) | (rgb & 0xffffff)) >>> 0;
+  }
+
   setFlags(i: number, flags: number) {
     this.u32[i * 16 + 14] = flags;
   }

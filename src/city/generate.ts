@@ -2,6 +2,7 @@
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
+import {CYAN, blockPalette} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -157,14 +158,8 @@ export function generateCity(seed: number): CityData {
     for (let j = -N; j < N; j++) {
       const rng = new Rng(seed, (i + 1000) * 4096 + (j + 1000));
       const info = superblockInfo(i, j, seed);
-      // District palette: two hues from slowly varying noise plus amber.
-      {
-        const h0 = Math.floor(
-          hashFloat(seed, Math.floor(i / 3), Math.floor(j / 3), 5) * 8,
-        );
-        const h1 = (h0 + 1 + Math.floor(hashFloat(seed, i, j, 6) * 3)) % 8;
-        setPalette([h0, h1, 2]);
-      }
+      // Block palette by district (ART_BIBLE.md 15.2b, 15.3).
+      setPalette(blockPalette(seed, i, j, info.district));
       const hs = info.heightScale;
       const sx0 = i * SUPER + half;
       const sz0 = j * SUPER + half;
@@ -280,6 +275,13 @@ export function generateCity(seed: number): CityData {
               if (fl !== g.flags) segments.setFlags(k, fl);
             }
             edgeUsed ||= usedEdges;
+            // Core landmarks carry the district's cyan accent on their crown
+            // lights and rings (ART_BIBLE.md 15.2b).
+            if (landmarkEdges) {
+              const cyan = packColor(CYAN[0], CYAN[1], CYAN[2]);
+              for (let k = s0; k < segments.count; k++)
+                segments.setAccent(k, cyan);
+            }
             // Hero dressing: buildings whose footprint comes within 60 m of
             // an avenue centreline (the flight corridors) get the denser kit.
             const ave = (t: number) =>

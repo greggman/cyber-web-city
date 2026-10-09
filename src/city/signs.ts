@@ -1,9 +1,10 @@
 // Neon signs on facades, and the static lights of the city (signs, street
 // lamps). Brands are invented: random syllables, kana and CJK characters.
-import {Rng, hashFloat} from '../math/random';
+import {Rng} from '../math/random';
 import {unwarp, warp3} from './warp';
 import type {LightDesc} from '../render/lightClusters';
-import {NEON, type FacadeSlot} from './buildings';
+import {type FacadeSlot} from './buildings';
+import {blockPalette, paletteColor} from './palette';
 import {AVENUE_W, CITY_RADIUS_SUPERS, District, SUPER} from './layout';
 import {
   CJK_COUNT,
@@ -58,17 +59,25 @@ export function brandGlyphs(rng: Rng, vertical: boolean): number[] {
   return out.slice(0, 8);
 }
 
-/** Signs follow the same district palettes as the buildings. */
+/** Signs use their block's palette (palette.ts): dominant 60%, secondary
+ * 30%, warm white 10%. */
 function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
   const [gu, gv] = unwarp(slot.x, slot.z);
   const i = Math.floor(gu / SUPER);
   const j = Math.floor(gv / SUPER);
-  const h0 = Math.floor(
-    hashFloat(seedForPalette, Math.floor(i / 3), Math.floor(j / 3), 5) * 8,
+  return paletteColor(rng, blockPalette(seedForPalette, i, j, slot.district));
+}
+
+/** The district accent for one deliberate sign (one per Slum tenement). */
+function slotAccent(slot: FacadeSlot): [number, number, number] | null {
+  const [gu, gv] = unwarp(slot.x, slot.z);
+  const p = blockPalette(
+    seedForPalette,
+    Math.floor(gu / SUPER),
+    Math.floor(gv / SUPER),
+    slot.district,
   );
-  const h1 = (h0 + 1 + Math.floor(hashFloat(seedForPalette, i, j, 6) * 3)) % 8;
-  const k = rng.weighted([5, 3, 1.2, 0.6]);
-  return NEON[[h0, h1, 2, rng.int(0, 8)][k]];
+  return slot.district === District.Slum ? p.accent : null;
 }
 let seedForPalette = 0;
 
@@ -231,7 +240,9 @@ export function generateSigns(
         ((k + 0.5) / n - 0.5) * (slot.width - 3) + srng.range(-0.8, 0.8);
       const yc = 5.2 + level * 1.4 + h / 2;
       const out = w / 2 + 0.3;
-      const col = slotPalette(srng, slot);
+      // One deliberate accent sign per slum tenement (ART_BIBLE.md 15.2b).
+      const acc = k === 0 ? slotAccent(slot) : null;
+      const col = acc ?? slotPalette(srng, slot);
       const col2 = slotPalette(srng, slot);
       first ??= col;
       signs.push({

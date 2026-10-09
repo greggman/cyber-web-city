@@ -1,5 +1,11 @@
 // Building archetypes. Each pushes a stack of segments for one lot.
 import type {Rng} from '../math/random';
+import {
+  type BlockPalette,
+  NEON_WHITE,
+  RED,
+  paletteColor as blockColor,
+} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 
@@ -57,17 +63,21 @@ export const NEON: [number, number, number][] = [
   [1.0, 0.85, 0.25], // gold
 ];
 
-// Each superblock uses a small palette (1-2 dominant hues plus a warm
-// accent) so districts read as coherent instead of rainbow noise.
-let palette: number[] = [0, 1, 2];
+// Each superblock has a block palette (palette.ts, ART_BIBLE.md 15): a
+// dominant and a secondary colour chosen by its district's rules.
+let palette: BlockPalette = {
+  dominant: RED,
+  secondary: NEON_WHITE,
+  accent: null,
+  magenta: false,
+};
 
-export function setPalette(p: number[]) {
+export function setPalette(p: BlockPalette) {
   palette = p;
 }
 
 export function paletteColor(rng: Rng): [number, number, number] {
-  const k = rng.weighted([5, 3, 1.5]);
-  return NEON[palette[Math.min(k, palette.length - 1)]];
+  return blockColor(rng, palette);
 }
 
 export function neon(rng: Rng): number {
