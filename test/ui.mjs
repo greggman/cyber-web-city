@@ -18,7 +18,7 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   const camera = () => page.evaluate(() => window.__ui.camera);
   check((await camera()) === 0, 'starts in chase camera');
   check((await page.$('#ui-cam-panel')) === null, 'camera button has no dropdown');
-  for (const [want, name] of [[1, 'Cockpit'], [2, 'Skyline'], [3, 'Map'], [0, 'Chase']]) {
+  for (const [want, name] of [[1, 'Cockpit'], [2, 'Skyline'], [0, 'Chase']]) {
     await page.click('#ui-cam-btn');
     await sleep(250);
     const toast = await page.$eval('#ui-toast', e => e.textContent);

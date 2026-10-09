@@ -141,6 +141,8 @@ const CSS = `
 `;
 
 const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
+/** Cameras in the button/key cycle (Map is URL-only). */
+const CYCLE = 3;
 
 type NumKey = 'volume' | 'timeScale' | 'rain' | 'haze' | 'exposure';
 type BoolKey =
@@ -333,10 +335,11 @@ export class Controls {
     }
   }
 
-  /** Switches to the next camera (chase, cockpit, skyline, map). */
+  /** Switches to the next camera (chase, cockpit, skyline). The map view
+   * is only reachable with ?cam=map. */
   cycleCamera() {
-    this.state.camera = ((this.state.camera + 1) %
-      CAMERA_NAMES.length) as CameraMode;
+    this.state.camera = ((Math.min(this.state.camera, CYCLE - 1) + 1) %
+      CYCLE) as CameraMode;
     this.state.shot = undefined;
     this.onChange('camera');
     this.showToast(`${CAMERA_NAMES[this.state.camera]} camera`);

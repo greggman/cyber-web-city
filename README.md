@@ -33,7 +33,7 @@ The site deploys to GitHub Pages on every push to `main`
 
 ## Controls
 
-Clicking the camera icon (top left) cycles chase → cockpit → skyline → map;
+Clicking the camera icon (top left) cycles chase → cockpit → skyline (the top-down map is `?cam=map` only);
 the gear icon
 (top right) opens settings (pause, sound, stats, flight speed, rain, haze,
 brightness, reflections, light shafts, anti-aliasing). Settings are saved
@@ -41,7 +41,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 
 | Key | Action |
 |---|---|
-| C | Cycle camera: chase, cockpit, skyline, top-down map |
+| C | Cycle camera: chase, cockpit, skyline |
 | 1–5 | Pick a chase framing (classic, low, high wide, side, front three-quarter) |
 | 0 | Cycle framings automatically |
 | Space | Pause |
