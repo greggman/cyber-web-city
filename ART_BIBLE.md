@@ -568,7 +568,7 @@ Today `window_facade` already ray-traces the window opening and interior-maps th
 14. Do slum buildings differ *from each other* (bay widths, tones, floor lines) while each one is internally consistent?
 15. Are the windows on corner bays whole: no clipped half-windows at building edges?
 16. **Colour: atmosphere.** Is the sky and haze amber-brown low and near, and grey-steel high and far, with **no violet or magenta cast** anywhere in the haze, sky or shadows (sample the sky at the horizon and at 30° up: hue between 20° and 40° low, saturation below 15% high)?
-17. **Colour: share.** Is at least 70% of the frame's emissive light sodium, tungsten or warm-white, and is red the only saturated sign hue that recurs? Is there **no** saturated cyan, magenta, violet or green neon (hologram rose and ice, and slum fluoro, are allowed only where section 15 places them)?
+17. **Colour: intent.** Is at least 60% of the emitted light warm (sodium, tungsten, red, warm white)? Does every magenta, cyan, green or violet accent belong to a place (a Market magenta block, a Core landmark crown, one Slum sign per tenement, a hologram), clustered rather than sprinkled, with one accent story leading the frame?
 18. **Colour: blocks.** Within one block, do the signs show one dominant hue plus one secondary, so that you could name the block's colour in one word? Is no frame a confetti of five or more sign hues?
 19. **Colour: grade.** Do the brightest sources (beams, headlights, sign cores, flares) roll off to warm or neutral white instead of clipping to a saturated colour, with no tinted anamorphic streaks (streaks take their source's colour), and are the deepest shadows near-neutral rather than teal or purple?
 
@@ -580,7 +580,7 @@ Today `window_facade` already ray-traces the window opening and interior-maps th
 
 - **Blade Runner (1982).** Cronenweth wanted *Citizen Kane*: high contrast, hard backlight and shafts of light, so the sets were filled with smoke ("just before I lose consciousness") and lit through it. The aerial "surveillance" beams were **xenon** advertising searchlights; on tungsten-balanced film they read **blue-white**. Street neons sat on dimmers "just above where they would start to flicker", and the crowds were dressed "rather colorless" (ASC, *Blade Runner: Cronenweth's Photography*). The Tyrell office is **amber**: arcs through amber gels behind a sunrise plate. The Hades opening is etched-brass miniatures lit from below by thousands of fibre-optic pinpoints (white and amber), in layers of smoke, with **orange gas-flare fireballs** projected into the miniature (Trumbull / EEG). The ads (Coca-Cola, Atari, TDK, Pan Am, the geisha) are mostly corporate **red and white** plus skin tones; Pan Am's blue globe is the one cool logo. The street neon is mostly red and warm white, with a few green and blue tubes, kept dim.
 - **Blade Runner 2049.** Deakins's Los Angeles is grey, rain- and snow-soaked and desaturated. The only strong colour is the ads: the Joi advert is **pink and blue** and "was basically lighting the whole shot". Las Vegas is an orange monochrome (Lee 105 Orange plus Moroccan Pink, Golden Amber on skylights). Wallace's spaces are amber water caustics.
-- **Correction.** The user is right. There is **no magenta** in either film's atmosphere, and **no saturated cyan neon** as a recurring sign colour. Blue does appear, but as a *light* (xenon beams, steel-blue night fill, 2049's grey-teal rain), not as a sign hue. Orange does appear, but as **sodium, fire and tungsten**, never as a pure "neon orange" sign colour. Red is the one saturated sign colour that recurs.
+- **Correction (refined by the user).** The point is not that cyberpunk accents are forbidden; it is that we used them as a **crutch**: every sign rolled a random saturated hue, and the whole atmosphere was tinted violet, so no colour meant anything. In both films the saturated colours are rare, **placed**, and carry meaning (the red Coca-Cola wall, Joi's pink-and-blue). So: keep magenta, cyan and green, but give each one an owner, a place and a budget (15.2b). The atmosphere is never an accent colour by default.
 
 **What reads as random in our build** (out/review-s13):
 
@@ -622,7 +622,25 @@ All code values are **linear**. Energy share is the share of the frame's emissiv
 - Flare `#FF7A1E` (1.0, 0.195, 0.013): Hades flare stacks only.
 - Tube Green `#86C89A` (0.238, 0.578, 0.323): at most 1 Market tube sign per block.
 
-Everything warm (P1, P2, X1, X2) totals at least **70%** of the energy.
+Everything warm (P1, P2, X1, X2) totals at least **60%** of the energy; accents follow 15.2b.
+
+### 15.2b Accents with intent
+
+The cyberpunk accents stay, as **signatures**: each belongs to a district or a landmark, appears **clustered** (a block, a building, a hologram), and is never rolled per sign.
+
+| # | Name | sRGB | Linear | Owner and place | Budget |
+|---|---|---|---|---|---|
+| K1 | Electric Magenta | `#FF2D95` | 1.0, 0.026, 0.30 | **Market**: the dominant sign hue of about 1 Market block in 3; Market LED skins; the giant route holograms (with Ice) | ≤ 12% |
+| K2 | Data Cyan | `#2EE6FF` | 0.027, 0.79, 1.0 | **Core**: crown lights and data screens on landmark towers; secondary sign hue in Market magenta blocks | ≤ 8% |
+| K3 | Acid Green | `#7CFF5A` | 0.20, 1.0, 0.10 | **Slum**: one small sign per tenement (pharmacy crosses, noodle bars) and green fluoro rooms | ≤ 5% |
+| K4 | Ultraviolet | `#8A4DFF` | 0.25, 0.074, 1.0 | **Landmarks only**: at most one per view (a hologram or one crown) | ≤ 3% |
+
+Rules:
+- **Cluster, don't sprinkle.** An accent appears as a whole block's palette, one building's program or one landmark, so it reads as a *place*. A lone random accent sign is a bug.
+- **One accent story per frame.** The district under the camera decides which accent leads; others appear only in the distance.
+- **Accents total ≤ 25%** of emitted energy in any frame, and warm (P1, P2, X1, X2) stays ≥ 60%.
+- **Motivated colour only in the air.** Haze takes an accent only as *bounce* below about 60 m from a big source of it (a Market canyon glows magenta-red near the street); never as a global tint.
+- Accents never tint the grade, the ambient light or the streaks.
 
 ### 15.3 Districts (one film, five mixes)
 
@@ -630,10 +648,10 @@ Shares are of the district's practical and sign energy. The haze tint multiplies
 
 | District | Mix | Haze tint (`district_tint`) | Read |
 |---|---|---|---|
-| Core | Tungsten 35, Xenon 35, Sodium 10, Red 12 (crowns, beacons), Holo 8 | `(0.94, 0.98, 1.06)` | the coolest district: xenon offices, beams on crowns |
+| Core | Tungsten 35, Xenon 30, Sodium 10, Red 10 (beacons), Cyan 8 (landmark crowns, screens), Holo 7 | `(0.94, 0.98, 1.06)` | the coolest district: xenon offices, beams on crowns |
 | Megablock | Sodium 45, Tungsten 35, Xenon 8, Red 12 | `(1.08, 1.0, 0.9)` | sodium-brown plateaus |
-| Slum | Tungsten 45, Fluoro 20, Sodium 20, Red 15 | `(1.04, 1.0, 0.9)`, density ×1.4 below 60 m | smoky and dim, with one red sign per building |
-| Market | Red 35, Tungsten 25, Sodium 15, Neon White 15, Holo 7, Tube Green ≤3 | `(1.12, 0.97, 0.9)` | a red canyon (the BR street) |
+| Slum | Tungsten 45, Fluoro 15, Sodium 20, Red 12, Acid Green 8 (one sign per tenement) | `(1.04, 1.0, 0.9)`, density ×1.4 below 60 m | smoky and dim, with one red sign per building |
+| Market | red blocks: Red 35, Tungsten 25, Sodium 15, Neon White 15, Holo 10; magenta blocks (1 in 3): Magenta 35, Cyan 15, Neon White 20, Tungsten 30 | `(1.12, 0.97, 0.9)` | a red canyon (the BR street) |
 | Corporate | Sodium-gold 60 (Tyrell), Xenon 30 (searchlights), Red 10 (beacons) | `(1.06, 1.0, 0.94)`, density ×0.7 | gold pyramids raked by white beams |
 
 ### 15.4 Signage rules
@@ -648,7 +666,7 @@ Sign set: **Red, Sodium (amber), Neon White, Holo Ice**, plus Tube Green in Mark
 
 - **Block rule.** Each superblock rolls one **dominant** from {Red 0.5, Amber 0.3, Neon White 0.2} and one **secondary**, which is a different member of that set or Ice (p=0.15). Then signs are dominant 60%, secondary 30%, and the size table above 10%. There is no global wildcard.
 - **Text versus body.** Glyphs are Neon White or the sign hue. The sign body or border is the *other* one, never two saturated hues on one sign.
-- **Never:** magenta, violet, pink neon or saturated cyan. Ice appears only on screens and blades, and is never adjacent to another Ice sign.
+- **Accents only by block.** Magenta and cyan appear as the dominant and secondary of a Market *magenta block*, green as the one Slum sign per tenement, cyan on Core landmark crowns (15.2b). Never as a per-sign roll.
 - **Dim the street.** Neon tube peak is at most 2.5× a lit window's luminance (Cronenweth's "just above flicker"). Blades may reach 4×.
 
 ### 15.5 Atmosphere
@@ -657,7 +675,7 @@ Sign set: **Red, Sodium (amber), Neon White, Holo Ice**, plus Tube Green in Mark
 - **Sky.**
   - Horizon `(0.10, 0.06, 0.035)`, mid `(0.03, 0.026, 0.024)`, zenith `(0.004, 0.005, 0.007)`.
   - The cloud underside is lit amber near the horizon `(0.20, 0.11, 0.05)` and fades to steel overhead `(0.045, 0.048, 0.055)`.
-  - No hue may sit between 260° and 340° (violet and magenta).
+  - The sky and fog carry no violet or magenta wash; any accent in the air is motivated bounce (15.2b).
 - **Beams (new).** Xenon searchlights, 3 to 6 per km², from Corporate and Core crowns, with slow sweeps of 0.05 to 0.15 rad/s. The volumetric colour is `(0.72, 0.81, 1.0)`. Beams are the main source of cool light in the frame, and they backlight the smoke.
 - **Hades flares (new, optional).** Refinery stacks on the city edge burst Flare orange every 8 to 20 s and light the cloud underside within 1.5 km.
 
@@ -711,7 +729,7 @@ Sign set: **Red, Sodium (amber), Neon White, Holo Ice**, plus Tube Green in Mark
   - Shadows to near-neutral steel `(0.97, 1.0, 1.03)` (from the teal `0.85, 1.0, 1.12`).
   - Highlights to warm `(1.04, 1.0, 0.92)`.
 - **Saturation.** Global ×0.88 in display space. Above luminance 0.75, ramp the saturation down to 0.4, so that sign and beam cores roll off to warm or neutral white the way film does.
-- **Clamp.** No display pixel may have a hue in 260° to 340° with a saturation above 0.35. This is a safety clamp; flag any pixel it changes in the debug view.
+- **No clamp.** Accents are controlled at the source (15.2b), not in the grade.
 - **Streaks and bloom.** The anamorphic streak takes the **source colour** × `(1.0, 0.95, 0.9)`, instead of the fixed `(0.35, 0.55, 1.0)`. Keep the bloom mix at 0.12.
 - **Grain.** Keep the 0.025 grain. Black level must stay at 0.004 or below. Never lift the shadows with colour.
 
