@@ -396,3 +396,29 @@ judge report. The next milestone starts with the top judge findings.
   upgrade them when the judge or profiler says they're the bottleneck.
 - **IP:** draw inspiration from the films and cities, but invent all brands, logos, faces,
   and the car design itself.
+
+---
+
+## 15. Status (implementation notes)
+
+All ten milestones are implemented; see [README.md](README.md) for usage and
+the architecture overview. Where the implementation deviates from the plan
+above, it is noted here.
+
+| Plan item | Status |
+|---|---|
+| Tooling, Pages deploy, labeled objects, error reporting | Done. TypeScript 7 runs side by side with the TS 6 API package, because typescript-eslint (used by gts) doesn't support TS 7 yet. A WGSL batch validator (`test/validate-shaders.mjs`) was added. |
+| GPU-driven city, compute culling, indirect draws, LOD | Done. Hi-Z occlusion uses the previous frame's pyramid; in canyon views it typically culls about 95% of segments. |
+| Building grammar, districts, Chinese-city archetypes | Done (setback, cylinder, twisting, pearl, megablock, pyramid, slum stack, Raffles-style bridged cluster, gate, LED slab, wedge), plus sky bridges that always connect to real faces. |
+| Facade shading, interior mapping, wetness | Done. Distant facades use per-building emission averages. |
+| Clustered forward+ lighting | Done (16×9×24 clusters, about 200k static and 2k dynamic lights). |
+| Signs, glyph atlas | Done, with GPU culling into an indirect draw. |
+| Ads (render to texture) and holograms | Done. Ads are raymarched SDF scenes in a mipmapped atlas, with GPU-extracted area lights. Holograms are raymarched SDFs. One planned ad, a commercial rasterizing the NURBS car, was not done. |
+| Rain, splashes, canopy droplets, condensation | Done. Splashes are represented by animated ripple normals on wet surfaces rather than splash particles. |
+| SSR, volumetrics, TAA, bloom, streaks, grade | Done. |
+| NURBS API and car via designer and judge agents | Done in five rounds. The car judge scored 4.5, 5.7 and 6.6 in rounds 1–3; later results are in the commit history. |
+| Traffic | Done. It's analytic (no simulation state), so screenshots are deterministic. The nearest vehicles render as meshes (the hero car tessellated coarsely) and all of them as light streaks. Dedicated traffic models were not made. |
+| Nanite-style meshlet clusters | **Not built.** City geometry is a few hundred thousand instanced primitives whose facade detail lives in shaders, so meshlets would not pay off. The plan's fallback was used instead: discrete LODs, Hi-Z occlusion and size culling. |
+| Impostors and chunk streaming | **Replaced.** The whole city (about 230k segments) generates in under 0.7 s. A far-field ring of simple buildings out to about 14 km, plus horizon-matched fog, replaces impostors and the skyline layer, and no streaming is needed because the flight path loops within the city. |
+| Quality presets, profiling | Done: `quality=low`, GPU timestamp HUD, visible-segment readback. |
+| Audio (stretch goal) | Done: procedural WebAudio ambience. |
