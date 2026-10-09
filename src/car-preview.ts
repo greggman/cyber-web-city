@@ -21,6 +21,7 @@ import {
   multiply,
   lookAtCamera,
   rotationY,
+  translation,
   type Mat4,
   type Vec3,
 } from './math/vec';
@@ -256,6 +257,7 @@ async function main() {
     (bmin[1] + bmax[1]) / 2,
     (bmin[2] + bmax[2]) / 2,
   ];
+  center[1] += 0.9;
   const extent = Math.max(
     bmax[0] - bmin[0],
     bmax[1] - bmin[1],
@@ -265,7 +267,11 @@ async function main() {
   const envName = params.get('env') ?? 'studio';
   const spin = params.get('spin') === '1';
   const d = extent * 1.15;
-  const eye = entry.driverEye;
+  const eye: Vec3 = [
+    entry.driverEye[0],
+    entry.driverEye[1] + 0.9,
+    entry.driverEye[2],
+  ];
   const cams: Record<string, [Vec3, Vec3, number]> = {
     'three-quarter': [
       [center[0] - d * 0.75, center[1] + d * 0.3, center[2] - d * 0.85],
@@ -282,12 +288,12 @@ async function main() {
     side: [[center[0] - d * 1.5, center[1], center[2]], center, 35],
     top: [[center[0], center[1] + d * 1.6, center[2] + 0.001], center, 35],
     low: [
-      [center[0] - d * 0.6, bmin[1] + 0.3, center[2] - d * 0.9],
+      [center[0] - d * 0.6, bmin[1] + 1.2, center[2] - d * 0.9],
       [center[0], center[1] + 0.2, center[2]],
       45,
     ],
     under: [
-      [center[0] - d * 0.5, bmin[1] - 1.2, center[2] - d * 0.6],
+      [center[0] - d * 0.5, bmin[1] - 0.3, center[2] - d * 0.6],
       [center[0], center[1], center[2]],
       45,
     ],
@@ -355,7 +361,11 @@ async function main() {
     const camToWorld = lookAtCamera(camEye, camTarget);
     const proj = perspective((fovDeg * Math.PI) / 180, w / h, 0.02, 200);
     const vp = multiply(proj, invert(camToWorld));
-    const modelM = spin ? rotationY(t * 0.4) : rotationY(0);
+    // Hover 0.9 m above the preview floor so glow cones aren't cut off.
+    const modelM = multiply(
+      translation([0, 0.9, 0]),
+      spin ? rotationY(t * 0.4) : rotationY(0),
+    );
     const u = new Float32Array(40);
     u.set(vp, 0);
     u.set(modelM, 16);
