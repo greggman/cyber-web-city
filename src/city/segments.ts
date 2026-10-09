@@ -108,6 +108,10 @@ export class SegmentList {
     this.f32[o + 3] = rotY;
   }
 
+  getFlags(i: number): number {
+    return this.u32[i * 16 + 14];
+  }
+
   setFlags(i: number, flags: number) {
     this.u32[i * 16 + 14] = flags;
   }

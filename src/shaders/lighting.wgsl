@@ -19,7 +19,10 @@ fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
   // stronger deeper in the canyons). The differences between them are what
   // make ledges, fins and greebles read at night.
   let sky = vec3f(0.26, 0.18, 0.34) * frame.cityGlow;
-  let horizon = vec3f(0.12, 0.085, 0.12) * frame.cityGlow;
+  // The smog glow is brighter toward the city core: faces turned toward
+  // it are lit more than the others, so building forms separate.
+  let face = 0.55 + 0.45 * dot(normalize(n.xz + vec2f(1e-4)), vec2f(0.6, 0.8)) * (1.0 - abs(n.y));
+  let horizon = vec3f(0.24, 0.16, 0.22) * face * frame.cityGlow;
   let depthBoost = 1.0 + 3.0 * exp(-max(worldY, 0.0) / 90.0);
   let ground = vec3f(0.2, 0.1, 0.06) * depthBoost * frame.cityGlow;
   return sky * smoothstep(-0.1, 1.0, n.y) + horizon * (1.0 - abs(n.y)) + ground * smoothstep(0.1, -1.0, n.y);
@@ -29,9 +32,9 @@ fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
 // glowing smog layer at the horizon.
 fn reflection_env(r: vec3f) -> vec3f {
   let horizon = exp(-abs(r.y) * 6.0);
-  let below = vec3f(0.025, 0.014, 0.012) * (1.0 - smoothstep(-0.2, 0.0, r.y));
-  let above = vec3f(0.012, 0.010, 0.022) * smoothstep(0.0, 0.3, r.y);
-  return (below + above + vec3f(0.09, 0.04, 0.06) * horizon) * frame.cityGlow;
+  let below = vec3f(0.05, 0.028, 0.024) * (1.0 - smoothstep(-0.2, 0.0, r.y));
+  let above = vec3f(0.03, 0.024, 0.05) * smoothstep(0.0, 0.3, r.y);
+  return (below + above + vec3f(0.14, 0.07, 0.1) * horizon) * frame.cityGlow;
 }
 
 fn ggx_d(nh: f32, a: f32) -> f32 {

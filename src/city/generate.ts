@@ -32,6 +32,12 @@ import {
   wedgeTower,
 } from './buildings';
 
+/** Fraction of buildings per district that keep LED edge strips. */
+const NEON_SHARE: Partial<Record<number, number>> = {
+  [District.Core]: 0.25,
+  [District.Market]: 0.35,
+};
+
 /** An axis-aligned box over an avenue that the flight path must avoid. */
 export interface Obstacle {
   x0: number;
@@ -222,7 +228,20 @@ export function generateCity(seed: number): CityData {
           const segStart = segments.count;
           const build = (lot: Lot, fn: (ctx: BuildCtx, lot: Lot) => number) => {
             const ctx = ctxFor(sideOnAvenue(lot));
+            const s0 = segments.count;
             minH = Math.min(minH, fn(ctx, inset(lot, 2.5)));
+            // Neon outlines on every building read as wireframe: only some
+            // buildings keep their LED edges/bands; the rest are lit by
+            // windows and signs.
+            const share = NEON_SHARE[info.district] ?? 0.15;
+            const h = hashFloat(seed, Math.round(lot.x0), Math.round(lot.z0), 41);
+            if (h >= share) {
+              const glow =
+                SegFlags.EdgeGlow | SegFlags.FloorBands | SegFlags.TopGlow;
+              for (let k = s0; k < segments.count; k++) {
+                segments.setFlags(k, segments.getFlags(k) & ~glow);
+              }
+            }
           };
           switch (info.district) {
             case District.Core: {

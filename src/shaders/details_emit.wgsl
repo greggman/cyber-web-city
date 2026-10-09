@@ -299,7 +299,7 @@ fn grid_for(s: Segment, row: i32) -> Grid {
   switch s.style {
     case ST_GLASS: { return Grid(1.6, 0.06, 0.94, 0.14, 0.98); }
     case ST_RESIDENTIAL: { return Grid(3.4, 0.18, 0.82, 0.25, 0.85); }
-    case ST_METAL: { return Grid(3.0, 0.04, 0.96, 0.35, 0.7); }
+    case ST_METAL: { return Grid(1.5, 0.07, 0.93, 0.3, 0.72); }
     case ST_SLUM: {
       let fid = bitcast<u32>(row);
       let cw = 2.2 + 2.5 * hash21(s.seed, fid);
@@ -577,7 +577,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
             emit(T_AC, spot(s, fc, winCx + xo, y + 0.15), vec3f(1.0), 0.3, rgba(vec3f(0.38, 0.38, 0.36)), neon_accent(h >> 9u), IF_LIT, u2f(h >> 19u), true);
           }
         } else if (style == ST_METAL) {
-          if (r < 0.3) {
+          if (r < 0.15) {
             emit(T_VENT, spot(s, fc, cx, y + 0.08 * fh), vec3f(1.0), 0.5, rgba(vec3f(0.16, 0.16, 0.17)), 0u, 0u, rank, true);
           }
         }

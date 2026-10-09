@@ -59,8 +59,9 @@ fn detail(cellMeters: vec2f, fw: vec2f) -> f32 {
 fn light_color(kind: u32, h: f32, tint: vec3f) -> vec3f {
   // Mostly the building tint, with some variation in color temperature.
   var c = tint;
-  if (h < 0.15) { c = vec3f(1.0, 0.62, 0.32); }           // tungsten
-  else if (h < 0.25) { c = vec3f(0.75, 0.88, 1.0); }      // fluorescent
+  if (h < 0.2) { c = vec3f(1.0, 0.62, 0.32); }            // tungsten
+  else if (h < 0.36) { c = vec3f(0.75, 0.88, 1.0); }      // fluorescent
+  else if (h < 0.44) { c = mix(tint, vec3f(1.0, 0.8, 0.55), 0.5) * 0.6; } // lamp-lit, dim
   else if (h < 0.28 && kind == ST_SLUM) { c = vec3f(1.0, 0.2, 0.6); }
   else if (h < 0.31 && kind == ST_SLUM) { c = vec3f(0.2, 1.0, 0.8); }
   else if (h < 0.33) { c = vec3f(0.4, 0.5, 1.0); }        // TV glow
@@ -92,7 +93,7 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
       // Ceiling with a light panel.
       let q = h.xz / room.xz;
       let panel = step(abs(q.x - 0.5), 0.2) * step(abs(q.y - 0.4), 0.15);
-      c = vec3f(0.6) + panel * 3.0;
+      c = vec3f(0.6) + panel * 1.6;
     } else {
       // Floor.
       c = mix(vec3f(0.22, 0.17, 0.13), vec3f(0.3, 0.3, 0.32), u2f(hs >> 5u)) * 0.6;
@@ -162,9 +163,21 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
   let lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
-  let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.06 + 1.6 * pow(u2f(hRoom >> 9u), 4.0));
+  let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f(hRoom >> 9u), 2.5));
+  // Panes of one room differ a little (blinds angle, lamps, furniture).
+  let pane = 0.7 + 0.6 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), floorId);
   var em = vec3f(0.0);
   var reveal = 0.0;
+  // Light spilling out of a lit window onto the wall/sill around it.
+  if (det > 0.0 && win < 1.0) {
+    let lpm = f * vec2f(ws.cellW, ws.floorH);
+    let q0 = vec2f(ws.winX0 * ws.cellW, ws.winY0 * ws.floorH);
+    let q1 = vec2f(ws.winX1 * ws.cellW, ws.winY1 * ws.floorH);
+    let dd = max(max(q0 - lpm, lpm - q1), vec2f(0.0));
+    // Mostly downward onto the sill.
+    let dist = length(dd * vec2f(1.0, select(2.0, 0.8, lpm.y < q0.y)));
+    (*sf).emissive += lc * pane * lit * det * (1.0 - win) * 0.05 * exp(-dist * 2.5);
+  }
   if (det > 0.0 && win > 0.0) {
     // Recessed window: trace the view ray into the opening. It either
     // reaches the glass (look into the room from the hit point: parallax)
@@ -207,7 +220,7 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
       let open = 0.15 + 0.3 * u2f(hRoom >> 27u);
       inner = mix(inner, lc * cc * 0.6 * folds, step(open, abs(fr.x - 0.5) * 2.0));
     }
-    if (reveal == 0.0) { em = inner * lit; }
+    if (reveal == 0.0) { em = inner * lit * pane; }
     // Unlit windows: occasional TV flicker.
     if (reveal == 0.0 && lit < 0.5 && u2f(hRoom >> 3u) < 0.015) {
       let flick = 0.75 + 0.25 * sin(c.time * (1.5 + 2.0 * u2f(hRoom)) + f32(hRoom & 255u));
@@ -218,7 +231,7 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   // Smooth per-building average for distant facades (no blocky zones),
   // with a faint per-floor variation that survives a little longer.
   let floorVar = 0.75 + 0.5 * hash21(c.seed ^ 0x2545f491u, floorId);
-  let avg = ws.litFrac * 0.11 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  let avg = ws.litFrac * 0.2 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
   (*sf).emissive += mix(avg, em * win, det);
   // Reveal pixels are wall material, not glass.
   return win * det * (1.0 - step(0.001, reveal)) + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
@@ -305,7 +318,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   let g = grime(c);
   if ((s.flags & F_NOWIN) != 0u) {
     let panel = fract(c.facade / vec2f(1.2, 1.0));
-    (*sf).albedo = vec3f(0.09, 0.09, 0.1) * (0.8 + 0.3 * step(0.1, panel.x)) * g;
+    (*sf).albedo = vec3f(0.15, 0.15, 0.16) * (0.8 + 0.3 * step(0.1, panel.x)) * g;
     (*sf).metallic = 0.6;
     (*sf).roughness = 0.5;
     (*sf).reflectivity = 0.3;
@@ -319,7 +332,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
     let mull = (1.0 - aa_box(cellF.x, 0.07, 0.93, c.fw.x / ws.cellW)) * det;
     let rib = step(0.5, fract(c.facade.y * 2.5)) * (1.0 - step(0.14, cellF.y)) * det;
-    var frameCol = vec3f(0.05, 0.055, 0.06) * g;
+    var frameCol = vec3f(0.11, 0.115, 0.12) * g;
     frameCol = mix(frameCol, vec3f(0.55, 0.57, 0.6), mull);
     frameCol *= 1.0 - rib * 0.4;
     (*sf).albedo = mix(frameCol, glass, w);
@@ -329,7 +342,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   } else if (style == ST_RESIDENTIAL) {
     ws = WinStyle(3.4, s.floorH, 0.18, 0.82, 0.25, 0.85, 1.0, 5.0, 0.22, 1.6, 0.2, 0.45);
     let w = window_facade(c, ws, style, tint, sf);
-    let concrete = mix(vec3f(0.16, 0.15, 0.14), vec3f(0.2, 0.17, 0.14), hash11(c.seed + 3u)) * g;
+    let concrete = mix(vec3f(0.3, 0.28, 0.26), vec3f(0.36, 0.3, 0.25), hash11(c.seed + 3u)) * g;
     // Balcony ledges.
     let fy = fract(c.facade.y / s.floorH);
     let ledge = aa_box(fy, 0.0, 0.08, c.fw.y / s.floorH) * step(0.5, fract(c.facade.x / (ws.cellW * 2.0)));
@@ -352,11 +365,15 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // Some AC units have a faint indicator glow.
     (*sf).emissive += vec3f(0.2, 0.9, 0.5) * ac * select(0.0, 0.25, (hac & 12u) == 0u);
   } else if (style == ST_METAL) {
-    ws = WinStyle(3.0, s.floorH, 0.04, 0.96, 0.35, 0.7, 3.0, 6.0, 0.25, 1.2, 0.3, 0.0);
+    // Ribbon windows split into 1.5 m panes by mullions; room width varies
+    // per floor so lit rooms don't all read as identical dashes.
+    let fidM = u_of(c.facade.y / s.floorH);
+    let rc = 2.0 + floor(4.0 * hash21(c.seed ^ 0x3c6ef372u, fidM));
+    ws = WinStyle(1.5, s.floorH, 0.07, 0.93, 0.3 + 0.08 * hash21(c.seed, fidM / 6u), 0.72, rc, 6.0, 0.25, 1.2, 0.5, 0.1);
     let w = window_facade(c, ws, style, tint, sf);
     let panel = fract(c.facade / vec2f(3.0, s.floorH));
     let seam = 1.0 - (1.0 - aa_box(panel.x, 0.0, 0.03, c.fw.x / 3.0)) * (1.0 - aa_box(panel.y, 0.0, 0.03, c.fw.y / s.floorH));
-    let base = mix(vec3f(0.08, 0.09, 0.1), vec3f(0.12, 0.11, 0.1), hash11(c.seed + 9u));
+    let base = mix(vec3f(0.16, 0.17, 0.19), vec3f(0.22, 0.2, 0.18), hash11(c.seed + 9u));
     (*sf).albedo = mix(base * (1.0 - 0.5 * seam) * g, vec3f(0.02), w);
     (*sf).metallic = mix(0.7, 0.0, w);
     (*sf).roughness = mix(0.45, 0.1, w);
@@ -367,7 +384,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let cw = 2.2 + 2.5 * hash21(c.seed, fid);
     ws = WinStyle(cw, s.floorH, 0.15 + 0.1 * hash21(c.seed + 1u, fid), 0.8, 0.25, 0.8, 1.0, 4.0, 0.55, 1.3, 0.15, 0.4);
     let w = window_facade(c, ws, style, tint, sf);
-    let concrete = mix(vec3f(0.14, 0.13, 0.12), vec3f(0.18, 0.12, 0.1), hash11(c.seed + 5u)) * g * g;
+    let concrete = mix(vec3f(0.26, 0.24, 0.22), vec3f(0.32, 0.22, 0.18), hash11(c.seed + 5u)) * g * g;
     // AC units: small dark boxes under some windows.
     let cell = fract(vec2f(c.facade.x / cw, c.facade.y / s.floorH));
     let cid = floor(vec2f(c.facade.x / cw, c.facade.y / s.floorH));
@@ -389,19 +406,16 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
       (*sf).emissive += col * m * 4.0 * flick;
     }
   } else if (style == ST_MONOLITH) {
-    // Dark stone with horizontal strip windows every few floors and ribs.
-    let band = fract(c.facade.y / (s.floorH * 3.0));
+    // Dark stone with horizontal strip windows every few floors and ribs;
+    // the strips are real rooms (interior mapping, varied lights, blinds).
+    let bandH = s.floorH * 3.0;
+    ws = WinStyle(6.0, bandH, 0.12, 1.0, 0.0, 0.18, 1.0 + floor(3.0 * hash11(c.seed + 21u)), 8.0, 0.6, 5.0, 0.45, 0.1);
+    let w = window_facade(c, ws, style, tint, sf);
     let rib = aa_box(fract(c.facade.x / 6.0), 0.0, 0.12, c.fw.x / 6.0);
-    let strip = aa_box(band, 0.0, 0.18, c.fw.y / (s.floorH * 3.0)) * (1.0 - rib);
-    let row = u_of(c.facade.y / (s.floorH * 3.0));
-    let seg = u_of(c.facade.x / 24.0);
-    let lit = select(0.0, 1.0, (hash3_u(c.seed, row, seg) & 15u) <= 11u);
-    let flick = 0.85 + 0.15 * sin(c.time * 0.5 + f32(row));
-    (*sf).albedo = vec3f(0.035, 0.03, 0.028) * (1.0 + rib * 0.6);
-    (*sf).roughness = 0.35;
-    (*sf).metallic = 0.3;
-    (*sf).reflectivity = 0.5;
-    (*sf).emissive += tint * strip * lit * 2.6 * flick;
+    (*sf).albedo = mix(vec3f(0.07, 0.065, 0.06) * (1.0 + rib * 0.6) * g, vec3f(0.02), w);
+    (*sf).roughness = mix(0.35, 0.06, w);
+    (*sf).metallic = mix(0.3, 0.0, w);
+    (*sf).reflectivity = mix(0.5, 0.85, w);
   } else if (style == ST_PODIUM) {
     // Shopfronts on the ground floors, offices above.
     let shopH = 7.0;
