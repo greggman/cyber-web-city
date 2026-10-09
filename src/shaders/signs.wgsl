@@ -133,13 +133,13 @@ fn fs(i: VOut) -> GOut {
       let across = select(isz.y, isz.x, vertical);
       let pitch = min(along / f32(n), across);
       let start = (along - pitch * f32(n)) * 0.5;
-      let a = select(inner.x, isz.y - inner.y, vertical) - start;
+      let a = select(inner.x, inner.y, vertical) - start;
       let b = select(inner.y, inner.x, vertical) - (across - pitch) * 0.5;
       let gi = floor(a / pitch);
       if (gi >= 0.0 && gi < f32(n) && b >= 0.0 && b <= pitch) {
         let g = glyph_at(s, u32(gi));
         var guv = vec2f(fract(a / pitch), b / pitch);
-        if (!vertical) { guv = vec2f(fract(a / pitch), 1.0 - b / pitch); }
+        if (!vertical) { guv = vec2f(fract(a / pitch), b / pitch); }
         else { guv = vec2f(b / pitch, fract(a / pitch)); }
         let cell = vec2f(f32(g % 16u), f32(g / 16u));
         let t = textureSampleLevel(glyphTex, glyphSampler, (cell + guv) / 16.0, 0.0);
@@ -152,7 +152,7 @@ fn fs(i: VOut) -> GOut {
       // Bright backlit panel with dark lettering.
       sf.emissive = colB * 2.2 * (1.0 - text * 0.9) * flick + colA * frame_ * 3.0;
     } else {
-      sf.emissive = (colA * text * 7.0 + colA * glow * 1.2) * flick + colB * frame_ * 2.5;
+      sf.emissive = (colA * text * 10.0 + colA * glow * 2.0) * flick + colB * frame_ * 2.5;
       sf.albedo = vec3f(0.02);
     }
   } else {

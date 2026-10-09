@@ -1,6 +1,6 @@
 // Neon signs on facades, and the static lights of the city (signs, street
 // lamps). Brands are invented: random syllables, kana and CJK characters.
-import {Rng} from '../math/random';
+import {Rng, hashFloat} from '../math/random';
 import type {LightDesc} from '../render/lightClusters';
 import {NEON, type FacadeSlot} from './buildings';
 import {AVENUE_W, CITY_RADIUS_SUPERS, District, SUPER} from './layout';
@@ -57,11 +57,25 @@ function brandGlyphs(rng: Rng, vertical: boolean): number[] {
   return out.slice(0, 8);
 }
 
+/** Signs follow the same district palettes as the buildings. */
+function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
+  const i = Math.floor(slot.x / SUPER);
+  const j = Math.floor(slot.z / SUPER);
+  const h0 = Math.floor(
+    hashFloat(seedForPalette, Math.floor(i / 3), Math.floor(j / 3), 5) * 8,
+  );
+  const h1 = (h0 + 1 + Math.floor(hashFloat(seedForPalette, i, j, 6) * 3)) % 8;
+  const k = rng.weighted([5, 3, 1.2, 0.6]);
+  return NEON[[h0, h1, 2, rng.int(0, 8)][k]];
+}
+let seedForPalette = 0;
+
 export function generateSigns(
   seed: number,
   slots: FacadeSlot[],
 ): {signs: Sign[]; lights: LightDesc[]} {
   const rng = new Rng(seed, 4242);
+  seedForPalette = seed;
   const signs: Sign[] = [];
   const lights: LightDesc[] = [];
   const density = [0.5, 0.6, 0.95, 0.95, 0.3];
@@ -71,7 +85,11 @@ export function generateSigns(
     if (!rng.chance(p)) continue;
     const busy =
       slot.district === District.Slum || slot.district === District.Market;
-    const count = busy ? rng.int(1, slot.avenue ? 5 : 2) : 1;
+    const count = busy
+      ? slot.avenue
+        ? rng.int(3, 11)
+        : rng.int(0, 2)
+      : rng.int(1, 3);
     // right x up = normal (right-handed), so text reads left to right.
     const right: [number, number, number] = [slot.nz, 0, -slot.nx];
     const normal: [number, number, number] = [slot.nx, 0, slot.nz];
@@ -86,8 +104,8 @@ export function generateSigns(
         w = Math.min(slot.width * 0.8, rng.range(10, busy ? 28 : 45));
         h = w * rng.range(0.18, 0.32);
       } else if (kind === SignKind.Blade) {
-        w = rng.range(3, 6);
-        h = rng.range(12, 42);
+        w = rng.range(3.5, 8);
+        h = rng.range(12, 45);
         thick = 0.8;
       } else if (kind === SignKind.Column) {
         w = rng.range(3.5, 7);
@@ -112,8 +130,8 @@ export function generateSigns(
         yc,
         slot.z + right[2] * along + normal[2] * out,
       ];
-      const col = rng.pick(NEON);
-      const col2 = rng.pick(NEON);
+      const col = slotPalette(rng, slot);
+      const col2 = slotPalette(rng, slot);
       const lightbox = kind !== SignKind.Frame && rng.chance(0.25);
       const sign: Sign = {
         pos,
@@ -134,7 +152,7 @@ export function generateSigns(
       };
       signs.push(sign);
       const area = Math.sqrt(w * h);
-      const intensity = (lightbox ? 3 : 2) * Math.min(2.5, area / 6);
+      const intensity = (lightbox ? 4 : 3) * Math.min(2.5, area / 6);
       const lp: [number, number, number] = [
         slot.x + right[0] * along + normal[0] * (out + 3 + w * 0.2),
         yc,
@@ -142,7 +160,7 @@ export function generateSigns(
       ];
       lights.push({
         pos: lp,
-        radius: 14 + area * 1.6,
+        radius: 14 + area * 1.9,
         color: [col[0] * intensity, col[1] * intensity, col[2] * intensity],
       });
     }

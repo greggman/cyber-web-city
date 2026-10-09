@@ -166,7 +166,9 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let tint = mix(vec3f(1.0), saturate3(m.color), saturate(m.param * 4.0));
   let transmit = (1.0 - fres) * (1.0 - m.param);
   let condensation = vec3f(0.06, 0.07, 0.08) * fog + behind * fog * 0.15;
-  let c = refl * fres + condensation;
+  // A little extra sheen at grazing angles so the canopy reads as glass.
+  let rim = smoothstep(0.55, 0.0, nv) * vec3f(0.05, 0.06, 0.08);
+  let c = refl * (fres * 2.0 + 0.03) + condensation + rim;
   // The glass samples what is behind it itself (refraction), so it simply
   // replaces the pixel.
   return vec4f(c + behind * tint * transmit + behind * fres * 0.0, 1.0);

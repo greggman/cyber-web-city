@@ -1,5 +1,5 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
-import {Rng} from '../math/random';
+import {Rng, hashFloat} from '../math/random';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -23,6 +23,7 @@ import {
   neon,
   pearlTower,
   pyramid,
+  setPalette,
   seg,
   setbackTower,
   slumStack,
@@ -125,6 +126,14 @@ export function generateCity(seed: number): CityData {
     for (let j = -N; j < N; j++) {
       const rng = new Rng(seed, (i + 1000) * 4096 + (j + 1000));
       const info = superblockInfo(i, j, seed);
+      // District palette: two hues from slowly varying noise plus amber.
+      {
+        const h0 = Math.floor(
+          hashFloat(seed, Math.floor(i / 3), Math.floor(j / 3), 5) * 8,
+        );
+        const h1 = (h0 + 1 + Math.floor(hashFloat(seed, i, j, 6) * 3)) % 8;
+        setPalette([h0, h1, 2]);
+      }
       const hs = info.heightScale;
       const sx0 = i * SUPER + half;
       const sz0 = j * SUPER + half;
@@ -218,7 +227,7 @@ export function generateCity(seed: number): CityData {
                         Style.MetalPanel,
                         Style.Monolith,
                       ]),
-                      rng.chance(0.4) ? SegFlags.EdgeGlow : 0,
+                      rng.chance(0.25) ? SegFlags.EdgeGlow : 0,
                     );
                   else if (k === 1) cylinderTower(ctx, l, H, Style.GlassOffice);
                   else if (k === 2) twistTower(ctx, l, H);

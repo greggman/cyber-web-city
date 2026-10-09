@@ -55,8 +55,21 @@ export const NEON: [number, number, number][] = [
   [1.0, 0.85, 0.25], // gold
 ];
 
+// Each superblock uses a small palette (1-2 dominant hues plus a warm
+// accent) so districts read as coherent instead of rainbow noise.
+let palette: number[] = [0, 1, 2];
+
+export function setPalette(p: number[]) {
+  palette = p;
+}
+
+export function paletteColor(rng: Rng): [number, number, number] {
+  const k = rng.weighted([5, 3, 1.5]);
+  return NEON[palette[Math.min(k, palette.length - 1)]];
+}
+
 export function neon(rng: Rng): number {
-  const c = rng.pick(NEON);
+  const c = paletteColor(rng);
   return packColor(c[0], c[1], c[2]);
 }
 
@@ -282,7 +295,7 @@ export function setbackTower(
       flags,
       floorH,
     });
-    if (t === 0) addSlots(ctx, cx, cz, w, d, y, y + h);
+    addSlots(ctx, cx, cz, w, d, y, y + h);
     y += h;
     w *= r.range(0.72, 0.9);
     d *= r.range(0.72, 0.9);
@@ -492,9 +505,9 @@ export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
       colorA,
       colorB,
       floorH: 3.0,
-      flags: SegFlags.FloorBands,
+      flags: r.chance(0.35) ? SegFlags.FloorBands : 0,
     });
-    if (t === 0) addSlots(ctx, cx, cz, ww, dd, y, y + h);
+    addSlots(ctx, cx, cz, ww, dd, y, y + h);
     y += h;
     ww *= 0.85;
     dd *= 0.85;
@@ -589,18 +602,18 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
       colorB,
       floorH: r.range(2.8, 3.3),
     });
-    if (first) {
-      addSlots(ctx, x, z, w, d, 3, Math.min(h, 40));
-      first = false;
-    }
+    addSlots(ctx, x, z, w, d, first ? 3 : y, y + h);
+    first = false;
     y += h;
     // Shrink or shift a little; occasionally cantilever outward (within lot).
     const nw = Math.max(10, w * r.range(0.75, 1.02));
     const nd = Math.max(10, d * r.range(0.75, 1.02));
+    // Shift relative to the tier below so tiers always overlap (cantilevers
+    // but never floating), and stay within the lot.
     const maxDx = Math.max(0, (lot.x1 - lot.x0 - nw) / 2);
     const maxDz = Math.max(0, (lot.z1 - lot.z0 - nd) / 2);
-    x = cx + r.range(-maxDx, maxDx);
-    z = cz + r.range(-maxDz, maxDz);
+    x = Math.max(cx - maxDx, Math.min(cx + maxDx, x + r.range(-0.2, 0.2) * w));
+    z = Math.max(cz - maxDz, Math.min(cz + maxDz, z + r.range(-0.2, 0.2) * d));
     w = nw;
     d = nd;
   }
