@@ -48,7 +48,12 @@ function copyStatic() {
 }
 
 const appOptions = {
-  entryPoints: ['src/main.ts', 'src/car-preview.ts', 'src/audio-render.ts'],
+  entryPoints: [
+    'src/main.ts',
+    'src/car-preview.ts',
+    'src/audio-render.ts',
+    'src/city-worker.ts',
+  ],
   bundle: true,
   format: 'esm',
   target: 'es2023',
