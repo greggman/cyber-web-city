@@ -27,31 +27,57 @@ import {
   roundRect,
 } from './parts';
 
-export const SPINNER_DRIVER_EYE: Vec3 = [-0.4, 1.32, 0.3];
+export const SPINNER_DRIVER_EYE: Vec3 = [-0.4, 1.3, -0.05];
 
-// Key stations along the car.
+// Key stations along the car (final frame).
 const zN = -2.7; // nose
-const zC0 = -1.0; // A-pillar base / windshield base
-const zC1 = 1.85; // rear end of the glass bubble
-const zT = 2.6; // tail (before the rake)
-const RAKE = Math.tan((15 * Math.PI) / 180);
+const zC0 = -1.35; // A-pillar base / windshield base
+const zC1 = 1.5; // rear end of the glass bubble
+const zT = 2.38; // tail (before the rake)
+const RAKE = Math.tan((17 * Math.PI) / 180);
+/** The cabin (interior, seats, eye) was laid out 0.35 m further back. */
+const CAB = 0.35;
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 /** Ducktail: the top of the tail kicks up slightly. */
-const kick = (z: number) => 0.035 * smooth(zT - 0.35, zT, z);
+const kick = (z: number) => 0.04 * smooth(zT - 0.3, zT, z);
 
-const keel = keyed([
+/**
+ * Profiles below are keyed in a "design" frame (nose -2.7, A-pillar -1.0,
+ * canopy end 1.85, tail 2.6); fwd() maps it to the final frame with the
+ * cabin moved forward, a shorter hood and a shorter deck.
+ */
+const FWD: [number, number][] = [
+  [-2.7, -2.7],
+  [-1.0, -1.35],
+  [1.85, 1.5],
+  [2.6, 2.38],
+];
+function fwd(z: number): number {
+  for (let i = 0; i < FWD.length - 1; i++) {
+    const [a0, b0] = FWD[i];
+    const [a1, b1] = FWD[i + 1];
+    if (z <= a1 || i === FWD.length - 2) {
+      return b0 + ((z - a0) * (b1 - b0)) / (a1 - a0);
+    }
+  }
+  return z;
+}
+const K = (keys: [number, number][]) =>
+  keyed(keys.map(([z, v]) => [fwd(z), v] as [number, number]));
+
+const keel = K([
   [-2.7, 0.44],
   [-2.3, 0.39],
   [-1.8, 0.37],
-  [1.6, 0.37],
-  [2.2, 0.41],
-  [2.6, 0.46],
+  [1.7, 0.37],
+  [2.2, 0.44],
+  [2.6, 0.56],
 ]);
-const bottomW = keyed([
+const bottomW = K([
   [-2.7, 0.6],
   [-2.2, 0.66],
   [-1.2, 0.74],
@@ -60,7 +86,7 @@ const bottomW = keyed([
   [2.0, 0.66],
   [2.6, 0.64],
 ]);
-const flareW = keyed([
+const flareW = K([
   [-2.7, 0.8],
   [-2.3, 0.9],
   [-1.4, 0.94],
@@ -72,7 +98,7 @@ const flareW = keyed([
   [2.6, 1.13],
 ]);
 /** Beltline / edge line height: a steady wedge from nose to haunch. */
-const beltY = keyed([
+const beltY = K([
   [-2.7, 0.78],
   [-2.0, 0.86],
   [-1.0, 0.95],
@@ -82,7 +108,7 @@ const beltY = keyed([
   [2.6, 1.14],
 ]);
 /** How far the fender/haunch top rises above the edge line. */
-const rise = keyed([
+const rise = K([
   [-2.7, 0.03],
   [-1.0, 0.03],
   [0.5, 0.03],
@@ -90,7 +116,7 @@ const rise = keyed([
   [1.8, 0.12],
   [2.6, 0.1],
 ]);
-const ledge = keyed([
+const ledge = K([
   [-2.7, 0.14],
   [-1.6, 0.16],
   [-1.0, 0.13],
@@ -99,25 +125,26 @@ const ledge = keyed([
   [1.8, 0.3],
   [2.6, 0.28],
 ]);
-const crown = keyed([
+const crown = K([
   [-2.7, 0.0],
   [-2.0, 0.03],
   [-1.0, 0.04],
   [1.8, 0.03],
   [2.6, 0.02],
 ]);
-const bubble = keyed([
-  [zC0, 0],
+/** Canopy height over the edge line: a long fastback taper to the deck. */
+const bubble = K([
+  [-1.0, 0],
   [-0.75, 0.2],
   [-0.35, 0.44],
   [0.1, 0.59],
   [0.55, 0.6],
-  [1.0, 0.5],
-  [1.45, 0.28],
-  [zC1, 0],
+  [1.0, 0.47],
+  [1.45, 0.22],
+  [1.85, 0],
 ]);
 // Height of the flare's lower lip, as a fraction keel -> shoulder.
-const flareEdge = keyed([
+const flareEdge = K([
   [-2.7, 0.45],
   [-2.2, 0.5],
   [-1.2, 0.58],
@@ -133,15 +160,17 @@ const FLOOR = 0.5;
 
 // Rear thruster pods (fused into the quarter panels).
 const POD_X = 0.9;
-const POD_Y = 0.66;
+const POD_Y = 0.68;
 const POD_R = 0.26;
-const POD_Z0 = 1.3;
-const podR = keyed([
-  [POD_Z0, 0],
+const POD_Z0 = fwd(1.3);
+const podR = K([
+  [1.3, 0],
   [1.75, POD_R * 0.9],
   [2.1, POD_R],
-  [zT, POD_R * 0.97],
+  [2.6, POD_R * 0.98],
 ]);
+/** Exhaust duct radius at the tail. */
+const R_HOLE = 0.185;
 
 /** Point on the flare's lower lip (where the lower and upper hull meet). */
 function lip(z: number): Vec3 {
@@ -149,7 +178,7 @@ function lip(z: number): Vec3 {
   return [flareW(z) - 0.035, yk + flareEdge(z) * (shoulderY(z) - yk), z];
 }
 
-/** Right half lower hull section: keel (x = 0) to the flare lip. */
+/** Right half lower hull section (no pod): keel (x = 0) to the flare lip. */
 function lowerSection(z: number): NurbsCurve {
   const yk = keel(z);
   const bw = bottomW(z);
@@ -164,6 +193,60 @@ function lowerSection(z: number): NurbsCurve {
     [l[0] - 0.08, l[1] - 0.01, z],
     l,
   ]);
+}
+
+/**
+ * Right half lower hull points, keel to lip, with the thruster pod grown
+ * out of it: between A (belly) and B (flare underside) the plain section
+ * blends into a curve that fillets out of the hull, wraps the duct circle
+ * and fillets back. Same point count at every z so the loft is smooth.
+ */
+function lowerPoints(z: number): Vec3[] {
+  const ls = lowerSection(z);
+  const lx = lip(z)[0];
+  const xA = Math.min(POD_X - 1.1 * POD_R, 0.8 * lx);
+  const xB = Math.min(POD_X + 0.1, lx - 0.03);
+  const tA = paramWhere(ls, p => p[0] - xA);
+  const tB = paramWhere(ls, p => p[0] - xB);
+  const w = smooth(POD_Z0, POD_Z0 + 0.45, z);
+  const pts: Vec3[] = [];
+  for (let i = 0; i < 4; i++) pts.push(ls.evaluate((tA * i) / 4));
+  const A = ls.evaluate(tA);
+  const B = ls.evaluate(tB);
+  const r = Math.max(podR(z) * 1.04, 0.01);
+  const c = (deg: number): Vec3 => {
+    const a = (deg * Math.PI) / 180;
+    return [POD_X + r * Math.cos(a), POD_Y + r * Math.sin(a), z];
+  };
+  const f = 0.13;
+  const pod = NurbsCurve.fromPoints([
+    A,
+    add(A, scale(ls.tangent(tA), f)),
+    c(-90),
+    c(-45),
+    c(0),
+    c(30),
+    add(B, scale(ls.tangent(tB), f)),
+    B,
+  ]);
+  const n = 12;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const h = ls.evaluate(tA + (tB - tA) * t);
+    pts.push(w > 0 ? add(h, scale(sub(pod.evaluate(t), h), w)) : h);
+  }
+  for (let i = 1; i <= 3; i++) pts.push(ls.evaluate(tB + ((1 - tB) * i) / 3));
+  return pts;
+}
+
+/** Full-width lower hull section: left lip -> keel -> right lip. */
+function lowerFull(z: number): NurbsCurve {
+  const r = lowerPoints(z);
+  const l = r
+    .slice(1)
+    .reverse()
+    .map(([x, y, zz]) => [-x, y, zz] as Vec3);
+  return NurbsCurve.interpolate([...l, ...r]);
 }
 
 /** Right half upper hull section: flare lip up to the edge line. */
@@ -183,43 +266,6 @@ function upperSection(z: number): NurbsCurve {
     [ex + 0.04, ey + 0.005, z],
     [ex, ey, z],
   ]);
-}
-
-interface PodSection {
-  curve: NurbsCurve;
-  tA: number;
-  tB: number;
-}
-
-/**
- * Pod section at z: leaves the lower hull at A (on the belly) with a
- * fillet, wraps the duct circle and fillets into the flare underside at B.
- */
-function podSection(z: number): PodSection {
-  const ls = lowerSection(z);
-  const tA = paramWhere(ls, p => p[0] - (POD_X - 1.1 * POD_R));
-  const tB = paramWhere(ls, p => p[0] - (POD_X + 0.1));
-  const A = ls.evaluate(tA);
-  const B = ls.evaluate(tB);
-  const tanA = ls.tangent(tA);
-  const tanB = ls.tangent(tB);
-  const r = podR(z) * 1.04;
-  const c = (deg: number): Vec3 => {
-    const a = (deg * Math.PI) / 180;
-    return [POD_X + r * Math.cos(a), POD_Y + r * Math.sin(a), z];
-  };
-  const f = 0.13;
-  const curve = NurbsCurve.fromPoints([
-    A,
-    add(A, scale(tanA, f)),
-    c(-90),
-    c(-45),
-    c(0),
-    c(30),
-    add(B, scale(tanB, f)),
-    B,
-  ]);
-  return {curve, tA, tB};
 }
 
 // Shape of top sections (hood/canopy/deck) from +edge to -edge.
@@ -291,10 +337,8 @@ const TRIM: Vec3 = [0.2, 0.21, 0.23];
 const FASCIA: Vec3 = [0.06, 0.065, 0.072];
 const LEATHER: Vec3 = [0.075, 0.03, 0.022];
 const HEAD: Vec3 = [6, 5, 4];
-const TAIL: Vec3 = [8, 0.4, 0.15];
-const THRUST_BLUE: Vec3 = [0.5, 1.3, 3.2];
-const THRUST_HOT: Vec3 = [4.5, 1.5, 0.35];
-const LIFT: Vec3 = [6, 2.2, 0.5];
+const TAIL: Vec3 = [10, 0.5, 0.2];
+const LIFT: Vec3 = [9, 3.2, 0.7];
 const AMBER: Vec3 = [8, 3.2, 0.4];
 const CYAN: Vec3 = [0.4, 5, 7];
 
@@ -378,6 +422,36 @@ function liftDuct(z: number, r: number): Part[] {
       surface: orient(
         revAxis(c, up, out, [
           [r - 0.03, 0.02],
+          [r - 0.03, 0.05],
+        ]),
+        [-1, 0, 0],
+        0.5,
+        0,
+      ),
+      material: 'metal',
+      color: DARK,
+      tessellation: REV(1, 40),
+    },
+    {
+      name: 'lift-ring-glow',
+      surface: orient(
+        revAxis(c, up, out, [
+          [r - 0.03, 0.05],
+          [r - 0.03, 0.075],
+        ]),
+        [-1, 0, 0],
+        0.5,
+        0,
+      ),
+      material: 'emissive',
+      emissive: scale(LIFT, 1.3),
+      tessellation: REV(1, 40),
+    },
+    {
+      name: 'lift-wall',
+      surface: orient(
+        revAxis(c, up, out, [
+          [r - 0.03, 0.075],
           [r - 0.03, 0.11],
         ]),
         [-1, 0, 0],
@@ -427,18 +501,35 @@ function liftDuct(z: number, r: number): Part[] {
         {e: 0.25, seg: 4},
       ),
     );
+    // Glowing louvre edge.
+    parts.push(
+      box(
+        'lift-louvre-glow',
+        [0, y + 0.002, zz],
+        [half * 0.95, 0.003, 0.0065],
+        {material: 'emissive', emissive: scale(LIFT, 0.8)},
+        {e: 0.3, seg: 3},
+      ),
+    );
   }
   return parts;
 }
 
-function interior(parts: Part[]) {
+// The interior is laid out in a cabin frame CAB m behind the final one.
+const cEdgeX = (z: number) => edgeX(z - CAB);
+const cEdgeY = (z: number) => edgeY(z - CAB);
+const cZ0 = zC0 + CAB;
+const cZ1 = zC1 + CAB;
+
+function interior(all: Part[]) {
+  const parts: Part[] = [];
   // Cockpit tub: sill and door cards, then the floor, hanging off the edge
   // line (two lofts sharing the boundary column).
-  const tubZ = steps(zC0 - 0.06, zC1 + 0.04, 14);
+  const tubZ = steps(cZ0 - 0.06, cZ1 + 0.04, 14);
   const doorCard = loft(
     tubZ.map(z => {
-      const ex = edgeX(z);
-      const ey = edgeY(z);
+      const ex = cEdgeX(z);
+      const ey = cEdgeY(z);
       return NurbsCurve.fromPoints([
         [ex + 0.01, ey - 0.01, z],
         [ex - 0.03, ey - 0.005, z],
@@ -451,7 +542,7 @@ function interior(parts: Part[]) {
   );
   const floor = loft(
     tubZ.map(z => {
-      const ex = edgeX(z);
+      const ex = cEdgeX(z);
       return NurbsCurve.fromPoints([
         [ex - 0.06, FLOOR + 0.03, z],
         [ex - 0.07, FLOOR, z],
@@ -480,7 +571,7 @@ function interior(parts: Part[]) {
   parts.push(
     box(
       'armrest',
-      [edgeX(0.2) - 0.11, 0.84, 0.18],
+      [cEdgeX(0.2) - 0.11, 0.84, 0.18],
       [0.36, 0.028, 0.045],
       {material: 'leather', color: LEATHER},
       {x: [0, 0, 1], y: [0, 1, 0], z: [1, 0, 0], seg: 10, mirror: true},
@@ -496,12 +587,12 @@ function interior(parts: Part[]) {
       loft(
         [
           NurbsCurve.fromPoints([
-            [edgeX(bz) - 0.08, FLOOR, bz + 0.06],
+            [cEdgeX(bz) - 0.08, FLOOR, bz + 0.06],
             [0.36, FLOOR, bz + 0.06],
             [0, FLOOR, bz + 0.06],
           ]),
           NurbsCurve.fromPoints([
-            [edgeX(bz) - 0.07, shelfY, bz],
+            [cEdgeX(bz) - 0.07, shelfY, bz],
             [0.4, shelfY, bz],
             [0, shelfY, bz],
           ]),
@@ -514,10 +605,10 @@ function interior(parts: Part[]) {
     mirror: true,
   });
   const shelf = loft(
-    steps(bz, zC1 + 0.04, 6).map(z =>
+    steps(bz, cZ1 + 0.04, 6).map(z =>
       NurbsCurve.fromPoints([
-        [edgeX(z) - 0.065, shelfY, z],
-        [0.5 * edgeX(z), shelfY, z],
+        [cEdgeX(z) - 0.065, shelfY, z],
+        [0.5 * cEdgeX(z), shelfY, z],
         [0, shelfY, z],
       ]),
     ),
@@ -542,13 +633,13 @@ function interior(parts: Part[]) {
 
   // Dashboard: one loft swept across the cabin; its ends wrap back and down
   // into the door cards like a curved cowl.
-  const xe = edgeX(-0.6) - 0.07;
+  const xe = cEdgeX(-0.6) - 0.07;
   const dashSecs = steps(-1, 1, 10).map(s => {
     const x = s * xe;
     const w = Math.pow(Math.abs(s), 3);
     const zs = 0.32 * w;
     const ys = -0.06 * w;
-    const yt = 0.9 + ys;
+    const yt = 0.85 + ys;
     const zf = -1.02 + zs * 0.4;
     const zl = -0.62 + zs;
     return NurbsCurve.fromPoints([
@@ -572,7 +663,7 @@ function interior(parts: Part[]) {
   parts.push(
     box(
       'dash-accent',
-      [0, 0.77, -0.6],
+      [0, 0.72, -0.6],
       [0.6, 0.004, 0.004],
       {material: 'emissive', emissive: [0.3, 1.6, 2.4]},
       {seg: 6},
@@ -581,7 +672,7 @@ function interior(parts: Part[]) {
   parts.push(
     box(
       'dash-vent',
-      [0.5, 0.84, -0.62],
+      [0.5, 0.79, -0.62],
       [0.1, 0.026, 0.008],
       {material: 'metal', color: [0.02, 0.02, 0.022]},
       {seg: 6, mirror: true},
@@ -590,9 +681,9 @@ function interior(parts: Part[]) {
 
   // Screens on one arc around the driver's eye, all facing it with the
   // same tilt, carried by a curved housing.
-  const eye = SPINNER_DRIVER_EYE;
+  const eye = add(SPINNER_DRIVER_EYE, [0, 0, CAB]);
   const R = 0.82;
-  const sy = 0.93;
+  const sy = 0.875;
   const deg = Math.PI / 180;
   const frame = (th: number) => {
     const c: Vec3 = [eye[0] + R * Math.sin(th), sy, eye[2] - R * Math.cos(th)];
@@ -602,11 +693,11 @@ function interior(parts: Part[]) {
     return {c, n, X, Y};
   };
   const screens: [string, number, number, number][] = [
-    ['gauges', -4, 0.26, 1],
-    ['nav', 15, 0.28, 0],
-    ['comms', 34, 0.24, 2],
+    ['gauges', -3, 0.21, 1],
+    ['nav', 12, 0.22, 0],
+    ['comms', 27, 0.19, 2],
   ];
-  const sh = 0.13;
+  const sh = 0.104;
   for (const [name, th, w, id] of screens) {
     const {c, n, X, Y} = frame(th * deg);
     const p = (a: number, b: number): Vec3 =>
@@ -628,7 +719,7 @@ function interior(parts: Part[]) {
   }
   // Housing: rounded section swept along the arc, closed at both ends.
   const hs: NurbsCurve[] = [];
-  const ths = [-21, -20.5, -19, ...steps(-15, 47, 6), 49, 50.5, 51];
+  const ths = [-16.5, -16, -14.5, ...steps(-11.5, 37.5, 6), 40.5, 42, 42.5];
   ths.forEach((t, i) => {
     const {c, n, Y} = frame(t * deg);
     const endScale =
@@ -702,13 +793,13 @@ function interior(parts: Part[]) {
 
   // Flight yoke.
   const yz = -0.24;
-  const yy = 0.86;
+  const yy = 0.81;
   parts.push({
     name: 'yoke-column',
     surface: pipe(
       [
-        [-0.4, 0.8, -0.62],
-        [-0.4, 0.83, -0.45],
+        [-0.4, 0.76, -0.62],
+        [-0.4, 0.785, -0.45],
         [-0.4, yy, yz - 0.02],
       ],
       0.024,
@@ -716,6 +807,21 @@ function interior(parts: Part[]) {
     material: 'metal',
     color: DARK,
     tessellation: {segmentsU: 10, segmentsV: 8},
+  });
+  parts.push({
+    name: 'column-shroud',
+    surface: superBox([-0.4, 0.765, -0.5], [0.045, 0.035, 0.14], 0.35, {
+      nu: 9,
+      nv: 13,
+      taperY: 0.8,
+      taperZ: 0.8,
+      x: [0, 0, 1],
+      y: [0, 1, 0],
+      z: [-1, 0, 0],
+    }),
+    material: 'plastic',
+    color: [0.03, 0.03, 0.033],
+    tessellation: {segmentsU: 10, segmentsV: 14},
   });
   parts.push({
     name: 'yoke',
@@ -849,6 +955,124 @@ function interior(parts: Part[]) {
       tessellation: {segmentsU: 10, segmentsV: 12},
     });
   }
+  for (const p of parts) {
+    all.push({
+      ...p,
+      surface: p.surface.transform(([x, y, z]) => [x, y, z - CAB]),
+    });
+  }
+}
+
+/** Recessed exhaust: chamfered lip, deep duct, stators, cone, hot core. */
+function exhaust(): Part[] {
+  const nc: Vec3 = [POD_X, POD_Y, zT];
+  const ax: Vec3 = [0, 0, 1];
+  const ex: Vec3 = [1, 0, 0];
+  const rh = R_HOLE;
+  const depth = 0.3;
+  const rev = (pts: [number, number][]) => revAxis(nc, ax, ex, pts);
+  const parts: Part[] = [
+    {
+      // Chamfered lip ring sitting on the tail panel, covering the hole edge.
+      name: 'exhaust-lip',
+      surface: orient(
+        rev([
+          [rh + 0.05, 0.0],
+          [rh + 0.042, 0.02],
+          [rh - 0.025, 0.026],
+          [rh - 0.035, 0.0],
+          [rh - 0.035, -0.03],
+        ]),
+        [0, 0, 1],
+        0.3,
+        0,
+      ),
+      material: 'metal',
+      color: TRIM,
+      mirror: true,
+      tessellation: REV(8, 40),
+    },
+    {
+      name: 'exhaust-duct',
+      surface: orient(
+        rev([
+          [rh - 0.035, -0.03],
+          [rh * 0.8, -depth * 0.5],
+          [rh * 0.78, -depth],
+        ]),
+        [-1, 0, 0],
+        0.5,
+        0,
+      ),
+      material: 'metal',
+      color: [0.05, 0.05, 0.055],
+      roughness: 0.35,
+      mirror: true,
+      tessellation: REV(6, 40),
+    },
+    {
+      name: 'exhaust-cone',
+      surface: orient(
+        rev([
+          [rh * 0.34, -depth],
+          [rh * 0.3, -depth * 0.6],
+          [rh * 0.14, -depth * 0.3],
+          [0, -depth * 0.22],
+        ]),
+        [0, 0, 1],
+        0.6,
+        0,
+      ),
+      material: 'metal',
+      color: [0.16, 0.16, 0.17],
+      mirror: true,
+      tessellation: REV(8, 32),
+    },
+  ];
+  // Radial emissive gradient on the back wall: hot blue-white core out to a
+  // dim rim.
+  const rings: [number, number, Vec3][] = [
+    [0.0, 0.42, [5, 9, 16]],
+    [0.42, 0.62, [2.2, 4.5, 11]],
+    [0.62, 0.8, [0.8, 1.8, 5]],
+    [0.8, 0.985, [0.15, 0.35, 1.2]],
+  ];
+  for (const [r0, r1, e] of rings) {
+    parts.push({
+      name: 'exhaust-glow',
+      surface: orient(
+        rev([
+          [rh * 0.8 * r1, -depth],
+          [rh * 0.8 * (r0 + r1) * 0.5, -depth - 0.002],
+          [rh * 0.8 * r0, -depth - 0.004],
+        ]),
+        [0, 0, 1],
+        0.5,
+        0,
+      ),
+      material: 'emissive',
+      emissive: e,
+      mirror: true,
+      tessellation: REV(2, 32),
+    });
+  }
+  // Stator vanes.
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.2;
+    const R: Vec3 = [Math.cos(a), Math.sin(a), 0];
+    const T: Vec3 = [-Math.sin(a), Math.cos(a), 0];
+    const rm = (rh * 0.35 + rh * 0.78) / 2;
+    parts.push(
+      box(
+        'exhaust-stator',
+        add(nc, [R[0] * rm, R[1] * rm, -depth * 0.55]),
+        [(rh * 0.45) / 2, 0.006, 0.05],
+        {material: 'metal', color: [0.1, 0.1, 0.11]},
+        {x: R, y: T, z: ax, seg: 4, mirror: true},
+      ),
+    );
+  }
+  return parts;
 }
 
 export function buildSpinner(): Model {
@@ -856,21 +1080,22 @@ export function buildSpinner(): Model {
 
   // Lift duct positions (holes are cut in the belly for them).
   const ducts: [number, number][] = [
-    [-1.75, 0.3],
-    [0.55, 0.32],
+    [-1.85, 0.3],
+    [0.25, 0.32],
   ];
 
-  // Main hull: charcoal lower tub and painted upper flanks, two lofts that
-  // share the flare lip line (a crisp crease, no gap).
+  // Main hull: a full-width lower loft (belly, flanks below the crease and
+  // the fused thruster pods) and the painted upper flanks. Both share the
+  // flare lip column exactly, so the two-tone crease is a clean break.
   const hullZ = [
     ...steps(zN, -2.4, 4),
     ...steps(-2.2, zC0, 4),
-    ...steps(-0.6, 1.2, 4),
-    ...steps(1.45, zT, 7),
+    ...steps(-1.0, POD_Z0, 4),
+    ...steps(POD_Z0 + 0.15, zT, 8),
   ];
-  const hullTessV = 50;
+  const hullTessV = 56;
   const upper = loft(hullZ.map(upperSection));
-  const lower = loft(hullZ.map(lowerSection));
+  const lower = orient(loft(hullZ.map(lowerFull)), [0, -1, 0], 0.5, 0.5);
   parts.push({
     name: 'hull-upper',
     surface: upper,
@@ -879,135 +1104,48 @@ export function buildSpinner(): Model {
     mirror: true,
     tessellation: {segmentsU: 16, segmentsV: hullTessV},
   });
-  // Belly holes for the lift ducts (tested on both mirror halves).
-  const ductV = ducts.map(([z, r]) => [
-    vAtZ(lower, 0.2, z - r - 0.05),
-    vAtZ(lower, 0.2, z + r + 0.05),
-  ]);
   const inDuct = (p: Vec3) =>
-    ducts.some(([z, r]) => Math.hypot(p[0], p[2] - z) < r - 0.025);
+    ducts.some(([z, r]) => Math.hypot(p[0], p[2] - z) < r - 0.02);
+  const ductV = ducts.map(([z, r]) => [
+    vAtZ(lower, 0.5, z - r - 0.05),
+    vAtZ(lower, 0.5, z + r + 0.05),
+  ]);
   parts.push({
     name: 'hull-lower',
     surface: lower,
     material: 'paint',
     color: PAINT2,
     roughness: 0.45,
-    mirror: true,
     tessellation: {
-      segmentsU: 20,
+      segmentsU: 60,
       segmentsV: hullTessV,
-      keep: (u, v) => {
-        if (!ductV.some(([a, b]) => v > a && v < b)) return true;
-        return !(
-          inDuct(lower.evaluate(u, v)) || inDuct(lower.evaluate(1 - u, v))
-        );
-      },
+      keep: (u, v) =>
+        !ductV.some(([a, b]) => v > a && v < b) ||
+        !inDuct(lower.evaluate(u, v)),
     },
   });
   for (const [z, r] of ducts) parts.push(...liftDuct(z, r));
 
-  // Rear thruster pods lofted out of the quarter panels.
-  const podZ = steps(POD_Z0, zT, 9);
-  const podSecs = podZ.map(podSection);
-  const pod = orient(loft(podSecs.map(p => p.curve)), [1, 0, 0], 0.55, 0.8);
-  parts.push({
-    name: 'thruster-pod',
-    surface: pod,
-    material: 'paint',
-    color: PAINT2,
-    roughness: 0.45,
-    mirror: true,
-    tessellation: {segmentsU: 22, segmentsV: 20},
-  });
-  // Red side marker and a groove outlining the pod.
-  parts.push({
-    name: 'pod-marker',
-    surface: conform(pod, 0.5, 0.58, 0.82, 0.93, 0.004, {nu: 4, nv: 4}),
-    material: 'emissive',
-    emissive: TAIL,
-    mirror: true,
-    tessellation: {segmentsU: 3, segmentsV: 4},
-  });
-  // Exhaust nozzle at the tail: dark ring, blue outer glow, hot core.
-  const nc: Vec3 = [POD_X, POD_Y, zT];
-  const back: Vec3 = [0, 0, 1];
-  const rr = POD_R * 0.97;
-  parts.push({
-    name: 'nozzle',
-    surface: orient(
-      revAxis(
-        nc,
-        back,
-        [1, 0, 0],
-        [
-          [rr * 1.0, -0.02],
-          [rr * 0.99, 0.05],
-          [rr * 0.84, 0.06],
-          [rr * 0.78, 0.01],
-        ],
-      ),
-      [0, 0, 1],
-      0.4,
-      0,
+  // Pod details: red side marker, orange lift strip, exhaust assembly.
+  parts.push(
+    box(
+      'pod-marker',
+      [POD_X + podR(zT - 0.35) * 1.04 + 0.002, POD_Y + 0.03, zT - 0.35],
+      [0.004, 0.018, 0.08],
+      {material: 'emissive', emissive: TAIL},
+      {seg: 4, mirror: true},
     ),
-    material: 'metal',
-    color: [0.12, 0.12, 0.13],
-    mirror: true,
-    tessellation: REV(6, 36),
-  });
-  parts.push({
-    name: 'nozzle-glow',
-    surface: orient(
-      revAxis(
-        nc,
-        back,
-        [1, 0, 0],
-        [
-          [rr * 0.79, 0.01],
-          [rr * 0.55, 0.004],
-          [rr * 0.32, 0.002],
-        ],
-      ),
-      [0, 0, 1],
-      0.5,
-      0,
-    ),
-    material: 'emissive',
-    emissive: THRUST_BLUE,
-    mirror: true,
-    tessellation: REV(4, 32),
-  });
-  parts.push({
-    name: 'nozzle-core',
-    surface: orient(
-      revAxis(
-        nc,
-        back,
-        [1, 0, 0],
-        [
-          [rr * 0.33, 0.002],
-          [rr * 0.2, 0.012],
-          [0, 0.03],
-        ],
-      ),
-      [0, 0, 1],
-      0.5,
-      0,
-    ),
-    material: 'emissive',
-    emissive: THRUST_HOT,
-    mirror: true,
-    tessellation: REV(3, 24),
-  });
+  );
   parts.push(
     box(
       'pod-lift',
-      [POD_X, POD_Y - POD_R * 1.0 + 0.01, 2.1],
-      [0.07, 0.008, 0.3],
+      [POD_X, POD_Y - POD_R * 1.04 - 0.002, zT - 0.45],
+      [0.07, 0.006, 0.28],
       {material: 'emissive', emissive: LIFT},
       {seg: 6, mirror: true},
     ),
   );
+  parts.push(...exhaust());
 
   // Hood, canopy, rear deck.
   const panelTess = {maxEdge: 0.1, segmentsU: 24};
@@ -1047,6 +1185,63 @@ export function buildSpinner(): Model {
     tessellation: panelTess,
   });
 
+  // Buttress sail panels: painted strips that grow over the lower rear
+  // corners of the glass and run down the deck to the haunches.
+  const vS = vAtZ(canopy, 0.0, fwd(0.75));
+  const sailW = (t: number) => 0.16 * Math.sin(Math.min(1, t) * Math.PI * 0.5);
+  for (const side of [0, 1]) {
+    const uu = (w: number) => (side === 0 ? w : 1 - w);
+    parts.push({
+      name: 'sail',
+      surface: orient(
+        conformMap(
+          canopy,
+          (a, b) => [uu(a * sailW(b)), vS + (1 - vS) * b],
+          0.004,
+          5,
+          9,
+        ),
+        [0, 1, 0],
+        0.5,
+        0.9,
+      ),
+      material: 'paint',
+      color: PAINT,
+      tessellation: {segmentsU: 4, segmentsV: 18},
+    });
+    parts.push({
+      name: 'sail',
+      surface: orient(
+        conformMap(
+          deck,
+          (a, b) => [uu(a * (0.16 - 0.1 * b)), 0.75 * b],
+          0.004,
+          5,
+          6,
+        ),
+        [0, 1, 0],
+        0.5,
+        0.2,
+      ),
+      material: 'paint',
+      color: PAINT,
+      tessellation: {segmentsU: 4, segmentsV: 10},
+    });
+  }
+
+  // Deck lid louvres.
+  parts.push({
+    name: 'deck-vent',
+    surface: conform(deck, 0.34, 0.66, 0.3, 0.75, 0.003, {
+      nu: 6,
+      nv: 25,
+      bump: (_a, b) => 0.008 * Math.abs(Math.sin(b * Math.PI * 6)),
+    }),
+    material: 'metal',
+    color: DARK,
+    tessellation: {segmentsU: 4, segmentsV: 48},
+  });
+
   // Glass rim: a dark seal all round the base of the bubble, plus a thin
   // bright edge just inside it (reads as the glass thickness).
   const railZ = steps(zC0 + 0.01, zC1 - 0.01, 18);
@@ -1068,89 +1263,102 @@ export function buildSpinner(): Model {
       ...(mat as Mat),
     });
   }
-  for (const z of [zC0, zC1]) {
-    parts.push({
-      name: 'canopy-seal',
-      surface: pipe(
-        offsetSection(topSection(z), 0.004, 14, [0, 0.6, z], 0.02, 0.98),
-        0.013,
-        {
-          up: [0, 0, 1],
-        },
-      ),
-      material: 'rubber',
-      tessellation: {segmentsU: 6, segmentsV: 30},
-    });
-  }
+  parts.push({
+    name: 'canopy-seal',
+    surface: pipe(
+      offsetSection(topSection(zC0), 0.004, 14, [0, 0.6, zC0], 0.02, 0.98),
+      0.013,
+      {up: [0, 0, 1]},
+    ),
+    material: 'rubber',
+    tessellation: {segmentsU: 6, segmentsV: 30},
+  });
 
-  // One slim roll hoop inside the glass behind the seats; a low smoked
-  // light bar sits on the glass above it.
-  const hoopZ = canZ[13];
+  // Firewall closing the cabin under the cowl.
+  const fz = zC0 - 0.02;
+  parts.push({
+    name: 'firewall',
+    surface: orient(
+      loft(
+        [
+          NurbsCurve.line([-edgeX(fz), FLOOR, fz], [edgeX(fz), FLOOR, fz]),
+          NurbsCurve.line(
+            [-edgeX(fz), edgeY(fz) - 0.01, fz],
+            [edgeX(fz), edgeY(fz) - 0.01, fz],
+          ),
+        ],
+        1,
+      ),
+      [0, 0, 1],
+    ),
+    material: 'plastic',
+    color: [0.02, 0.02, 0.022],
+    tessellation: {segmentsU: 1, segmentsV: 1},
+  });
+
+  // Slim 2.5 cm roll hoop inside the glass behind the seats; a low smoked
+  // light bar on the roof above it.
+  const hoopZ = fwd(0.85);
   const hoopC = topSection(hoopZ, bubble(hoopZ));
   parts.push({
     name: 'roll-hoop',
     surface: pipe(
-      offsetSection(hoopC, -0.03, 16, [0, 1.0, hoopZ], 0.04, 0.96),
-      0.015,
-      {
-        up: [0, 0, 1],
-      },
+      offsetSection(hoopC, -0.025, 16, [0, 1.0, hoopZ], 0.04, 0.96),
+      0.0125,
+      {up: [0, 0, 1]},
     ),
     material: 'metal',
     color: TRIM,
-    tessellation: {segmentsU: 8, segmentsV: 40},
+    tessellation: {segmentsU: 6, segmentsV: 40},
   });
   const topY = hoopC.evaluate(0.5)[1];
   parts.push(
     box(
       'beacon-base',
-      [0, topY + 0.008, hoopZ],
-      [0.21, 0.01, 0.055],
+      [0, topY + 0.006, hoopZ],
+      [0.18, 0.008, 0.05],
       {material: 'metal', color: DARK},
-      {
-        e: 0.2,
-        seg: 10,
-      },
-    ),
-  );
-  parts.push(
-    box(
-      'beacon-lens',
-      [0, topY + 0.03, hoopZ],
-      [0.2, 0.022, 0.045],
-      {
-        material: 'tinted-glass',
-        doubleSided: true,
-      },
-      {e: 0.25, seg: 12},
+      {e: 0.2, seg: 10},
     ),
   );
   for (const [x, col] of [
-    [0.1, AMBER],
-    [-0.1, CYAN],
+    [0.085, AMBER],
+    [-0.085, CYAN],
   ] as const) {
     parts.push(
-      box('beacon', [x, topY + 0.028, hoopZ], [0.08, 0.014, 0.03], {
-        material: 'emissive',
-        emissive: col,
-      }),
+      box(
+        'beacon',
+        [x, topY + 0.02, hoopZ],
+        [0.075, 0.01, 0.03],
+        {material: 'emissive', emissive: scale(col, 0.8)},
+        {seg: 6},
+      ),
     );
   }
+  parts.push(
+    box(
+      'beacon-lens',
+      [0, topY + 0.022, hoopZ],
+      [0.175, 0.02, 0.045],
+      {material: 'tinted-glass', doubleSided: true},
+      {e: 0.25, seg: 12},
+    ),
+  );
 
   // Hood: a smooth power dome blended into the panel, two small vents.
   parts.push({
     name: 'hood-dome',
-    surface: conform(hood, 0.3, 0.7, 0.35, 0.95, 0.0008, {
+    surface: conform(hood, 0.3, 0.7, 0.3, 0.95, 0.0008, {
       nu: 9,
       nv: 11,
       bump: (a, b) =>
-        0.045 *
+        0.04 *
         Math.pow(Math.sin(Math.PI * a), 2) *
         Math.pow(Math.sin(Math.PI * Math.min(1, b * 1.3)), 2),
     }),
     material: 'paint',
     color: PAINT,
-    tessellation: {segmentsU: 16, segmentsV: 20},
+    tessellation: {segmentsU: 16, segmentsV: 18},
   });
   for (const [u0, u1] of [
     [0.13, 0.24],
@@ -1158,7 +1366,7 @@ export function buildSpinner(): Model {
   ]) {
     parts.push({
       name: 'hood-vent',
-      surface: conform(hood, u0, u1, 0.6, 0.85, 0.003, {
+      surface: conform(hood, u0, u1, 0.55, 0.85, 0.003, {
         nu: 5,
         nv: 19,
         bump: (_a, b) => 0.007 * Math.abs(Math.sin(b * Math.PI * 5)),
@@ -1170,8 +1378,8 @@ export function buildSpinner(): Model {
   }
 
   // Haunch intakes ahead of the thrusters.
-  const hv0 = vAtZ(upper, 0.5, 1.3);
-  const hv1 = vAtZ(upper, 0.5, 1.75);
+  const hv0 = vAtZ(upper, 0.5, fwd(1.3));
+  const hv1 = vAtZ(upper, 0.5, fwd(1.75));
   parts.push({
     name: 'haunch-vent',
     surface: conform(upper, 0.3, 0.62, hv0, hv1, 0.003, {
@@ -1185,7 +1393,8 @@ export function buildSpinner(): Model {
     tessellation: {segmentsU: 28, segmentsV: 6},
   });
 
-  // Panel-line grooves: hood shut lines, door cuts, deck lid, crease line.
+  // Panel-line grooves: hood shut lines, door cuts, deck lid. (The two-tone
+  // crease itself is the shared lip edge of the hull lofts.)
   const groove = (
     s: NurbsSurface,
     uv: [number, number][],
@@ -1200,106 +1409,152 @@ export function buildSpinner(): Model {
       tessellation: {segmentsU: 4, segmentsV: seg},
     });
   };
+  const line = (
+    a: number,
+    b: number,
+    n: number,
+    f: (t: number) => [number, number],
+  ) => steps(a, b, n).map(f);
   groove(
     hood,
-    steps(0.03, 0.97, 6).map(v => [0.07, v] as [number, number]),
+    line(0.03, 0.97, 6, v => [0.07, v]),
   );
   groove(
     hood,
-    steps(0.03, 0.97, 6).map(v => [0.93, v] as [number, number]),
+    line(0.03, 0.97, 6, v => [0.93, v]),
   );
   groove(
     hood,
-    steps(0.07, 0.93, 6).map(u => [u, 0.03] as [number, number]),
+    line(0.07, 0.93, 6, u => [u, 0.03]),
   );
   groove(
     deck,
-    steps(0.12, 0.88, 6).map(u => [u, 0.25] as [number, number]),
+    line(0.2, 0.8, 6, u => [u, 0.15]),
   );
   groove(
     deck,
-    steps(0.12, 0.88, 6).map(u => [u, 0.88] as [number, number]),
+    line(0.2, 0.8, 6, u => [u, 0.88]),
   );
   groove(
     deck,
-    steps(0.25, 0.88, 4).map(v => [0.12, v] as [number, number]),
+    line(0.15, 0.88, 4, v => [0.2, v]),
   );
   groove(
     deck,
-    steps(0.25, 0.88, 4).map(v => [0.88, v] as [number, number]),
+    line(0.15, 0.88, 4, v => [0.8, v]),
   );
-  for (const z of [-0.95, 1.2]) {
+  for (const z of [zC0 + 0.05, fwd(1.2)]) {
     const v = vAtZ(upper, 0.5, z);
     groove(
       upper,
-      steps(0.04, 0.85, 5).map(u => [u, v] as [number, number]),
+      line(0.04, 0.85, 5, u => [u, v]),
       true,
       10,
     );
   }
-  groove(
-    upper,
-    steps(0.02, 0.98, 20).map(v => [0.025, v] as [number, number]),
-    true,
-    70,
-  );
 
   // Nose fascia and tail panel: planar caps ruled horizontally from the
-  // half outline to the center plane (no pole, so shading stays flat).
-  const capOutline = (z: number, withPod: boolean): NurbsCurve => {
-    const pts: Vec3[] = [];
-    const ls = lowerSection(z);
-    if (withPod) {
-      const ps = podSection(z);
-      for (let i = 0; i <= 6; i++) pts.push(ls.evaluate((ps.tA * i) / 6));
-      for (let i = 1; i <= 16; i++) pts.push(ps.curve.evaluate(i / 16));
-      for (let i = 1; i <= 4; i++)
-        pts.push(ls.evaluate(ps.tB + ((1 - ps.tB) * i) / 4));
-    } else {
-      for (let i = 0; i <= 12; i++) pts.push(ls.evaluate(i / 12));
-    }
+  // half outline to the center plane (no pole, so shading stays flat). The
+  // tail panel has the exhaust holes cut out (hidden under the lip rings).
+  const capOutline = (z: number): NurbsCurve => {
+    const pts: Vec3[] = [...lowerPoints(z)];
     const us = upperSection(z);
     for (let i = 1; i <= 10; i++) pts.push(us.evaluate(i / 10));
     const ts = topSection(z);
     for (let i = 1; i <= 8; i++) pts.push(ts.evaluate(0.5 * (i / 8)));
     return NurbsCurve.interpolate(pts);
   };
-  for (const [z, dir, name, withPod] of [
-    [zN, -1, 'nose-fascia', false],
-    [zT, 1, 'tail-panel', true],
+  for (const [z, dir, name] of [
+    [zN, -1, 'nose-fascia'],
+    [zT, 1, 'tail-panel'],
   ] as const) {
-    const outline = capOutline(z, withPod);
-    parts.push({
-      name,
-      surface: orient(
-        ruled(
-          outline.transform(([, y, zz]) => [0, y, zz]),
-          outline,
-        ),
-        [0, 0, dir],
-        0.5,
-        0.5,
+    const outline = capOutline(z);
+    const cap = orient(
+      ruled(
+        outline.transform(([, y, zz]) => [0, y, zz]),
+        outline,
       ),
-      material: 'plastic',
-      color: FASCIA,
-      roughness: 0.5,
+      [0, 0, dir],
+      0.5,
+      0.5,
+    );
+    if (dir < 0) {
+      parts.push({
+        name,
+        surface: cap,
+        material: 'plastic',
+        color: FASCIA,
+        roughness: 0.5,
+        mirror: true,
+        tessellation: {segmentsU: 48, segmentsV: 1},
+      });
+      continue;
+    }
+    // Tail: both halves explicitly (trim functions see their own surface).
+    for (const half of [cap, cap.mirrorX()]) {
+      parts.push({
+        name,
+        surface: half,
+        material: 'plastic',
+        color: FASCIA,
+        roughness: 0.5,
+        tessellation: {
+          segmentsU: 64,
+          segmentsV: 22,
+          keep: (u, v) => {
+            // Ruled horizontally: y depends on u only.
+            const p = half.evaluate(u, 1);
+            if (Math.abs(p[1] - POD_Y) > R_HOLE + 0.02) return true;
+            const q = half.evaluate(u, v);
+            return Math.hypot(Math.abs(q[0]) - POD_X, q[1] - POD_Y) > R_HOLE;
+          },
+        },
+      });
+    }
+  }
+
+  // Diffuser: fins under the tail between the exhausts, following the
+  // rising belly.
+  for (const x of [0.12, 0.34]) {
+    const zs = steps(zT - 0.55, zT + 0.01, 4);
+    parts.push({
+      name: 'diffuser-fin',
+      surface: orient(
+        loft(
+          [
+            NurbsCurve.fromPoints(zs.map(z => [x, keel(z) + 0.01, z] as Vec3)),
+            NurbsCurve.fromPoints(
+              zs.map(
+                z =>
+                  [
+                    x,
+                    keel(z) - 0.09 * smooth(zT - 0.55, zT - 0.2, z),
+                    z,
+                  ] as Vec3,
+              ),
+            ),
+          ],
+          1,
+        ),
+        [1, 0, 0],
+      ),
+      material: 'metal',
+      color: TRIM,
       mirror: true,
-      tessellation: {segmentsU: 48, segmentsV: 1},
+      doubleSided: true,
+      tessellation: {segmentsU: 8, segmentsV: 2},
     });
   }
 
-  // Nose: slim full-width light bar, slim grille, recessed wedge lamp
-  // housings at the fender corners, a low bumper blade.
+  // Nose: slim full-width light bar, slim grille, chin blade tied to the
+  // body with two strakes, headlamps wrapping into the fenders.
   parts.push(
     box(
       'light-bar',
       [0, 0.745, zN - 0.012],
       [0.64, 0.012, 0.014],
       {material: 'emissive', emissive: HEAD},
-      {
-        e: 0.2,
-        seg: 10,
-      },
+      {e: 0.2, seg: 10},
     ),
   );
   parts.push(
@@ -1308,10 +1563,7 @@ export function buildSpinner(): Model {
       [0, 0.62, zN - 0.006],
       [0.4, 0.05, 0.01],
       {material: 'metal', color: [0.015, 0.015, 0.017]},
-      {
-        e: 0.2,
-        seg: 10,
-      },
+      {e: 0.2, seg: 10},
     ),
   );
   for (let i = 0; i < 3; i++) {
@@ -1320,10 +1572,7 @@ export function buildSpinner(): Model {
         'grille-slat',
         [0, 0.59 + i * 0.03, zN - 0.016],
         [0.38, 0.004, 0.006],
-        {
-          material: 'metal',
-          color: TRIM,
-        },
+        {material: 'metal', color: TRIM},
         {seg: 4},
       ),
     );
@@ -1331,57 +1580,32 @@ export function buildSpinner(): Model {
   parts.push(
     box(
       'bumper',
-      [0, 0.49, zN - 0.04],
-      [0.68, 0.035, 0.07],
+      [0, 0.47, zN - 0.04],
+      [0.68, 0.03, 0.08],
       {material: 'metal', color: TRIM},
-      {
-        e: 0.3,
-        seg: 16,
-      },
+      {e: 0.3, seg: 16},
     ),
   );
-  // Wedge housing wrapping the fender corner (front face + side).
-  const v1 = vAtZ(upper, 0.5, zN + 0.42);
-  const wedge = (a: number, b: number): [number, number] => {
-    const taper = 1 - 0.75 * b;
-    return [0.12 + (0.68 - 0.12) * (0.5 + (a - 0.5) * taper), b * v1];
-  };
-  parts.push({
-    name: 'lamp-housing',
-    surface: conformMap(upper, wedge, 0.003, 6, 6),
-    material: 'plastic',
-    color: [0.012, 0.012, 0.014],
-    mirror: true,
-    tessellation: {segmentsU: 6, segmentsV: 8},
-  });
-  parts.push({
-    name: 'side-lamp',
-    surface: conformMap(
-      upper,
-      (a, b) => {
-        const [u, v] = wedge(0.3 + 0.4 * a, 0.12 + 0.5 * b);
-        return [u, v];
-      },
-      0.006,
-      4,
-      5,
+  parts.push(
+    box(
+      'chin-strake',
+      [0.3, 0.505, zN + 0.0],
+      [0.025, 0.05, 0.1],
+      {material: 'metal', color: TRIM},
+      {e: 0.3, seg: 6, mirror: true},
     ),
-    material: 'emissive',
-    emissive: AMBER,
-    mirror: true,
-    tessellation: {segmentsU: 3, segmentsV: 6},
-  });
+  );
+  // Headlamp clusters: a dark recessed bezel on the corner of the fascia,
+  // and a lamp strip wrapping around onto the fender side.
   const nl = lip(zN);
   const nu = upperSection(zN).evaluate(0.65);
+  const lampY = (nl[1] + nu[1]) / 2;
   parts.push(
     box(
       'headlamp-bezel',
-      [nu[0] - 0.13, (nl[1] + nu[1]) / 2, zN - 0.004],
+      [nu[0] - 0.13, lampY, zN - 0.004],
       [0.13, 0.05, 0.01],
-      {
-        material: 'plastic',
-        color: [0.012, 0.012, 0.014],
-      },
+      {material: 'plastic', color: [0.012, 0.012, 0.014]},
       {e: 0.2, seg: 10, mirror: true},
     ),
   );
@@ -1389,28 +1613,52 @@ export function buildSpinner(): Model {
     parts.push(
       box(
         'headlamp',
-        [nu[0] + dx + 0.02, (nl[1] + nu[1]) / 2, zN - 0.012],
+        [nu[0] + dx + 0.02, lampY, zN - 0.012],
         [0.045, 0.028, 0.006],
-        {
-          material: 'emissive',
-          emissive: HEAD,
-        },
+        {material: 'emissive', emissive: HEAD},
         {seg: 6, mirror: true},
       ),
     );
   }
+  const uL0 = paramWhere(upperSection(zN), p => p[1] - (lampY - 0.03));
+  const uL1 = paramWhere(upperSection(zN), p => p[1] - (lampY + 0.03));
+  const vW = vAtZ(upper, 0.5, zN + 0.3);
+  parts.push({
+    name: 'lamp-wrap-bezel',
+    surface: conform(upper, uL0 - 0.04, uL1 + 0.04, 0, vW + 0.02, 0.003, {
+      nu: 4,
+      nv: 5,
+    }),
+    material: 'plastic',
+    color: [0.012, 0.012, 0.014],
+    mirror: true,
+    tessellation: {segmentsU: 3, segmentsV: 6},
+  });
+  parts.push({
+    name: 'lamp-wrap',
+    surface: conform(upper, uL0, uL1, 0, vW * 0.55, 0.006, {nu: 4, nv: 4}),
+    material: 'emissive',
+    emissive: HEAD,
+    mirror: true,
+    tessellation: {segmentsU: 2, segmentsV: 4},
+  });
+  parts.push({
+    name: 'side-marker',
+    surface: conform(upper, uL0, uL1, vW * 0.62, vW, 0.006, {nu: 4, nv: 4}),
+    material: 'emissive',
+    emissive: AMBER,
+    mirror: true,
+    tessellation: {segmentsU: 2, segmentsV: 4},
+  });
 
-  // Tail: full-width saturated red strip, small reversing lamps, lip.
+  // Tail: full-width saturated red strip and an upkicked lip.
   const tailTop = edgeY(zT);
   parts.push(
     box(
       'tail-light',
       [0, tailTop - 0.07, zT + 0.008],
-      [flareW(zT) - 0.06, 0.018, 0.012],
-      {
-        material: 'emissive',
-        emissive: TAIL,
-      },
+      [flareW(zT) - 0.06, 0.02, 0.012],
+      {material: 'emissive', color: [1, 0.05, 0.02], emissive: TAIL},
       {e: 0.2, seg: 10},
     ),
   );
@@ -1418,19 +1666,16 @@ export function buildSpinner(): Model {
     box(
       'tail-light-bezel',
       [0, tailTop - 0.07, zT + 0.002],
-      [flareW(zT) - 0.04, 0.03, 0.01],
-      {
-        material: 'metal',
-        color: DARK,
-      },
+      [flareW(zT) - 0.04, 0.032, 0.01],
+      {material: 'metal', color: DARK},
       {e: 0.2, seg: 10},
     ),
   );
   parts.push(
     box(
       'tail-lip',
-      [0, tailTop + 0.012, zT - 0.02],
-      [0.82, 0.008, 0.05],
+      [0, tailTop + 0.014, zT - 0.02],
+      [0.84, 0.008, 0.055],
       {material: 'paint', color: PAINT},
       {
         e: 0.3,
@@ -1442,26 +1687,24 @@ export function buildSpinner(): Model {
     ),
   );
 
-  // Front amber markers, rear deck antenna.
+  // Rear deck antenna.
+  const az = zT - 0.3;
   parts.push(
     box(
       'antenna-base',
-      [-0.62, edgeY(2.25) + 0.03, 2.25],
+      [-0.62, edgeY(az) + 0.03, az],
       [0.03, 0.03, 0.03],
       {material: 'metal', color: TRIM},
-      {
-        e: 0.4,
-        seg: 6,
-      },
+      {e: 0.4, seg: 6},
     ),
   );
   parts.push({
     name: 'antenna',
     surface: pipe(
       [
-        [-0.62, edgeY(2.25) + 0.05, 2.25],
-        [-0.62, edgeY(2.25) + 0.3, 2.32],
-        [-0.62, edgeY(2.25) + 0.52, 2.42],
+        [-0.62, edgeY(az) + 0.05, az],
+        [-0.62, edgeY(az) + 0.3, az + 0.07],
+        [-0.62, edgeY(az) + 0.52, az + 0.17],
       ],
       0.005,
     ),
