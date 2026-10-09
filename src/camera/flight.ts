@@ -286,11 +286,13 @@ const SHOT_BLEND = 4;
 
 /** Blended framing for a time (deterministic, so screenshots repeat). */
 export function shotAt(time: number, fixed?: number): Shot {
-  if (fixed !== undefined) return SHOTS[fixed % SHOTS.length];
+  const n = SHOTS.length;
+  const at = (i: number) => SHOTS[((i % n) + n) % n];
+  if (fixed !== undefined) return at(fixed);
   const k = Math.floor(time / SHOT_LEN);
   const f = time / SHOT_LEN - k;
-  const a = SHOTS[k % SHOTS.length];
-  const b = SHOTS[(k + 1) % SHOTS.length];
+  const a = at(k);
+  const b = at(k + 1);
   const t = Math.max(0, (f * SHOT_LEN - (SHOT_LEN - SHOT_BLEND)) / SHOT_BLEND);
   const e = t * t * (3 - 2 * t);
   const mix = (x: number, y: number) => x + (y - x) * e;

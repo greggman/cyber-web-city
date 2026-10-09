@@ -66,3 +66,11 @@ test('Rng is deterministic and uniform-ish', () => {
   assert.notEqual(new Rng(1).next(), new Rng(2).next());
   assert.equal(hashFloat(1, 2, 3), hashFloat(1, 2, 3));
 });
+
+test('chase framing is defined for any time, including negative', async () => {
+  const {shotAt} = await import('../../src/camera/flight');
+  for (const t of [-100, -0.01, 0, 21.9, 1e6]) {
+    assert.ok(Number.isFinite(shotAt(t).back), `t=${t}`);
+  }
+  assert.ok(Number.isFinite(shotAt(0, -1).back));
+});

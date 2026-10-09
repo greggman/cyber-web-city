@@ -298,7 +298,8 @@ async function main() {
   let fpsFrames = 0;
   let fps = 0;
   function frame(now: number) {
-    const realDt = Math.min(0.1, (now - last) / 1000);
+    // rAF timestamps can precede the performance.now() taken at startup.
+    const realDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
     fpsAccum += realDt;
     fpsFrames++;
