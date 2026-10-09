@@ -9,7 +9,7 @@
     "check": "tsc --noEmit -p .",
     "lint": "gts lint",
     "fix": "gts fix",
-    "test:unit": "node build.mjs --tests && node --test out/tests/",
+    "test:unit": "node build.mjs --tests && node --test out/tests/*.mjs",
     "test": "npm run build && npm run test:unit && node test/smoke.mjs",
     "shots": "npm run build && node test/shots.mjs"
   },
