@@ -483,6 +483,28 @@ function liftDuct(z: number, r: number): Part[] {
       tessellation: REV(3, 32),
     },
     {
+      // Downward lift glow cone (additive; v runs duct -> tip).
+      name: 'lift-cone',
+      surface: orient(
+        revAxis(c, up, out, [
+          [r - 0.04, 0.0],
+          [r * 1.0, -0.03],
+          [r * 1.03, -0.07],
+          [r * 1.04, -0.12],
+          [r * 1.0, -0.18],
+          [r * 0.92, -0.25],
+          [r * 0.5, -0.55],
+          [0.02, -0.85],
+        ]).transposed(),
+        [1, 0, 0],
+        0,
+        0.2,
+      ),
+      material: 'glow',
+      emissive: [5, 1.8, 0.4],
+      tessellation: {segmentsU: 28, segmentsV: 10},
+    },
+    {
       // 3 cm orange ring facing down, just inside the lip.
       name: 'lift-ring-glow',
       surface: orient(
@@ -1162,15 +1184,50 @@ export function buildSpinner(): Model {
     const v0 = vAtZ(lower, 0.5, z0);
     const v1 = vAtZ(lower, 0.5, z1);
     const zm = (z0 + z1) / 2;
+    const ua = bellyU(zm, x0);
+    const ub = bellyU(zm, x1);
     parts.push({
       name: 'belly-hatch',
-      surface: conform(lower, bellyU(zm, x0), bellyU(zm, x1), v0, v1, 0.003, {
-        nu: 4,
-        nv: 4,
-      }),
+      surface: conform(lower, ua, ub, v0, v1, 0.003, {nu: 4, nv: 4}),
       material: 'metal',
-      color: [0.08, 0.085, 0.09],
+      color: [0.012, 0.012, 0.014],
+      roughness: 0.6,
       tessellation: {segmentsU: 2, segmentsV: 2},
+    });
+    // Light edge groove around the hatch and an amber warning stripe.
+    const e = 0.004;
+    parts.push({
+      name: 'hatch-edge',
+      surface: surfaceLine(
+        lower,
+        [
+          [ua - e, v0],
+          [ub + e, v0],
+          [ub + e, v1],
+          [ua - e, v1],
+          [ua - e, v0 + 0.001],
+        ],
+        0.006,
+        -0.002,
+      ),
+      material: 'metal',
+      color: [0.45, 0.46, 0.48],
+      tessellation: {segmentsU: 4, segmentsV: 24},
+    });
+    parts.push({
+      name: 'hatch-stripe',
+      surface: conform(
+        lower,
+        ua + (ub - ua) * 0.15,
+        ub - (ub - ua) * 0.15,
+        v0 + (v1 - v0) * 0.12,
+        v0 + (v1 - v0) * 0.2,
+        0.005,
+        {nu: 3, nv: 3},
+      ),
+      material: 'emissive',
+      emissive: [3, 1.1, 0.1],
+      tessellation: {segmentsU: 2, segmentsV: 1},
     });
     for (const [bx, bz] of [
       [x0 + 0.03, z0 + 0.03],
@@ -1189,6 +1246,19 @@ export function buildSpinner(): Model {
       );
     }
   }
+
+  // Pod seam: a dark trim bead turns the pod / flare fold into a seam.
+  parts.push({
+    name: 'pod-seam',
+    surface: pipe(
+      steps(POD_Z0 + 0.3, zT - 0.01, 8).map(z => lowerPoints(z)[15]),
+      0.012,
+    ),
+    material: 'metal',
+    color: TRIM,
+    mirror: true,
+    tessellation: {segmentsU: 6, segmentsV: 20},
+  });
 
   // Pod details: red side marker, orange lift strip, exhaust assembly.
   parts.push(
@@ -1210,6 +1280,34 @@ export function buildSpinner(): Model {
     ),
   );
   parts.push(...exhaust());
+  // Blue-white exhaust plumes (additive glow volumes; v runs from the
+  // nozzle to the tip).
+  {
+    const nc: Vec3 = [POD_X, POD_Y, zT - 0.02];
+    parts.push({
+      name: 'exhaust-plume',
+      surface: orient(
+        revAxis(
+          nc,
+          [0, 0, 1],
+          [1, 0, 0],
+          [
+            [R_HOLE * 0.8, 0],
+            [R_HOLE * 0.75, 0.18],
+            [R_HOLE * 0.4, 0.38],
+            [0.01, 0.5],
+          ],
+        ).transposed(),
+        [1, 0, 0],
+        0,
+        0.2,
+      ),
+      material: 'glow',
+      emissive: [1.5, 3, 6],
+      mirror: true,
+      tessellation: {segmentsU: 24, segmentsV: 8},
+    });
+  }
 
   // Hood, canopy, rear deck.
   const panelTess = {maxEdge: 0.1, segmentsU: 24};
@@ -1649,6 +1747,28 @@ export function buildSpinner(): Model {
     mirror: true,
     tessellation: {segmentsU: 2, segmentsV: 8},
   });
+  // Bridge around the tail corner joining the strip and the wrap.
+  {
+    const P = upper.evaluate(tS, 1);
+    const n = upper.normal(tS, 1);
+    const Q = upper.evaluate(tS, vAtZ(upper, tS, zT - 0.06));
+    const nq = upper.normal(tS, vAtZ(upper, tS, zT - 0.06));
+    const bridge = [
+      [P[0] - 0.16, ys, zT + 0.012],
+      [P[0] - 0.06, ys, zT + 0.012],
+      add(add(P, scale(n, 0.008)), [0, 0, 0.008]),
+      add(Q, scale(nq, 0.008)),
+    ] as Vec3[];
+    parts.push({
+      name: 'tail-wrap-bridge',
+      surface: pipe(bridge, 0.016),
+      material: 'emissive',
+      color: [1, 0.05, 0.02],
+      emissive: TAIL,
+      mirror: true,
+      tessellation: {segmentsU: 6, segmentsV: 10},
+    });
+  }
 
   // Diffuser: four fins under the tail between the exhausts, rising with
   // the belly and continuing up the black lower tail face as ribs.
