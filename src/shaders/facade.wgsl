@@ -66,16 +66,35 @@ fn detail(cellMeters: vec2f, fw: vec2f) -> f32 {
   return smoothstep(2.0, 6.0, px);
 }
 
+// Room light colour: warm : cool : tinted mixes per building type
+// (ART_BIBLE.md 10). h is a per-room random number in [0, 1).
 fn light_color(kind: u32, h: f32, tint: vec3f) -> vec3f {
-  // Mostly the building tint, with some variation in color temperature.
-  var c = tint;
-  if (h < 0.2) { c = vec3f(1.0, 0.62, 0.32); }            // tungsten
-  else if (h < 0.36) { c = vec3f(0.75, 0.88, 1.0); }      // fluorescent
-  else if (h < 0.44) { c = mix(tint, vec3f(1.0, 0.8, 0.55), 0.5) * 0.6; } // lamp-lit, dim
-  else if (h < 0.28 && kind == ST_SLUM) { c = vec3f(1.0, 0.2, 0.6); }
-  else if (h < 0.31 && kind == ST_SLUM) { c = vec3f(0.2, 1.0, 0.8); }
-  else if (h < 0.33) { c = vec3f(0.4, 0.5, 1.0); }        // TV glow
-  return c;
+  let warm = mix(tint, vec3f(1.0, 0.64, 0.34), 0.5 + 0.5 * fract(h * 7.0));
+  let cool = mix(vec3f(0.78, 0.9, 1.0), vec3f(0.92, 0.95, 1.0), fract(h * 5.0));
+  let fluoro = vec3f(0.62, 1.0, 0.72);
+  let tinted = select(vec3f(1.0, 0.3, 0.55), vec3f(0.3, 0.85, 0.9), fract(h * 11.0) < 0.5);
+  let tv = vec3f(0.4, 0.5, 1.0);
+  switch kind {
+    case ST_RESIDENTIAL: {
+      if (h < 0.7) { return warm; }
+      if (h < 0.85) { return cool; }
+      return select(tv, tinted, h < 0.93);
+    }
+    case ST_SLUM: {
+      if (h < 0.6) { return warm; }
+      if (h < 0.8) { return fluoro; }
+      return tinted;
+    }
+    case ST_MONOLITH: {
+      return select(cool, vec3f(1.0, 0.6, 0.28), h < 0.9);
+    }
+    default: {
+      // Offices: mostly cool-neutral.
+      if (h < 0.3) { return warm; }
+      if (h < 0.9) { return cool; }
+      return tv;
+    }
+  }
 }
 
 // Interior mapping: ray-cast into a fake room behind the window.
@@ -195,7 +214,18 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   let hRoom = hash3_u(c.seed, u_of(roomId), floorId);
   // Floors/zones tend to be lit together (offices) with per-room variation.
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
-  let lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
+  var lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
+  var litAvg = ws.litFrac;
+  if (kind == ST_GLASS) {
+    // Offices light up in whole-floor runs of 2-6 floors (ART_BIBLE C1),
+    // with the odd dark bay inside a lit run.
+    let runLen = 2u + c.seed % 5u;
+    let run = (floorId + (c.seed >> 8u) % runLen) / runLen;
+    let runLit = step(hash21(c.seed ^ 0x9e3779b9u, run), 0.5);
+    lit = runLit * step(0.3, u2f_rot(hRoom, 13u));
+    // Far away the lit runs stay visible as bands until they get small.
+    litAvg = mix(0.2, runLit * 0.38, detail(vec2f(ws.cellW * 4.0, ws.floorH * f32(runLen)), c.fw));
+  }
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
   let lc = light_color(kind, u2f_rot(hRoom, 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f_rot(hRoom, 9u), 2.5));
   // Panes of one room differ a little (blinds angle, lamps, furniture).
@@ -265,7 +295,8 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   // Smooth per-building average for distant facades (no blocky zones),
   // with a faint per-floor variation that survives a little longer.
   let floorVar = 0.75 + 0.5 * hash21(c.seed ^ 0x2545f491u, floorId);
-  let avg = ws.litFrac * 0.2 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  // 0.13 ~ the mean of interior colour x room light (see lc above).
+  let avg = litAvg * 0.13 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
   (*sf).emissive += mix(avg, em * win, det);
   // Reveal pixels are wall material, not glass.
   return win * det * (1.0 - step(0.001, reveal)) + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
@@ -456,7 +487,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).reflectivity = 0.3;
   } else if (style == ST_GLASS) {
     let r = win_rect(s, BAY_W);
-    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 4.0, 9.0, 0.12, 2.4, 0.35, 0.0);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 4.0, 9.0, 0.12, 1.5, 0.35, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let glass = mix(vec3f(0.02, 0.035, 0.05), vec3f(0.03, 0.05, 0.06), hash11(c.seed));
     // Mullions (vertical) and transoms catch neon specular; spandrels are
@@ -594,7 +625,8 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   // LED strips and bands.
   let flags = s.flags;
   if ((flags & F_BANDS) != 0u) {
-    let every = s.floorH * f32(4u + (c.seed % 9u));
+    // Mechanical floors only (every 15 floors), never every few floors.
+    let every = s.floorH * 15.0;
     let fb = fract(c.facade.y / every);
     let band = aa_box(fb, 0.0, 0.6 / every, c.fw.y / every);
     let chase = 0.6 + 0.4 * sin(c.facade.x * 0.05 - c.time * 1.5);
@@ -798,7 +830,9 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     }
     apply_wet(c, &sf, false);
     // Vertical LED strips on box edges.
-    if ((s.flags & F_EDGE) != 0u) {
+    // Edge strips: landmarks light only their top 30%; LED frames run full
+    // height (ART_BIBLE.md 10).
+    if ((s.flags & F_EDGE) != 0u && (c.hRel > 0.7 || s.style == ST_LED)) {
       let accent = unpack_color(s.colorB);
       var ed = 1e9;
       if (s.shape == 0u || s.shape == 1u || s.shape == 6u) {

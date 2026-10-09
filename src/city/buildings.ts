@@ -233,7 +233,6 @@ function podium(ctx: BuildCtx, lot: Lot, h: number) {
     style: Style.Podium,
     floorH: 6,
     colorA: tint(ctx.rng, 'neutral'),
-    flags: SegFlags.TopGlow,
   });
   addSlots(ctx, cx, cz, w, d, 2, h);
 }
