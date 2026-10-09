@@ -11,6 +11,44 @@
 @group(1) @binding(3) var volSampler: sampler;
 @group(1) @binding(4) var districtTex: texture_2d<u32>;
 
+// Xenon searchlights (ART_BIBLE.md 15.5), uploaded by volumetrics.ts.
+struct Beam { origin: vec3f, len: f32, dir: vec3f, intensity: f32 };
+@group(1) @binding(5) var<uniform> beams: array<Beam, 16>;
+const XENON = vec3f(0.716, 0.807, 1.0);
+
+// Light scattered toward the camera by each beam, integrated analytically
+// across its gaussian profile at the closest approach of the view ray,
+// limited by the scene depth along the ray.
+fn beam_light(ro: vec3f, rd: vec3f, maxT: f32) -> vec3f {
+  var c = vec3f(0.0);
+  for (var i = 0u; i < 16u; i++) {
+    let b = beams[i];
+    if (b.intensity <= 0.0) { continue; }
+    let w0 = ro - b.origin;
+    let bb = dot(rd, b.dir);
+    let dd = dot(rd, w0);
+    let ee = dot(b.dir, w0);
+    let den = max(1.0 - bb * bb, 1e-4);
+    let t = (bb * ee - dd) / den;
+    var s = (ee - bb * dd) / den;
+    if (t < 0.0 || t > maxT) { continue; }
+    s = clamp(s, 0.0, b.len);
+    let q = ro + rd * t;
+    let dist = length(q - (b.origin + b.dir * s));
+    let w = 2.5 + s * 0.035;
+    let prof = exp(-(dist * dist) / (w * w));
+    if (prof < 1e-3) { continue; }
+    let along = exp(-s / 900.0) * smoothstep(0.0, 8.0, s);
+    // Path length through the beam grows as the view grazes along it.
+    let path = w * 1.77 / max(sqrt(den), 0.15);
+    let y = max(q.y, 0.0);
+    let dens = frame.fogDensity * exp(-frame.fogHeightFalloff * y * 0.6) * (1.0 + frame.rain);
+    let ph = 0.5 + 2.5 * pow(max(dot(-rd, b.dir), 0.0), 8.0);
+    c += XENON * b.intensity * prof * along * path * dens * ph;
+  }
+  return c;
+}
+
 // Haze tint per district (ART_BIBLE.md 10): Core cool blue-grey, Megablock
 // warm brown, Slum green, Market magenta, Corporate clean amber.
 fn district_tint(d: u32) -> vec3f {
@@ -78,7 +116,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let dir = normalize(world - frame.camPos);
   if (depth <= 0.0) {
     let sky = sky_color(dir, frame.time);
-    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5), 1.0);
+    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + beam_light(frame.camPos, dir, 1e5), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;
   var fog = fog_amount(frame.camPos, world);
@@ -89,5 +127,6 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let tintK = mix(0.75, 0.6, smoothstep(500.0, 2200.0, distance(world, frame.camPos)));
   let fogged = mix(c, fog_color(dir, world.y) * mix(vec3f(1.0), haze_tint(world.xz), tintK), fog);
   let lin = linear_depth(depth, frame.near);
-  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin), 1.0);
+  let rayLen = distance(world, frame.camPos);
+  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin) + beam_light(frame.camPos, dir, rayLen), 1.0);
 }

@@ -277,7 +277,8 @@ export function generateCity(seed: number): CityData {
             edgeUsed ||= usedEdges;
             // Core landmarks carry the district's cyan accent on their crown
             // lights and rings (ART_BIBLE.md 15.2b).
-            if (landmarkEdges) {
+            // Only true landmarks (supertalls), not every block's tallest.
+            if (landmarkEdges && top > 800) {
               const cyan = packColor(CYAN[0], CYAN[1], CYAN[2]);
               for (let k = s0; k < segments.count; k++)
                 segments.setAccent(k, cyan);

@@ -115,6 +115,14 @@ async function main() {
     duration: flight.duration,
   };
   renderer.details.setBlockers(adData.screens);
+  // Xenon searchlights from the tallest roofs, at least 350 m apart
+  // (ART_BIBLE.md 15.5).
+  for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
+    if (r[1] < 280) break;
+    const src = renderer.volume.beamSources;
+    if (src.some(q => Math.hypot(q[0] - r[0], q[2] - r[2]) < 350)) continue;
+    src.push([r[0], r[1] + 2, r[2]]);
+  }
   const ads = new AdSystem(
     gpu.device,
     adData.tiles,
@@ -491,6 +499,7 @@ async function main() {
       pose.forward[1] * pose.speed,
       pose.forward[2] * pose.speed,
     ]);
+    renderer.volume.updateBeams(camera.position, time + animOffset);
     renderer.render(camera, time + animOffset, dt, settings);
     // Opt-in per-frame trace for tests: __debug.trace = [] starts recording.
     const trace = (window as unknown as {__debug: {trace?: number[][]}}).__debug

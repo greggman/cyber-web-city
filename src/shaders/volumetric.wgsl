@@ -13,6 +13,10 @@ const V_FAR = 1500.0;
 @group(1) @binding(1) var injectIn: texture_3d<f32>;
 @group(1) @binding(2) var integrateOut: texture_storage_3d<rgba16float, write>;
 @group(1) @binding(3) var<uniform> strength: vec4f;
+// Beam data is bound here too but drawn in composite.wgsl (analytic per
+// pixel: the froxels are too coarse for 5 m wide beams).
+struct Beam { origin: vec3f, len: f32, dir: vec3f, intensity: f32 };
+@group(1) @binding(4) var<uniform> beams: array<Beam, 16>;
 
 fn slice_dist(z: f32) -> f32 {
   return V_NEAR * pow(V_FAR / V_NEAR, z / f32(VZ));

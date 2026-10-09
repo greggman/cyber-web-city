@@ -124,6 +124,7 @@ export class Renderer {
       ['f', 'tex-float-3d'],
       ['f', 'sampler'],
       ['f', 'tex-uint'],
+      ['f', 'uniform'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
       ['f', 'tex-float'],
@@ -229,6 +230,7 @@ export class Renderer {
         this.volume.view,
         this.volSampler,
         this.districtTex.createView({label: 'composite/districts/view'}),
+        {buffer: this.volume.beamBuf},
       ],
     );
     this.targetsVersion = this.targets.version;
