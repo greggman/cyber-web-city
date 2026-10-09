@@ -123,9 +123,9 @@ fn fs_opaque(i: VOut, @builtin(front_facing) front: bool) -> GOut {
     let q = i.local * 33.0;
     let cell = floor(q);
     let h = hash3_u(bitcast<u32>(i32(cell.x)), bitcast<u32>(i32(cell.y)), bitcast<u32>(i32(cell.z)));
-    let ctr = cell + 0.5 + (vec3f(u2f(h), u2f(h >> 8u), u2f(h >> 16u)) - 0.5) * 0.5;
+    let ctr = cell + 0.5 + (vec3f(u2f(h), u2f_rot(h, 8u), u2f_rot(h, 16u)) - 0.5) * 0.5;
     let dv = q - ctr;
-    let r = length(dv) / mix(0.2, 0.42, u2f(h >> 4u));
+    let r = length(dv) / mix(0.2, 0.42, u2f_rot(h, 4u));
     let bead = select(0.0, 1.0, (h & 3u) == 0u) * step(r, 1.0) * step(0.2, n.y);
     let coatN = normalize(n + (dv / max(length(dv), 1e-3)) * bead * r * 0.8);
     let fres = 0.04 + 0.96 * pow(1.0 - saturate(dot(coatN, v)), 5.0);

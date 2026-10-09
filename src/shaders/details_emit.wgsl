@@ -344,8 +344,8 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       let h = hash3_u(s.seed ^ 0x6a09e667u, bitcast<u32>(ix), bitcast<u32>(iz));
       let pick = u2f(h);
       if (pick > 0.62) { continue; }
-      let lu = ((f32(ix) + 0.5) / f32(nx) - 0.5) * 0.9 + (u2f(h >> 4u) - 0.5) * 0.4 / f32(nx);
-      let lv = ((f32(iz) + 0.5) / f32(nz) - 0.5) * 0.9 + (u2f(h >> 8u) - 0.5) * 0.4 / f32(nz);
+      let lu = ((f32(ix) + 0.5) / f32(nx) - 0.5) * 0.9 + (u2f_rot(h, 4u) - 0.5) * 0.4 / f32(nx);
+      let lv = ((f32(iz) + 0.5) / f32(nz) - 0.5) * 0.9 + (u2f_rot(h, 8u) - 0.5) * 0.4 / f32(nz);
       // Center built on (penthouse/crown): only around the edge.
       if ((s.flags & 64u) != 0u && max(abs(lu), abs(lv)) < 0.3) { continue; }
       // Keep helipads (see shade_roof) clear.
@@ -358,19 +358,19 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       sp.pos = x.world;
       sp.n = up;
       sp.t = vec3f(cos(ang), 0.0, sin(ang));
-      let rank = u2f(h >> 16u);
+      let rank = u2f_rot(h, 16u);
       if (pick < 0.3) {
-        let sx = 3.0 + 3.5 * u2f(h >> 20u);
-        emit(T_HVAC, sp, vec3f(sx, sx * (0.5 + 0.4 * u2f(h >> 24u)), 1.2 + 1.2 * u2f(h >> 26u)), 0.0,
+        let sx = 3.0 + 3.5 * u2f_rot(h, 20u);
+        emit(T_HVAC, sp, vec3f(sx, sx * (0.5 + 0.4 * u2f_rot(h, 24u)), 1.2 + 1.2 * u2f_rot(h, 26u)), 0.0,
              rgba(vec3f(0.36, 0.37, 0.38)), neon_accent(h >> 5u), IF_LIT, rank, false);
       } else if (pick < 0.42) {
-        let sc = 2.4 + 2.2 * u2f(h >> 20u);
-        emit(T_TANK, sp, vec3f(sc), 0.0, rgba(mix(vec3f(0.3, 0.22, 0.16), vec3f(0.32, 0.33, 0.34), u2f(h >> 24u))), 0u, 0u, rank, true);
+        let sc = 2.4 + 2.2 * u2f_rot(h, 20u);
+        emit(T_TANK, sp, vec3f(sc), 0.0, rgba(mix(vec3f(0.3, 0.22, 0.16), vec3f(0.32, 0.33, 0.34), u2f_rot(h, 24u))), 0u, 0u, rank, true);
       } else if (pick < 0.48) {
-        let sc = 1.5 + 2.0 * u2f(h >> 20u);
+        let sc = 1.5 + 2.0 * u2f_rot(h, 20u);
         emit(T_DISH, sp, vec3f(sc), 0.0, rgba(vec3f(0.55, 0.55, 0.53)), 0u, 0u, rank, true);
       } else {
-        let sc = 1.0 + 2.2 * u2f(h >> 20u);
+        let sc = 1.0 + 2.2 * u2f_rot(h, 20u);
         emit(T_VENTSTACK, sp, vec3f(sc), 0.0, rgba(vec3f(0.3, 0.3, 0.31)), 0u, 0u, rank, true);
       }
     }
@@ -416,7 +416,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         } else if (style == ST_GLASS || style == ST_METAL || style == ST_PODIUM) {
           col = darkMetal * 1.3;
         }
-        emit(T_LEDGE, spot(s, fc, 0.0, y), vec3f(w + 0.2, th, d), 0.0, rgba(col), 0u, 0u, u2f(rh >> 8u), false);
+        emit(T_LEDGE, spot(s, fc, 0.0, y), vec3f(w + 0.2, th, d), 0.0, rgba(col), 0u, 0u, u2f_rot(rh, 8u), false);
       }
     }
 
@@ -463,7 +463,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         var cs = colScl;
         // Every 4th mullion on curtain walls is a heavy structural pier.
         if ((style == ST_GLASS || style == ST_PODIUM) && col % 4 == 0) { cs = vec3f(0.8, 1.0, 1.0); }
-        emit(colType, sp, vec3f(cs.x, distance(a.pos, b.pos), cs.z), 0.5, colColor, rgba(unpack_color(s.colorB)), flags, u2f(ch_h >> 12u), false);
+        emit(colType, sp, vec3f(cs.x, distance(a.pos, b.pos), cs.z), 0.5, colColor, rgba(unpack_color(s.colorB)), flags, u2f_rot(ch_h, 12u), false);
       }
     }
 
@@ -489,13 +489,13 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
           let hgt = floors * fh - 0.3;
           if (y + hgt > s.pos.y + s.size.y - 1.0 || y < 3.0) { continue; }
           let wTop = face_width(s, fc, y + hgt);
-          let wm = 4.0 + 6.0 * u2f(mh >> 12u);
-          let X = (f32(ix) - f32(nx - 1) * 0.5) * (wBase / f32(nx)) + (u2f(mh >> 16u) - 0.5) * 3.0;
+          let wm = 4.0 + 6.0 * u2f_rot(mh, 12u);
+          let X = (f32(ix) - f32(nx - 1) * 0.5) * (wBase / f32(nx)) + (u2f_rot(mh, 16u) - 0.5) * 3.0;
           if (abs(X) + wm * 0.5 > wTop * 0.5 - 0.5) { continue; }
-          let depth = 2.0 + 3.5 * u2f(mh >> 20u);
-          let tone = u2f(mh >> 24u);
+          let depth = 2.0 + 3.5 * u2f_rot(mh, 20u);
+          let tone = u2f_rot(mh, 24u);
           let col = mix(concrete * mix(0.8, 1.3, tone), darkMetal * 2.2, step(0.65, tone));
-          emit(T_MODULE, spot(s, fc, X, y), vec3f(wm, hgt, depth), 0.5, rgba(col), rgba(vec3f(1.0, 0.72, 0.45)), select(0u, IF_LIT, (mh & 3u) != 0u), u2f(mh >> 4u), false);
+          emit(T_MODULE, spot(s, fc, X, y), vec3f(wm, hgt, depth), 0.5, rgba(col), rgba(vec3f(1.0, 0.72, 0.45)), select(0u, IF_LIT, (mh & 3u) != 0u), u2f_rot(mh, 4u), false);
         }
       }
     }
@@ -516,10 +516,10 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         if (abs(X) > face_width(s, fc, ch1) * 0.5 - 2.0) { continue; }
         let a = spot(s, fc, X, ch0);
         let b = spot(s, fc, X, ch1);
-        let wsh = 1.6 + 1.6 * u2f(sh >> 8u);
-        emit(T_FIN, a, vec3f(wsh, distance(a.pos, b.pos), 0.9 + 0.8 * u2f(sh >> 16u)), 0.5,
-             rgba(mix(darkMetal * 1.5, concrete, u2f(sh >> 4u))), rgba(unpack_color(s.colorB)),
-             select(0u, IF_LIT, (sh & 7u) < 3u), u2f(sh >> 20u), false);
+        let wsh = 1.6 + 1.6 * u2f_rot(sh, 8u);
+        emit(T_FIN, a, vec3f(wsh, distance(a.pos, b.pos), 0.9 + 0.8 * u2f_rot(sh, 16u)), 0.5,
+             rgba(mix(darkMetal * 1.5, concrete, u2f_rot(sh, 4u))), rgba(unpack_color(s.colorB)),
+             select(0u, IF_LIT, (sh & 7u) < 3u), u2f_rot(sh, 20u), false);
       }
     }
 
@@ -530,7 +530,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         let X = (f32(k) - f32(nBays - 1) * 0.5) * 8.0;
         let hb = hash3_u(s.seed, f, bitcast<u32>(k) + 77u);
         if ((hb & 3u) == 0u) { continue; }
-        emit(T_CANOPY, spot(s, fc, X, 4.9), vec3f(7.2, 1.0, 1.0), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), IF_LIT, u2f(hb >> 4u), false);
+        emit(T_CANOPY, spot(s, fc, X, 4.9), vec3f(7.2, 1.0, 1.0), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), IF_LIT, u2f_rot(hb, 4u), false);
       }
     }
 
@@ -558,7 +558,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         let cx = left + g.cellW * 0.5;
         let h = hash3_u(s.seed, f * 977u + bitcast<u32>(ci), bitcast<u32>(row));
         let r = u2f(h);
-        let rank = u2f(h >> 7u);
+        let rank = u2f_rot(h, 7u);
         let winW = (g.x1 - g.x0) * g.cellW;
         let winH = (g.y1 - g.y0) * fh;
         let winCx = left + (g.x0 + g.x1) * 0.5 * g.cellW;
@@ -582,7 +582,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
           }
           if (((h >> 16u) & 7u) < 3u) {
             let xo = select(-0.3, 0.3, (h & 2048u) != 0u) * winW;
-            emit(T_AC, spot(s, fc, winCx + xo, y + 0.15), vec3f(1.0), 0.3, rgba(vec3f(0.38, 0.38, 0.36)), neon_accent(h >> 9u), IF_LIT, u2f(h >> 19u), true);
+            emit(T_AC, spot(s, fc, winCx + xo, y + 0.15), vec3f(1.0), 0.3, rgba(vec3f(0.38, 0.38, 0.36)), neon_accent(h >> 9u), IF_LIT, u2f_rot(h, 19u), true);
           }
         } else if (style == ST_METAL) {
           if (r < 0.15) {

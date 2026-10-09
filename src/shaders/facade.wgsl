@@ -87,7 +87,7 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
     // Back wall with a darker wainscot and a picture/shelf.
     let uv = h.xy / room.xy;
     c = wallTint * (0.65 + 0.35 * smoothstep(0.0, 0.8, uv.y));
-    let shelf = step(0.3, uv.x) * step(uv.x, 0.6) * step(0.45, uv.y) * step(uv.y, 0.75) * step(0.5, u2f(hs >> 3u));
+    let shelf = step(0.3, uv.x) * step(uv.x, 0.6) * step(0.45, uv.y) * step(uv.y, 0.75) * step(0.5, u2f_rot(hs, 3u));
     c = mix(c, vec3f(0.15, 0.12, 0.1), shelf * 0.8);
   } else if (t == abs(ty)) {
     if (v.y > 0.0) {
@@ -97,7 +97,7 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
       c = vec3f(0.6) + panel * 1.6;
     } else {
       // Floor.
-      c = mix(vec3f(0.22, 0.17, 0.13), vec3f(0.3, 0.3, 0.32), u2f(hs >> 5u)) * 0.6;
+      c = mix(vec3f(0.22, 0.17, 0.13), vec3f(0.3, 0.3, 0.32), u2f_rot(hs, 5u)) * 0.6;
     }
   } else {
     c = wallTint * 0.8;
@@ -105,17 +105,17 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
   // Light falls off toward the back.
   c *= mix(1.15, 0.6, h.z / room.z);
   // Silhouettes (furniture/people) on a mid-depth plane.
-  let zMid = room.z * (0.35 + 0.3 * u2f(hs >> 7u));
+  let zMid = room.z * (0.35 + 0.3 * u2f_rot(hs, 7u));
   let tm = zMid / v.z;
-  if (tm < t && u2f(hs >> 11u) < 0.55) {
+  if (tm < t && u2f_rot(hs, 11u) < 0.55) {
     let q = (p.xy + v.xy * tm) / room.xy;
-    let px = fract(q.x * (1.0 + floor(u2f(hs >> 13u) * 2.0)));
+    let px = fract(q.x * (1.0 + floor(u2f_rot(hs, 13u) * 2.0)));
     // A desk/sofa band plus occasionally a standing figure.
     let desk = step(q.y, 0.28) * step(0.1, px) * step(px, 0.85);
-    let fx = u2f(hs >> 17u);
+    let fx = u2f_rot(hs, 17u);
     let body = step(abs(q.x - fx), 0.06) * step(q.y, 0.55);
     let head = step(length((q - vec2f(fx, 0.62)) * vec2f(1.0, room.y / room.x)), 0.05);
-    let person = (body + head) * step(0.6, u2f(hs >> 19u));
+    let person = (body + head) * step(0.6, u2f_rot(hs, 19u));
     c = mix(c, vec3f(0.02), saturate(desk + person) * 0.9);
   }
   return c * light;
@@ -164,7 +164,7 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
   let lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
-  let lc = light_color(kind, u2f(hRoom >> 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f(hRoom >> 9u), 2.5));
+  let lc = light_color(kind, u2f_rot(hRoom, 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f_rot(hRoom, 9u), 2.5));
   // Panes of one room differ a little (blinds angle, lamps, furniture).
   let pane = 0.7 + 0.6 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), floorId);
   var em = vec3f(0.0);
@@ -210,20 +210,20 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
       (hit.y / ws.floorH - ws.winY0) / (ws.winY1 - ws.winY0));
     var inner = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, lc, kind);
     // Blinds / curtains on the upper part of the window.
-    let hb = u2f(hRoom >> 21u);
+    let hb = u2f_rot(hRoom, 21u);
     if (hb < ws.blinds) {
-      let cover = 0.3 + 0.6 * u2f(hRoom >> 23u);
+      let cover = 0.3 + 0.6 * u2f_rot(hRoom, 23u);
       let stripes = 0.7 + 0.3 * step(0.5, fract(fr.y * 20.0));
       inner = mix(inner, lc * 0.45 * stripes, step(1.0 - cover, fr.y));
     } else if (hb < ws.blinds + ws.curtains) {
-      let cc = mix(vec3f(0.9, 0.3, 0.2), vec3f(0.3, 0.5, 0.9), u2f(hRoom >> 25u));
+      let cc = mix(vec3f(0.9, 0.3, 0.2), vec3f(0.3, 0.5, 0.9), u2f_rot(hRoom, 25u));
       let folds = 0.75 + 0.25 * sin(fr.x * 40.0);
-      let open = 0.15 + 0.3 * u2f(hRoom >> 27u);
+      let open = 0.15 + 0.3 * u2f_rot(hRoom, 27u);
       inner = mix(inner, lc * cc * 0.6 * folds, step(open, abs(fr.x - 0.5) * 2.0));
     }
     if (reveal == 0.0) { em = inner * lit * pane; }
     // Unlit windows: occasional TV flicker.
-    if (reveal == 0.0 && lit < 0.5 && u2f(hRoom >> 3u) < 0.015) {
+    if (reveal == 0.0 && lit < 0.5 && u2f_rot(hRoom, 3u) < 0.015) {
       let flick = 0.75 + 0.25 * sin(c.time * (1.5 + 2.0 * u2f(hRoom)) + f32(hRoom & 255u));
       em = vec3f(0.25, 0.35, 0.9) * flick * 0.6 * smoothstep(0.0, 1.0, 1.0 - fr.y);
     }
@@ -325,13 +325,78 @@ fn weathering(c: Ctx, s: Segment) -> f32 {
   let hs = hash3_u(s.seed ^ 0x297a2d39u, u_of(col), u_of(pid.y));
   let len = 0.3 + 0.7 * u2f(hs);
   let below = 1.0 - fract(c.facade.y / fh); // 0 at the sill, 1 at the floor
-  let streak = step(u2f(hs >> 8u), 0.35) * smoothstep(len, 0.0, below) * (0.5 + 0.5 * vnoise2(vec2f(c.facade.x * 3.0, c.facade.y * 0.7)));
+  let streak = step(u2f_rot(hs, 8u), 0.35) * smoothstep(len, 0.0, below) * (0.5 + 0.5 * vnoise2(vec2f(c.facade.x * 3.0, c.facade.y * 0.7)));
   // Runoff from the parapet and splash dirt at street level.
   let top = s.pos.y + s.size.y - c.world.y;
   let runoff = smoothstep(14.0, 0.0, top) * (0.4 + 0.6 * vnoise2(vec2f(c.facade.x * 1.3, c.world.y * 0.08)));
   let splash = smoothstep(4.0, 0.0, c.world.y) * 0.5;
   let fine = mix(0.9, 1.0 - 0.28 * streak, detS);
   return mix(1.0, panel, detP) * fine * (1.0 - 0.3 * runoff) * (1.0 - splash);
+}
+
+// A blocky pseudo-glyph (5x5 cells) for shop signs: strokes from a hash.
+fn sign_glyph(p: vec2f, h: u32) -> f32 {
+  if (any(p < vec2f(0.0)) || any(p >= vec2f(1.0))) { return 0.0; }
+  let q = vec2u(p * 5.0);
+  // Mirror-ish: horizontal and vertical strokes look like characters.
+  let row = (h >> (q.y * 5u)) & 31u;
+  let colBits = (h >> (q.x * 3u + 7u)) & 1u;
+  let on = ((row >> q.x) & 1u) | select(0u, colBits, q.y == 2u || q.x == 2u);
+  return f32(on);
+}
+
+// Street-level shopfront: an 8 m bay with a lit interior or a rolling
+// shutter, a mullioned glass front and a sign board with glyphs above.
+fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
+  let bayW = 8.0;
+  // Heights from the street (podiums may start below ground).
+  let y = c.world.y;
+  let sx = fract(c.facade.x / bayW);
+  let sid = u_of(c.facade.x / bayW);
+  let hs = hash2_u(c.seed, sid);
+  let det = detail(vec2f(1.0), c.fw);
+  let glass = aa_box(sx, 0.05, 0.95, c.fw.x / bayW) * aa_box(y, 0.3, 4.6, c.fw.y);
+  let shuttered = u2f_rot(hs, 4u) < 0.22;
+  let shopCol = mix(vec3f(1.0, 0.85, 0.65), unpack_color(hash_u(hs) | 0xff000000u), 0.35);
+  var wall = vec3f(0.12, 0.11, 0.1);
+  var em = vec3f(0.0);
+  if (shuttered) {
+    // Corrugated roller shutter with a little graffiti color.
+    let rib = 0.75 + 0.25 * step(0.5, fract(y * 6.0));
+    let graf = step(0.72, vnoise2(vec2f(c.facade.x, y) * vec2f(0.8, 1.5) + f32(hs & 63u))) * det;
+    wall = mix(vec3f(0.3, 0.3, 0.31) * rib, unpack_color(hash_u(hs + 7u) | 0xff000000u) * 0.4, graf);
+    (*sf).albedo = mix(vec3f(0.1), wall, glass);
+    (*sf).roughness = 0.5;
+    (*sf).metallic = 0.6 * glass;
+  } else {
+    // Glass with mullions; the shop inside is an interior-mapped room.
+    let mull = (1.0 - aa_box(fract(sx * 3.0), 0.03, 0.97, c.fw.x * 3.0 / bayW)) * det;
+    let fr = vec2f(sx, saturate((y - 0.3) / 4.3));
+    let inner = interior(fr, vec3f(bayW, 4.3, 6.0), c.viewT, hs, shopCol * (1.2 + 1.6 * u2f_rot(hs, 9u)), ST_PODIUM);
+    em = mix(inner, vec3f(0.0), mull) * glass;
+    (*sf).albedo = mix(vec3f(0.1), mix(vec3f(0.02), vec3f(0.25), mull), glass);
+    (*sf).roughness = mix(0.6, 0.05, glass);
+    (*sf).reflectivity = mix(0.2, 0.8, glass);
+  }
+  // Sign board: dark panel with lit glyphs and a thin neon border.
+  let board = aa_box(y, 5.0, 6.8, c.fw.y) * aa_box(sx, 0.06, 0.94, c.fw.x / bayW);
+  let signCol = select(accent, vec3f(1.0, 0.95, 0.85), (hs & 3u) == 0u);
+  let bp = vec2f((sx - 0.06) / 0.88 * bayW, y - 5.0); // meters on the board
+  let border = board * (1.0 - aa_box(bp.x, 0.12, bayW * 0.88 - 0.12, c.fw.x) * aa_box(bp.y, 0.12, 1.68, c.fw.y));
+  let nG = 3u + (hs >> 12u) % 3u;
+  let gw = 1.2;
+  let x0 = (bayW * 0.88 - f32(nG) * gw) * 0.5;
+  let gi = floor((bp.x - x0) / gw);
+  var glyph = 0.0;
+  if (gi >= 0.0 && gi < f32(nG)) {
+    let gp = vec2f(fract((bp.x - x0) / gw) * 1.25 - 0.12, (bp.y - 0.3) / 1.1);
+    glyph = sign_glyph(gp, hash_u(hs + u32(gi) * 977u));
+  }
+  let lit = mix(0.35, glyph, det); // far away: average brightness
+  let flick = select(1.0, 0.6 + 0.4 * step(0.3, fract(c.time * 3.1 + f32(hs & 31u) * 0.1)), (hs & 60u) == 0u);
+  em += signCol * board * (lit * 3.5 + border * 4.0) * flick;
+  (*sf).albedo = mix((*sf).albedo, vec3f(0.03), board);
+  (*sf).emissive += em;
 }
 
 fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
@@ -444,17 +509,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // Shopfronts on the ground floors, offices above.
     let shopH = 7.0;
     if (c.world.y < shopH) {
-      let sx = fract(c.facade.x / 8.0);
-      let sid = u_of(c.facade.x / 8.0);
-      let hs = hash2_u(c.seed, sid);
-      let glass = aa_box(sx, 0.05, 0.95, c.fw.x / 8.0) * aa_box(c.facade.y, 0.3, 5.0, c.fw.y);
-      let shop = mix(tint, unpack_color(hash_u(hs) | 0xff000000u), 0.4) * (1.5 + 2.0 * u2f(hs));
-      let signBand = aa_box(c.facade.y, 5.4, 6.6, c.fw.y) * aa_box(sx, 0.1, 0.9, c.fw.x / 8.0);
-      let signCol = select(accent, vec3f(1.0, 0.95, 0.85), (hs & 3u) == 0u);
-      (*sf).emissive += shop * glass * step(0.15, u2f(hs >> 4u)) + signCol * signBand * 5.0;
-      (*sf).albedo = mix(vec3f(0.1), vec3f(0.02), glass);
-      (*sf).roughness = 0.2;
-      (*sf).reflectivity = 0.5;
+      shopfront(c, tint, accent, sf);
     } else {
       ws = WinStyle(2.0, 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
       let w = window_facade(c, ws, ST_GLASS, tint, sf);
@@ -551,7 +606,7 @@ fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
     let bars = mix(1.0, 0.4, step(0.85, fract(q.x * 1.5)) * det);
     (*sf).albedo = mix((*sf).albedo, vec3f(0.02), m);
     (*sf).roughness = mix((*sf).roughness, 0.08, m);
-    (*sf).emissive += vec3f(1.0, 0.7, 0.42) * m * bars * (0.25 + 0.5 * u2f(h >> 8u));
+    (*sf).emissive += vec3f(1.0, 0.7, 0.42) * m * bars * (0.25 + 0.5 * u2f_rot(h, 8u));
   }
   // Helipad.
   if (s.shape <= 1u && min(half.x, half.y) > 20.0 && (s.seed & 7u) < 2u && (s.flags & F_RING) == 0u) {

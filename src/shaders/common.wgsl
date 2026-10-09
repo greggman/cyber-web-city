@@ -15,6 +15,9 @@ fn hash_u(x_in: u32) -> u32 {
 fn hash2_u(a: u32, b: u32) -> u32 { return hash_u(a ^ hash_u(b + 0x9e3779b9u)); }
 fn hash3_u(a: u32, b: u32, c: u32) -> u32 { return hash_u(a ^ hash2_u(b, c)); }
 fn u2f(x: u32) -> f32 { return f32(x >> 8u) * (1.0 / 16777216.0); }
+// A [0,1) value from other bits of a hash: rotates them to the top
+// (u2f(x >> n) would only reach [0, 2^-n)).
+fn u2f_rot(x: u32, n: u32) -> f32 { return u2f((x >> n) | (x << (32u - n))); }
 fn hash11(a: u32) -> f32 { return u2f(hash_u(a)); }
 fn hash21(a: u32, b: u32) -> f32 { return u2f(hash2_u(a, b)); }
 fn hash31(a: u32, b: u32, c: u32) -> f32 { return u2f(hash3_u(a, b, c)); }
