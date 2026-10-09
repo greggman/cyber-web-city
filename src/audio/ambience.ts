@@ -1,64 +1,30 @@
-// Procedural ambience with WebAudio (no samples, no libraries): rain hiss,
-// a distant city rumble, a slow Vangelis-style pad, and the car's thruster
-// hum following its speed. Starts on the first user gesture (autoplay
-// policy); M toggles mute.
+// Audio mixer: the generative Vangelis-style score (music.ts) over a quiet
+// rain bed that is muffled when you're inside the cockpit. Starts on the
+// first user gesture (autoplay policy).
+import {VangelisEngine} from './music';
 
-function noiseBuffer(
-  ctx: AudioContext,
-  seconds: number,
-  brown: boolean,
-): AudioBuffer {
+function noiseBuffer(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const len = Math.floor(ctx.sampleRate * seconds);
   const buf = ctx.createBuffer(2, len, ctx.sampleRate);
   for (let ch = 0; ch < 2; ch++) {
     const d = buf.getChannelData(ch);
-    let last = 0;
-    for (let i = 0; i < len; i++) {
-      const w = Math.random() * 2 - 1;
-      if (brown) {
-        last = (last + 0.02 * w) / 1.02;
-        d[i] = last * 3.5;
-      } else {
-        d[i] = w;
-      }
-    }
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   }
   return buf;
 }
-
-function impulse(
-  ctx: AudioContext,
-  seconds: number,
-  decay: number,
-): AudioBuffer {
-  const len = Math.floor(ctx.sampleRate * seconds);
-  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = buf.getChannelData(ch);
-    for (let i = 0; i < len; i++)
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
-  }
-  return buf;
-}
-
-// Slow chord progression (MIDI notes), in a minor key.
-const CHORDS = [
-  [45, 52, 57, 60, 64],
-  [41, 48, 53, 57, 60],
-  [43, 50, 55, 58, 62],
-  [40, 47, 52, 55, 59],
-];
-const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 
 export class Ambience {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
-  private hum!: OscillatorNode;
-  private humGain!: GainNode;
-  private humFilter!: BiquadFilterNode;
-  private voices: OscillatorNode[] = [];
-  private chord = -1;
+  private rainGain!: GainNode;
+  private rainFilter!: BiquadFilterNode;
+  private music!: VangelisEngine;
   muted = false;
+  volume = 0.8;
+  rain = 1;
+  interior = false;
+
+  constructor(private readonly seed = 1) {}
 
   /** Creates the graph; must be called from a user gesture. */
   start() {
@@ -71,84 +37,55 @@ export class Ambience {
     this.master = ctx.createGain();
     this.master.gain.value = 0;
     this.master.gain.linearRampToValueAtTime(
-      this.muted ? 0 : 0.8,
-      ctx.currentTime + 4,
+      this.target(),
+      ctx.currentTime + 3,
     );
     const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.ratio.value = 3;
     this.master.connect(comp).connect(ctx.destination);
-    const reverb = ctx.createConvolver();
-    reverb.buffer = impulse(ctx, 5, 2.5);
-    const wet = ctx.createGain();
-    wet.gain.value = 0.6;
-    reverb.connect(wet).connect(this.master);
 
-    // Rain: white noise, band-passed, with slow intensity swells.
+    // Rain bed.
     const rain = ctx.createBufferSource();
-    rain.buffer = noiseBuffer(ctx, 4, false);
+    rain.buffer = noiseBuffer(ctx, 4);
     rain.loop = true;
-    const rf = ctx.createBiquadFilter();
-    rf.type = 'bandpass';
-    rf.frequency.value = 3500;
-    rf.Q.value = 0.4;
-    const rg = ctx.createGain();
-    rg.gain.value = 0.12;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.05;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 0.04;
-    lfo.connect(lfoG).connect(rg.gain);
-    rain.connect(rf).connect(rg).connect(this.master);
+    this.rainFilter = ctx.createBiquadFilter();
+    this.rainFilter.type = 'lowpass';
+    this.rainFilter.frequency.value = 6000;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 400;
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = 0;
+    rain
+      .connect(hp)
+      .connect(this.rainFilter)
+      .connect(this.rainGain)
+      .connect(this.master);
     rain.start();
-    lfo.start();
 
-    // City rumble: brown noise, low-passed.
-    const rumble = ctx.createBufferSource();
-    rumble.buffer = noiseBuffer(ctx, 6, true);
-    rumble.loop = true;
-    const lf = ctx.createBiquadFilter();
-    lf.type = 'lowpass';
-    lf.frequency.value = 180;
-    const lg = ctx.createGain();
-    lg.gain.value = 0.35;
-    rumble.connect(lf).connect(lg).connect(this.master);
-    rumble.start();
+    this.music = new VangelisEngine(ctx, this.master, this.seed);
+    this.applyRain();
+  }
 
-    // Pad voices: detuned sawtooths through a slowly sweeping low-pass.
-    const padFilter = ctx.createBiquadFilter();
-    padFilter.type = 'lowpass';
-    padFilter.frequency.value = 900;
-    padFilter.Q.value = 2;
-    const sweep = ctx.createOscillator();
-    sweep.frequency.value = 0.03;
-    const sweepG = ctx.createGain();
-    sweepG.gain.value = 500;
-    sweep.connect(sweepG).connect(padFilter.frequency);
-    sweep.start();
-    const padGain = ctx.createGain();
-    padGain.gain.value = 0.05;
-    padFilter.connect(padGain);
-    padGain.connect(this.master);
-    padGain.connect(reverb);
-    for (let v = 0; v < 10; v++) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.detune.value = (v % 2 ? 1 : -1) * (6 + v);
-      o.connect(padFilter);
-      o.start();
-      this.voices.push(o);
-    }
+  private target() {
+    return this.muted ? 0 : this.volume;
+  }
 
-    // Thruster hum.
-    this.hum = ctx.createOscillator();
-    this.hum.type = 'triangle';
-    this.hum.frequency.value = 50;
-    this.humFilter = ctx.createBiquadFilter();
-    this.humFilter.type = 'lowpass';
-    this.humFilter.frequency.value = 300;
-    this.humGain = ctx.createGain();
-    this.humGain.gain.value = 0.08;
-    this.hum.connect(this.humFilter).connect(this.humGain).connect(this.master);
-    this.hum.start();
+  private applyRain() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Inside the cockpit the rain is a muffled patter on the canopy.
+    this.rainFilter.frequency.setTargetAtTime(
+      this.interior ? 1100 : 6000,
+      t,
+      0.3,
+    );
+    this.rainGain.gain.setTargetAtTime(
+      0.05 * this.rain * (this.interior ? 1.6 : 1),
+      t,
+      0.5,
+    );
   }
 
   toggleMute() {
@@ -159,33 +96,36 @@ export class Ambience {
     this.muted = muted;
     if (this.ctx)
       this.master.gain.setTargetAtTime(
-        this.muted ? 0 : 0.8,
+        this.target(),
         this.ctx.currentTime,
         0.3,
       );
   }
 
-  /** Updates chord changes and the thruster hum from the flight state. */
-  update(time: number, speed: number) {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    const c = Math.floor(time / 12) % CHORDS.length;
-    if (c !== this.chord) {
-      this.chord = c;
-      const notes = CHORDS[c];
-      this.voices.forEach((o, i) => {
-        o.frequency.setTargetAtTime(
-          midi(notes[i % notes.length]) * (i >= notes.length ? 0.5 : 1),
-          ctx.currentTime,
-          1.5,
-        );
-      });
-    }
-    this.hum.frequency.setTargetAtTime(40 + speed * 0.9, ctx.currentTime, 0.5);
-    this.humFilter.frequency.setTargetAtTime(
-      200 + speed * 8,
-      ctx.currentTime,
-      0.5,
-    );
+  setVolume(v: number) {
+    this.volume = v;
+    if (this.ctx)
+      this.master.gain.setTargetAtTime(
+        this.target(),
+        this.ctx.currentTime,
+        0.1,
+      );
+  }
+
+  setRain(r: number) {
+    this.rain = r;
+    this.applyRain();
+  }
+
+  setInterior(inside: boolean) {
+    if (inside === this.interior) return;
+    this.interior = inside;
+    this.applyRain();
+  }
+
+  /** Call every frame: keeps the score scheduled ~2 s ahead. */
+  update() {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    this.music.scheduleUntil(this.ctx.currentTime + 2);
   }
 }

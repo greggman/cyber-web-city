@@ -15,6 +15,7 @@ export interface UiState {
   shot: number | undefined;
   paused: boolean;
   sound: boolean;
+  volume: number;
   hud: boolean;
   timeScale: number;
   rain: number;
@@ -30,6 +31,7 @@ export const DEFAULTS: UiState = {
   shot: undefined,
   paused: false,
   sound: true,
+  volume: 0.8,
   hud: false,
   timeScale: 1,
   rain: 1,
@@ -44,6 +46,7 @@ const STORAGE_KEY = 'cyber-web-city/settings';
 // Persisted keys (camera choice and pause are per session).
 const PERSIST: (keyof UiState)[] = [
   'sound',
+  'volume',
   'hud',
   'timeScale',
   'rain',
@@ -133,10 +136,11 @@ const CSS = `
 
 const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
 
-type NumKey = 'timeScale' | 'rain' | 'haze' | 'exposure';
+type NumKey = 'volume' | 'timeScale' | 'rain' | 'haze' | 'exposure';
 type BoolKey = 'paused' | 'sound' | 'hud' | 'ssr' | 'volumetrics' | 'taa';
 
 const SLIDERS: [NumKey, string, number, number, number][] = [
+  ['volume', 'Volume', 0, 1, 0.05],
   ['timeScale', 'Flight speed', 0, 2, 0.05],
   ['rain', 'Rain', 0, 2, 0.05],
   ['haze', 'Haze', 0, 2.5, 0.05],

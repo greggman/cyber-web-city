@@ -24,6 +24,7 @@ node test/car-shots.mjs spinner   # car preview renders into out/car/
 node test/validate-shaders.mjs    # compile every WGSL entry file, list all errors
 node test/route-check.mjs [seed]  # fly the whole route, fail on any building collision
 node test/flicker.mjs             # count sharply blinking pixels (camera frozen)
+node test/music.mjs [secs] [seed] # render the score offline, check levels, write out/music-sample.wav
 ```
 
 The site deploys to GitHub Pages on every push to `main`
@@ -118,5 +119,5 @@ them.
 | `src/camera/` | Autopilot flight path, chase framings |
 | `src/render/` | One class per system (city, signs, lights, SSR, volumetrics, rain, canopy, ads, traffic, post, Hi-Z) |
 | `src/shaders/` | WGSL, assembled with `#include` |
-| `src/audio/` | Procedural WebAudio ambience |
+| `src/audio/` | Generative Vangelis-inspired score (`music.ts`: CS-80-style pads, gliding lead, FM bells, hall reverb) and the rain bed |
 | `test/` | Puppeteer harness, smoke test, screenshot tools, shader validator, unit tests |

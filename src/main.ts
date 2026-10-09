@@ -211,7 +211,7 @@ async function main() {
   const animOffset =
     Number(params.get('anim') ?? 0) - (params.has('anim') ? time : 0);
 
-  const audio = new Ambience();
+  const audio = new Ambience(seed);
   audio.setMuted(!ui.sound);
   const startAudio = () => {
     if (ui.sound) audio.start();
@@ -225,7 +225,11 @@ async function main() {
         if (ui.sound) audio.start();
         audio.setMuted(!ui.sound);
         break;
+      case 'volume':
+        audio.setVolume(ui.volume);
+        break;
       case 'rain':
+        audio.setRain(ui.rain);
         rain.intensity = ui.rain;
         settings.rain = ui.rain;
         settings.wetness = Math.min(1, ui.rain * 2);
@@ -388,7 +392,8 @@ async function main() {
       speed: pose.speed,
       pov: ui.camera === CameraMode.Cockpit,
     });
-    audio.update(time, pose.speed);
+    audio.setInterior(ui.camera === CameraMode.Cockpit);
+    audio.update();
     rain.setFrame(camera.position, camera.forward, [
       pose.forward[0] * pose.speed,
       pose.forward[1] * pose.speed,
