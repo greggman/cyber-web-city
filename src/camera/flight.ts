@@ -425,19 +425,26 @@ export class ChaseCamera {
       add(pose.position, scale(pose.forward, shot.lookAhead)),
       [0, 0.5, 0],
     );
+    // Smooth the camera's offset from the car, not its world position:
+    // chasing a target moving at ~80 m/s with an exponential follow lags by
+    // about v*dt/2 more on longer frames, so frame-time jitter would shake
+    // the car around the screen. In the car's frame only framing changes and
+    // turns are smoothed, which is frame-rate independent.
+    const eyeRel = sub(desiredEye, pose.position);
+    const targetRel = sub(desiredTarget, pose.position);
     if (!this.pos || !this.target || Math.abs(time - this.lastTime) > 1) {
-      this.pos = desiredEye;
-      this.target = desiredTarget;
+      this.pos = eyeRel;
+      this.target = targetRel;
     } else {
       const a = 1 - Math.exp(-dt * 4);
       const b = 1 - Math.exp(-dt * 8);
-      this.pos = add(this.pos, scale(sub(desiredEye, this.pos), a));
-      this.target = add(this.target, scale(sub(desiredTarget, this.target), b));
+      this.pos = add(this.pos, scale(sub(eyeRel, this.pos), a));
+      this.target = add(this.target, scale(sub(targetRel, this.target), b));
       // Keep height close to the framing so climbs/dives don't leave the
       // camera staring at the car's belly.
       const y = Math.min(
-        Math.max(this.pos[1], desiredEye[1] - 1.5),
-        desiredEye[1] + 1.5,
+        Math.max(this.pos[1], eyeRel[1] - 1.5),
+        eyeRel[1] + 1.5,
       );
       this.pos = [this.pos[0], y, this.pos[2]];
     }
@@ -446,6 +453,10 @@ export class ChaseCamera {
     const up = normalize(
       add([0, 1, 0], scale(sub(pose.up, [0, dot(pose.up, [0, 1, 0]), 0]), 0.4)),
     );
-    return {eye: this.pos, target: this.target, up};
+    return {
+      eye: add(pose.position, this.pos),
+      target: add(pose.position, this.target),
+      up,
+    };
   }
 }

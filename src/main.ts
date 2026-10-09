@@ -424,7 +424,7 @@ async function main() {
       );
       camera.fovY = (50 * Math.PI) / 180;
     } else if (ui.camera === CameraMode.Chase) {
-      const c = chase.update(pose, time, Math.max(dt, 1 / 60));
+      const c = chase.update(pose, time, dt);
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
       camera.fovY = (chase.fov * Math.PI) / 180;
     } else {
@@ -463,6 +463,30 @@ async function main() {
       pose.forward[2] * pose.speed,
     ]);
     renderer.render(camera, time + animOffset, dt, settings);
+    // Opt-in per-frame trace for tests: __debug.trace = [] starts recording.
+    const trace = (window as unknown as {__debug: {trace?: number[][]}}).__debug
+      .trace;
+    if (trace) {
+      const cw = camera.camToWorld;
+      trace.push([
+        time,
+        dt,
+        ...pose.position,
+        cw[12],
+        cw[13],
+        cw[14],
+        -cw[8],
+        -cw[9],
+        -cw[10],
+        cw[4],
+        cw[5],
+        cw[6],
+        cw[0],
+        cw[1],
+        cw[2],
+        camera.fovY,
+      ]);
+    }
     if (ui.hud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
