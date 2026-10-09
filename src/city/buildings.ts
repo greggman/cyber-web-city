@@ -508,8 +508,7 @@ export function setbackTower(
   let y = ph;
   for (let t = 0; t < tiers; t++) {
     const h = perTier[t] * block;
-    const tierStyle =
-      style; // curtain walls stay glass (LED skins only on Market frames)
+    const tierStyle = style; // curtain walls stay glass (LED skins only on Market frames)
     seg(ctx, {
       x: cx,
       z: cz,
