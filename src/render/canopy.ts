@@ -14,7 +14,7 @@ import {Rng} from '../math/random';
 import canopyWgsl from '../shaders/canopy.wgsl';
 
 const SIZE = 512;
-const DROPS = 1100;
+const DROPS = 650;
 
 export class Canopy {
   private params: GPUBuffer;

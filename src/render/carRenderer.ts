@@ -22,6 +22,9 @@ import carWgsl from '../shaders/car.wgsl';
 export class CarRenderer {
   private opaquePipeline!: GPURenderPipeline;
   private glassPipeline!: GPURenderPipeline;
+  private glowPipeline!: GPURenderPipeline;
+  private glowIb!: GPUBuffer;
+  private glowCount = 0;
   private layout!: GPUBindGroupLayout;
   private bg: GPUBindGroup | null = null;
   private bgVersion = -1;
@@ -77,6 +80,13 @@ export class CarRenderer {
       mesh.materials,
       U.STORAGE,
     );
+    this.glowCount = mesh.glowIndices.length;
+    this.glowIb = createBufferWithData(
+      d,
+      'car/glowIndices',
+      mesh.glowIndices.length ? mesh.glowIndices : new Uint32Array(3),
+      U.INDEX,
+    );
     this.opaqueCount = mesh.opaqueIndices.length;
     this.glassCount = mesh.glassIndices.length;
     this.sampler = createSampler(d, {
@@ -112,36 +122,65 @@ export class CarRenderer {
         },
       ],
     };
-    [this.opaquePipeline, this.glassPipeline] = await Promise.all([
-      createRenderPipeline(d, {
-        label: 'car/opaque',
-        layout: pl,
-        vertex,
-        fragment: {module, entryPoint: 'fs_opaque', targets: GEOMETRY_TARGETS},
-        primitive: {topology: 'triangle-list', cullMode: 'back'},
-        depthStencil: {
-          format: DEPTH_FORMAT,
-          depthWriteEnabled: true,
-          depthCompare: 'greater',
-        },
-      }),
-      createRenderPipeline(d, {
-        label: 'car/glass',
-        layout: pl,
-        vertex,
-        fragment: {
-          module,
-          entryPoint: 'fs_glass',
-          targets: [{format: HDR_FORMAT}],
-        },
-        primitive: {topology: 'triangle-list', cullMode: 'none'},
-        depthStencil: {
-          format: DEPTH_FORMAT,
-          depthWriteEnabled: false,
-          depthCompare: 'greater',
-        },
-      }),
-    ]);
+    [this.opaquePipeline, this.glassPipeline, this.glowPipeline] =
+      await Promise.all([
+        createRenderPipeline(d, {
+          label: 'car/opaque',
+          layout: pl,
+          vertex,
+          fragment: {
+            module,
+            entryPoint: 'fs_opaque',
+            targets: GEOMETRY_TARGETS,
+          },
+          primitive: {topology: 'triangle-list', cullMode: 'back'},
+          depthStencil: {
+            format: DEPTH_FORMAT,
+            depthWriteEnabled: true,
+            depthCompare: 'greater',
+          },
+        }),
+        createRenderPipeline(d, {
+          label: 'car/glass',
+          layout: pl,
+          vertex,
+          fragment: {
+            module,
+            entryPoint: 'fs_glass',
+            targets: [{format: HDR_FORMAT}],
+          },
+          primitive: {topology: 'triangle-list', cullMode: 'none'},
+          depthStencil: {
+            format: DEPTH_FORMAT,
+            depthWriteEnabled: false,
+            depthCompare: 'greater',
+          },
+        }),
+        createRenderPipeline(d, {
+          label: 'car/glow',
+          layout: pl,
+          vertex,
+          fragment: {
+            module,
+            entryPoint: 'fs_glow',
+            targets: [
+              {
+                format: HDR_FORMAT,
+                blend: {
+                  color: {srcFactor: 'one', dstFactor: 'one'},
+                  alpha: {srcFactor: 'zero', dstFactor: 'one'},
+                },
+              },
+            ],
+          },
+          primitive: {topology: 'triangle-list', cullMode: 'none'},
+          depthStencil: {
+            format: DEPTH_FORMAT,
+            depthWriteEnabled: false,
+            depthCompare: 'greater',
+          },
+        }),
+      ]);
   }
 
   private bindGroupFor(targets: Targets): GPUBindGroup {
@@ -190,6 +229,20 @@ export class CarRenderer {
     pass.setVertexBuffer(0, this.vb);
     pass.setIndexBuffer(this.gb, 'uint32');
     pass.drawIndexed(this.glassCount);
+  }
+
+  drawGlow(
+    pass: GPURenderPassEncoder,
+    sceneBg: GPUBindGroup,
+    targets: Targets,
+  ) {
+    if (!this.visible || this.glowCount === 0) return;
+    pass.setPipeline(this.glowPipeline);
+    pass.setBindGroup(0, sceneBg);
+    pass.setBindGroup(1, this.bindGroupFor(targets));
+    pass.setVertexBuffer(0, this.vb);
+    pass.setIndexBuffer(this.glowIb, 'uint32');
+    pass.drawIndexed(this.glowCount);
   }
 }
 

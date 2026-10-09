@@ -23,7 +23,9 @@ fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
   if (d.life <= 0.0 || any(d.uv < vec2f(-0.05)) || any(d.uv > vec2f(1.05))) {
     // Respawn as a new raindrop hit (rate scales with rain).
     if (rnd(s, 1u) < P.rain * 0.9) {
-      d.uv = vec2f(rnd(s, 2u), rnd(s, 3u));
+      // Airflow keeps the center of the canopy clearer: bias spawns outward.
+      let side = select(-1.0, 1.0, rnd(s, 8u) < 0.5);
+      d.uv = vec2f(0.5 + side * (0.12 + 0.38 * sqrt(rnd(s, 2u))), rnd(s, 3u));
       d.radius = mix(0.0012, 0.006, pow(rnd(s, 4u), 3.0));
       d.vel = vec2f(0.0);
       d.life = mix(6.0, 30.0, rnd(s, 5u));

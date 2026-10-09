@@ -66,6 +66,9 @@ async function main() {
   renderer.transparentDrawers.push(pass =>
     car.drawGlass(pass, renderer.sceneBindGroup, renderer.targets),
   );
+  renderer.transparentDrawers.push(pass =>
+    car.drawGlow(pass, renderer.sceneBindGroup, renderer.targets),
+  );
   // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
   // 1024+ traffic (GPU).
   const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);

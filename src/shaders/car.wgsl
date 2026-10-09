@@ -183,8 +183,21 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     behind = mix(behind, lens * 1.3, cov) + ring * (vec3f(0.06, 0.06, 0.08) + lens * 0.6);
   }
   let glint = pow(saturate(1.0 - length(dropN - vec2f(-0.35, 0.35)) * 1.6), 6.0) * cov;
-  let c = refl * (fres * 2.0 + 0.03) + condensation + rim + glint * vec3f(1.5, 1.6, 1.8);
+  let c = refl * (fres * 2.0 + 0.03) + condensation + rim + glint * vec3f(0.75, 0.8, 0.9);
   // The glass samples what is behind it itself (refraction), so it simply
   // replaces the pixel.
   return vec4f(c + behind * tint * transmit + behind * fres * 0.0, 1.0);
+}
+
+// Additive glow volumes (lift/thruster cones). Brightest where seen
+// face-on, fading toward the tip (v = 1) and flickering slightly.
+@fragment
+fn fs_glow(i: VOut) -> @location(0) vec4f {
+  let m = materials[i.mat];
+  let n = normalize(i.normal);
+  let v = normalize(frame.camPos - i.world);
+  let facing = pow(abs(dot(n, v)), 1.5);
+  let fade = pow(1.0 - saturate(i.uv.y), 1.6);
+  let flick = 0.9 + 0.1 * sin(frame.time * 23.0 + i.uv.x * 12.0);
+  return vec4f(m.emissive * facing * fade * flick * 0.35, 0.0);
 }

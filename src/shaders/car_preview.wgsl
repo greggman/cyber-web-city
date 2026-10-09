@@ -202,3 +202,13 @@ fn fs_bg(i: BgOut) -> BgFrag {
   }
   return o;
 }
+
+@fragment
+fn fs_glow(i: VOut) -> @location(0) vec4f {
+  let m = materials[i.mat];
+  let n = normalize(i.normal);
+  let v = normalize(U.camPos - i.world);
+  let facing = pow(abs(dot(n, v)), 1.5);
+  let fade = pow(1.0 - saturate(i.uv.y), 1.6);
+  return vec4f(m.emissive * facing * fade * 0.35, 0.0);
+}
