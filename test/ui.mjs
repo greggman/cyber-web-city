@@ -76,8 +76,20 @@ await withPage('index.html?t=40&mute=1', async page => {
   await page.waitForFunction(() => window.__debug?.orbitActive, {timeout: 60000});
   await sleep(800);
   const p0 = await page.evaluate(() => window.__debug.cameraPos());
+  // Grabbing the camera must not make the view jump.
+  await page.evaluate(() => (window.__debug.trace = []));
+  await sleep(300);
   await page.mouse.move(640, 360);
   await page.mouse.down();
+  await sleep(300);
+  const tr = await page.evaluate(() => window.__debug.trace);
+  let maxTurn = 0;
+  for (let k = 1; k < tr.length; k++) {
+    const a = tr[k - 1].slice(8, 11), b = tr[k].slice(8, 11);
+    const d = Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+    maxTurn = Math.max(maxTurn, (Math.acos(d) * 180) / Math.PI);
+  }
+  check(maxTurn < 2, `taking control doesn't snap the view (max ${maxTurn.toFixed(2)} deg/frame)`);
   for (let k = 1; k <= 10; k++) {
     await page.mouse.move(640 + k * 30, 360 - k * 8);
     await sleep(30);

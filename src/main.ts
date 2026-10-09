@@ -58,6 +58,9 @@ function showError(msg: string) {
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1);
 
+const tStart = performance.now();
+const startupMs: Record<string, number> = {};
+
 async function main() {
   onGpuError(showError);
   const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -70,6 +73,7 @@ async function main() {
   const {signs, lights} = generateSigns(seed, city.slots);
   const genMs = performance.now() - t0;
   const renderer = new Renderer(gpu);
+  const tShaders = performance.now();
   loadmsg.textContent = 'Compiling shaders';
   await renderer.init({
     segments: city.segments,
@@ -204,6 +208,8 @@ async function main() {
   // over again 6 s after the last input.
   const orbit = new OrbitControl(canvas);
   let wasOrbit = false;
+  // Was the camera in the cockpit last frame (orbit starts outside then).
+  let wasInside = false;
   let lastOrbit: {eye: Vec3; target: Vec3} | null = null;
   (
     window as unknown as {__debug: Record<string, unknown>}
@@ -519,14 +525,22 @@ async function main() {
       camera.fovY = (50 * Math.PI) / 180;
     } else if (orbitOn) {
       const f = pose.forward;
+      const cw = camera.camToWorld;
       const o = orbit.update(
         pose.position,
         Math.atan2(-f[0], -f[2]),
         camera.position,
+        [
+          camera.position[0] - cw[8],
+          camera.position[1] - cw[9],
+          camera.position[2] - cw[10],
+        ],
+        (camera.fovY * 180) / Math.PI,
+        wasInside,
       );
       lastOrbit = o;
       camera.camToWorld = lookAtCamera(o.eye, o.target);
-      camera.fovY = (55 * Math.PI) / 180;
+      camera.fovY = (orbit.fov * Math.PI) / 180;
     } else if (inside >= 0) {
       const [yaw, pitch] = lookAround(inside, time);
       cockpitCam(yaw, pitch);
@@ -547,6 +561,7 @@ async function main() {
       // Cockpit: the driver's eye, looking slightly down over the dash.
       cockpitCam(Math.sin(time * 0.6) * 0.03, -0.12);
     }
+    if (!orbitOn) wasInside = inCockpit;
     const cl = carLights(pose.matrix, time);
     packLights(cl, dynamicLights);
     renderer.lights.writeDynamic(dynamicLights, 16);
@@ -615,6 +630,7 @@ async function main() {
       fps,
       segments: renderer.city.count,
       genMs,
+      startupMs,
       time,
       visibleSegments: renderer.city.visibleSegments,
       holograms: adData.holograms.length,
@@ -628,6 +644,8 @@ async function main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+  startupMs.toReady = performance.now() - tShaders;
+  startupMs.total = performance.now() - tStart;
   loadmsg.textContent = 'Ready';
   loadmsg.classList.add('done');
   (window as unknown as {__ready: boolean}).__ready = true;
