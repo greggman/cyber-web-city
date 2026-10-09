@@ -339,7 +339,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
     let cB = 0.16 * S;
     let hh = hash_u(s.seed ^ 0x2b2ae3u);
     let side = select(-1.0, 1.0, (hh & 1u) != 0u);
-    let nH = 2 + i32((hh >> 4u) % 5u);
+    let nH = 4 + i32((hh >> 4u) % 5u);
     let nT = 2 + i32((hh >> 8u) % 5u);
     let nV = 3 + i32((hh >> 12u) % 4u);
     let nD = i32((hh >> 16u) % 5u);
@@ -347,7 +347,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
     let tankS = 2.4 + 1.4 * u2f_rot(hh, 24u);
     let ang = s.rotY + s.twist + select(PI * 0.5, 0.0, longX);
     let dirA = vec3f(cos(ang), 0.0, sin(ang));
-    for (var k = i32(li); k < 36; k += 64) {
+    for (var k = i32(li); k < 48; k += 64) {
       var a = 0.0;
       var b = 0.0;
       var t = T_HVAC;
@@ -356,15 +356,42 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       var col = rgba(vec3f(0.36, 0.37, 0.38));
       var flags = 0u;
       if (k < 6 || k >= 30) {
+        // k 0..5 and 30..35: HVAC rows; 36..47: extra clusters below.
         // HVAC rows: one along the core, a second on its far side on big
         // roofs.
-        let q = select(k, k - 30, k >= 30);
-        if (q >= nH || (k >= 30 && (L < 35.0 || !core))) { continue; }
+        let q = select(k, k - 30, k >= 30 && k < 36);
+        if (k >= 36) {
+          // A second tank group at the other end (k 36..41) and a vent
+          // stack farm along the far edge (42..47).
+          let q2 = k - 36;
+          if (q2 < 6) {
+            if (q2 >= nT || L < 30.0) { continue; }
+            let c2 = q2 / 2;
+            let r2 = q2 % 2;
+            let pitch = tankS + 0.8;
+            a = -(L * 0.5 - 3.1 - tankS * 0.5 - f32(c2) * pitch) * select(1.0, -1.0, (hh & 2u) != 0u);
+            b = (f32(r2) - 0.5) * pitch + (S * 0.5 - 3.1 - pitch) * side;
+            t = T_TANK;
+            scl = vec3f(tankS);
+            fixedSize = true;
+            col = rgba(mix(vec3f(0.32, 0.3, 0.27), vec3f(0.28, 0.2, 0.15), u2f_rot(hh, 26u)));
+          } else {
+            let q3 = q2 - 6;
+            a = (f32(q3) - 2.5) * 2.2;
+            b = -side * (S * 0.5 - 2.2);
+            t = T_VENTSTACK;
+            scl = vec3f(1.2 + 0.6 * u2f_rot(hh, u32(q3) + 3u));
+            fixedSize = true;
+            col = rgba(vec3f(0.3, 0.3, 0.31));
+          }
+        } else {
+        if (q >= nH || (k >= 30 && (L < 25.0 || !core))) { continue; }
         let spacing = hvacS + 1.5;
         a = (f32(q) - f32(nH - 1) * 0.5) * spacing;
         b = select(S * 0.5 - 3.1 - hvacS * 0.5, cB + 3.0 + hvacS * 0.5, core) * select(side, -side, k >= 30);
         scl = vec3f(hvacS, hvacS * 0.7, 1.6);
         flags = IF_LIT;
+        }
       } else if (k < 12) {
         let q = k - 6;
         if (q >= nT) { continue; }

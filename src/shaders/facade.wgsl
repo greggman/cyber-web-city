@@ -265,8 +265,10 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * (1.0 - 0.5 * aa_box(fract(cell.y + 0.5), 0.0, 0.06, dpx.y));
     let blocks = mix(1.0, 0.6, step(0.85, fract(c.facade.y * 4.0)) * detail(vec2f(0.25), c.fw));
     // Landings are lit unevenly (dead tubes, timers), dim fluorescent green.
+    // Continuous slot; landings vary a little in brightness, never on/off
+    // (on/off per floor read as a dashed line).
     let landing = hash3_u(c.seed ^ 0x2545f491u, u_of(bx.x), u_of(cell.y + 0.5));
-    let on = step(u2f(landing), 0.55) * (0.5 + 0.5 * u2f_rot(landing, 8u));
+    let on = 0.7 + 0.3 * u2f(landing);
     (*sf).emissive += vec3f(0.55, 0.8, 0.65) * 0.12 * slot * blocks * on;
   }
   let roomId = floor(id.x / ws.roomCells);

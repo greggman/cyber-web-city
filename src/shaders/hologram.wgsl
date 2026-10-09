@@ -143,6 +143,9 @@ fn fs(i: VOut) -> @location(0) vec4f {
   let dist = t * h.scale;
   c3 *= exp(-dist * 0.00025);
   // Up close a projection washes out instead of filling the frame.
-  c3 *= mix(0.3, 1.0, smoothstep(15.0, 90.0, dist));
+  // Up close, relative to its size, a projection washes out so it never
+  // swamps the frame (it reads from a distance).
+  let camDist = distance(frame.camPos, h.pos + vec3f(0.0, h.scale, 0.0));
+  c3 *= mix(0.15, 1.0, smoothstep(2.0 * h.scale, 5.0 * h.scale, camDist));
   return vec4f(c3, 0.0);
 }
