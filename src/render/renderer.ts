@@ -205,6 +205,7 @@ export class Renderer {
       height,
       camera.fovY,
     );
+    this.signs.cull(encoder, this.frame.viewProjNoJitter, this.frame.camPos);
     for (const hook of this.preLightHooks) hook(encoder);
     this.lights.run(encoder);
     for (const hook of this.computeHooks) hook(encoder);

@@ -12,6 +12,32 @@ struct Sign {
 @group(1) @binding(0) var<storage, read> signs: array<Sign>;
 @group(1) @binding(1) var glyphTex: texture_2d<f32>;
 @group(1) @binding(2) var glyphSampler: sampler;
+@group(1) @binding(3) var<storage, read> visibleRO: array<u32>;
+
+// GPU culling: frustum + distance + projected size, compacted into a list
+// drawn with drawIndirect.
+struct CullParams { planes: array<vec4f, 5>, count: u32, _p0: u32, _p1: u32, _p2: u32 };
+struct DrawArgs { vertexCount: u32, instanceCount: atomic<u32>, firstVertex: u32, firstInstance: u32 };
+@group(0) @binding(0) var<uniform> CP: CullParams;
+@group(0) @binding(1) var<storage, read> signsC: array<Sign>;
+@group(0) @binding(2) var<storage, read_write> visible: array<u32>;
+@group(0) @binding(3) var<storage, read_write> args: DrawArgs;
+@group(0) @binding(4) var<uniform> camPosC: vec4f;
+
+@compute @workgroup_size(64)
+fn cs_cull(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= CP.count) { return; }
+  let s = signsC[i];
+  let r = 0.5 * max(s.width, s.height) + 1.0;
+  for (var p = 0; p < 5; p++) {
+    if (dot(CP.planes[p].xyz, s.pos) + CP.planes[p].w < -r) { return; }
+  }
+  let d = distance(s.pos, camPosC.xyz);
+  if (d > 3500.0 || 2.0 * r / d < 0.0025) { return; }
+  let slot = atomicAdd(&args.instanceCount, 1u);
+  visible[slot] = i;
+}
 
 struct VOut {
   @builtin(position) pos: vec4f,
@@ -48,7 +74,8 @@ fn cube_normal(face: u32) -> vec3f {
 }
 
 @vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut {
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) instance: u32) -> VOut {
+  let ii = visibleRO[instance];
   let s = signs[ii];
   let face = vi / 6u;
   let tri = array<u32, 6>(0u, 1u, 3u, 0u, 3u, 2u);
@@ -63,11 +90,6 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut 
   o.normal = s.right * ln.x + up * ln.y + s.normal * ln.z;
   o.world = world;
   o.pos = frame.viewProj * vec4f(world, 1.0);
-  // Distance culling: collapse far signs.
-  let d = distance(s.pos, frame.camPos);
-  if (d > 3500.0 || max(s.width, s.height) / d < 0.0015) {
-    o.pos = vec4f(0.0, 0.0, -1.0, 1.0);
-  }
   let uv = vec2f(f32(corner & 1u), f32((corner >> 1u) & 1u));
   o.uv = vec2f(uv.x, 1.0 - uv.y);
   o.sign = ii;

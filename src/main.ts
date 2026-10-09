@@ -24,6 +24,8 @@ import {packLights, LIGHT_FLOATS} from './render/lightClusters';
 import {DYNAMIC_LIGHTS} from './render/renderer';
 import {Rain} from './render/rain';
 import {Canopy} from './render/canopy';
+import {generateTraffic} from './city/traffic';
+import {Traffic} from './render/traffic';
 
 const loadmsg = document.getElementById('loadmsg')!;
 const errors = document.getElementById('errors')!;
@@ -81,7 +83,32 @@ async function main() {
     renderer.signs.glyphAtlas,
     renderer.lights.lightBuffer,
   );
-  const adState = {time: 0};
+  const adState = {time: 0, camVel: [0, 0, 0] as [number, number, number]};
+  // Traffic: a coarse tessellation of the hero car stands in for traffic.
+  const trafficMesh = buildModelMesh(carEntry.build(), 3);
+  const traffic = new Traffic(gpu.device, generateTraffic(seed), 1024, 1024);
+  await traffic.init(
+    renderer.frameLayout,
+    renderer.sceneLayout,
+    renderer.lights.lightBuffer,
+    trafficMesh,
+  );
+  renderer.preLightHooks.push(e =>
+    traffic.update(
+      e,
+      renderer.frameBindGroup,
+      renderer.lights.lightBuffer,
+      renderer.lights.staticCount,
+      renderer.frame.viewProjNoJitter,
+      adState.camVel,
+    ),
+  );
+  renderer.opaqueDrawers.push(p =>
+    traffic.drawMeshes(p, renderer.sceneBindGroup),
+  );
+  renderer.transparentDrawers.push(p =>
+    traffic.drawSprites(p, renderer.sceneBindGroup),
+  );
   renderer.preLightHooks.push(e => {
     ads.update(e, renderer.frame.camPos, adState.time);
     ads.writeLights(e);
@@ -222,6 +249,11 @@ async function main() {
     packLights(cl, dynamicLights);
     renderer.lights.writeDynamic(dynamicLights, 16);
     adState.time = time;
+    adState.camVel = [
+      pose.forward[0] * pose.speed,
+      pose.forward[1] * pose.speed,
+      pose.forward[2] * pose.speed,
+    ];
     Object.assign(canopyState, {
       dt: Math.max(dt, paused ? 1 / 60 : 0),
       time,
@@ -237,7 +269,7 @@ async function main() {
     if (showHud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
-        `segments ${renderer.city.count}  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
+        `segments ${renderer.city.count}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
         `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m`;
     } else {
       hud.textContent = '';

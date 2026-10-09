@@ -191,8 +191,13 @@ export function buildModelMesh(model: Model, lodScale = 1): ModelMesh {
     u32[0] = mi;
     const matBits = f32[0];
     const t = part.tessellation ?? {};
+    const scaleSeg = (n?: number) =>
+      n === undefined ? undefined : Math.max(2, Math.round(n / lodScale));
     const opts: TessOptions = {
       ...t,
+      segmentsU: scaleSeg(t.segmentsU),
+      segmentsV: scaleSeg(t.segmentsV),
+      maxSegments: Math.max(2, Math.round((t.maxSegments ?? 96) / lodScale)),
       maxEdge: (t.maxEdge ?? 0.25) * lodScale,
       maxAngle: (t.maxAngle ?? (7 * Math.PI) / 180) * lodScale,
     };
