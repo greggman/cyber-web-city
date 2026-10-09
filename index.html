@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cyber Web City</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #loadmsg {
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        color: #7ff; font: 16px/1.4 ui-monospace, monospace; letter-spacing: 0.2em;
+        text-shadow: 0 0 8px #0ff; pointer-events: none; text-align: center;
+      }
+      #loadmsg.done { display: none; }
+      #errors {
+        position: fixed; left: 8px; right: 8px; bottom: 8px; max-height: 40%;
+        overflow: auto; color: #f66; background: rgba(0, 0, 0, 0.8);
+        font: 12px/1.3 ui-monospace, monospace; white-space: pre-wrap; display: none;
+      }
+      #hud {
+        position: fixed; left: 8px; top: 8px; color: #9fc;
+        font: 11px/1.3 ui-monospace, monospace; white-space: pre;
+        text-shadow: 0 0 2px #000; pointer-events: none;
+      }
+      #help {
+        position: fixed; right: 10px; bottom: 8px; color: rgba(200, 255, 255, 0.45);
+        font: 11px ui-monospace, monospace; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="loadmsg">Loading</div>
+    <div id="hud"></div>
+    <div id="help">C: camera &nbsp; Space: pause &nbsp; 1-5: shots &nbsp; H: hud</div>
+    <div id="errors"></div>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

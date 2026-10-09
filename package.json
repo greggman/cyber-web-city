@@ -1,0 +1,44 @@
+{
+  "name": "cyber-web-city",
+  "version": "1.0.0",
+  "description": "Blade Runner inspired flying car through a procedural cyberpunk megacity in raw WebGPU",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch --serve",
+    "serve": "node server.mjs",
+    "check": "tsc --noEmit -p .",
+    "lint": "gts lint",
+    "fix": "gts fix",
+    "test:unit": "node build.mjs --tests && node --test out/tests/",
+    "test": "npm run build && npm run test:unit && node test/smoke.mjs",
+    "shots": "npm run build && node test/shots.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greggman/cyber-web-city.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/greggman/cyber-web-city/issues"
+  },
+  "homepage": "https://github.com/greggman/cyber-web-city#readme",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "@webgpu/types": "^0.1.74",
+    "esbuild": "^0.28.2",
+    "express": "^5.2.1",
+    "gts": "^7.0.0",
+    "puppeteer": "^25.13.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "puppeteer@25.13.0": true
+  },
+  "private": true
+}
