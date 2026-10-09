@@ -25,6 +25,7 @@ import {CarRenderer, carLights} from './render/carRenderer';
 import {packLights, LIGHT_FLOATS} from './render/lightClusters';
 import {DYNAMIC_LIGHTS} from './render/renderer';
 import {Rain} from './render/rain';
+import {CableRenderer} from './render/cables';
 import {Canopy} from './render/canopy';
 import {Ambience} from './audio/ambience';
 import {
@@ -81,6 +82,11 @@ async function main() {
   );
   // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
   // 1024+ traffic (GPU).
+  const cableRenderer = new CableRenderer(gpu.device, city.cables);
+  await cableRenderer.init(renderer.sceneLayout);
+  renderer.opaqueDrawers.push(p =>
+    cableRenderer.draw(p, renderer.sceneBindGroup),
+  );
   const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
   void DYNAMIC_LIGHTS;
   const adData = generateAds(
@@ -345,6 +351,24 @@ async function main() {
       const p = pose.position;
       camera.camToWorld = lookAtCamera([p[0], 3200, p[2] + 1], [p[0], 0, p[2]]);
       camera.fovY = (50 * Math.PI) / 180;
+    } else if (camParam === 'cable' && city.cables.length) {
+      // Look along an inner street at a cable (lanterns first).
+      const withLanterns = city.cables.filter(c => c.lanterns);
+      const list = withLanterns.length ? withLanterns : city.cables;
+      const c = list[inspectN % list.length];
+      const mid: [number, number, number] = [
+        (c.a[0] + c.b[0]) / 2,
+        (c.a[1] + c.b[1]) / 2 - c.sag,
+        (c.a[2] + c.b[2]) / 2,
+      ];
+      const dx = c.b[0] - c.a[0];
+      const dz = c.b[2] - c.a[2];
+      const l = Math.hypot(dx, dz) || 1;
+      camera.camToWorld = lookAtCamera(
+        [mid[0] - (dz / l) * 30, mid[1] + 4, mid[2] + (dx / l) * 30],
+        mid,
+      );
+      camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'screen' && adData.screens.length) {
       const sc = adData.screens[inspectN % adData.screens.length];
       const dist = Math.max(sc.width, sc.height) * 1.3;
@@ -448,6 +472,8 @@ async function main() {
       holograms: adData.holograms.length,
       details: renderer.details.counts,
       detailSegs: renderer.details.nearCount,
+      cables: cableRenderer.cableCount,
+      lanterns: cableRenderer.lanternCount,
       gpu: renderer.timer.results,
       gpuFrameMs: renderer.timer.frameMs,
     };

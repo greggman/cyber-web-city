@@ -51,6 +51,18 @@ export interface CityData {
   obstacles: Obstacle[];
   /** Tallest landmarks: [x, height, z]. */
   landmarks: [number, number, number][];
+  /** Cable bundles strung across inner streets (world space). */
+  cables: Cable[];
+}
+
+export interface Cable {
+  a: [number, number, number];
+  b: [number, number, number];
+  /** Sag at the middle (m). */
+  sag: number;
+  radius: number;
+  /** Paper lanterns along the cable: 0 none, else a color index. */
+  lanterns: number;
 }
 
 function splitLots(
@@ -97,6 +109,7 @@ export function generateCity(seed: number): CityData {
   const roofs: [number, number, number, number][] = [];
   const obstacles: Obstacle[] = [];
   const landmarks: [number, number, number][] = [];
+  const cables: Cable[] = [];
   const N = CITY_RADIUS_SUPERS;
   const half = AVENUE_W / 2;
 
@@ -373,6 +386,83 @@ export function generateCity(seed: number): CityData {
           colorB: neon(rng),
           flags: SegFlags.EdgeGlow,
         });
+      }
+
+      // Cable bundles (and lantern strings) across the inner streets,
+      // anchored on real facing walls. Own random stream so the rest of the
+      // city doesn't change.
+      {
+        const crng = new Rng(seed, (i + 1000) * 4096 + (j + 1000) + 7777777);
+        const nCables =
+          info.district === District.Slum
+            ? 40
+            : info.district === District.Market
+              ? 26
+              : info.district === District.Megablock
+                ? 8
+                : 5;
+        for (let k = 0; k < nCables; k++) {
+          const alongX = crng.chance(0.5);
+          if (alongX ? zs.length < 2 : xs.length < 2) continue;
+          const side = crng.int(0, alongX ? xs.length : zs.length);
+          const nz = zs.length;
+          const [ia, ib] = alongX
+            ? [side * nz, side * nz + 1]
+            : [side, nz + side];
+          const top = Math.min(blockHeights[ia], blockHeights[ib]);
+          if (top < 12) continue;
+          // Denser low down, near the street.
+          const y = 6 + Math.pow(crng.next(), 2.2) * Math.min(top - 4, 180);
+          const [blockStart, blockEnd] = alongX ? xs[side] : zs[side];
+          if (blockEnd - blockStart < 10) continue;
+          const along = crng.range(blockStart + 3, blockEnd - 3);
+          const faceAt = (bidx: number, sign: number): number | null => {
+            let best: number | null = null;
+            const [s0, s1] = blockSegs[bidx];
+            for (let q = s0; q < s1; q++) {
+              const g = segments.get(q);
+              if (g.y > y || g.y + g.sy < y || g.style === Style.Bridge)
+                continue;
+              const f = Math.min(1, (y - g.y) / g.sy);
+              const tp = 1 + (g.taper - 1) * f;
+              const hx = (g.sx / 2) * tp;
+              const hz = (g.sz / 2) * tp;
+              const c = alongX ? g.x : g.z;
+              if (Math.abs(along - c) > (alongX ? hx : hz) - 0.5) continue;
+              const edge = alongX ? g.z + sign * hz : g.x + sign * hx;
+              if (best === null || (sign > 0 ? edge > best : edge < best))
+                best = edge;
+            }
+            return best;
+          };
+          const ea = faceAt(ia, 1);
+          const eb = faceAt(ib, -1);
+          if (ea === null || eb === null || eb - ea < 3 || eb - ea > 45)
+            continue;
+          const span = eb - ea;
+          const lantern =
+            info.district === District.Slum || info.district === District.Market
+              ? crng.chance(0.35)
+              : crng.chance(0.08);
+          const strands = lantern ? 1 : crng.int(1, 4);
+          const drop = crng.range(-2, 2);
+          for (let st = 0; st < strands; st++) {
+            const off = (st - (strands - 1) / 2) * 0.35;
+            const p0: [number, number, number] = alongX
+              ? [along + off, y, ea]
+              : [ea, y, along + off];
+            const p1: [number, number, number] = alongX
+              ? [along + off, y + drop, eb]
+              : [eb, y + drop, along + off];
+            cables.push({
+              a: p0,
+              b: p1,
+              sag: span * crng.range(0.04, 0.12) + 0.3,
+              radius: crng.range(0.03, 0.08),
+              lanterns: lantern ? crng.int(1, 5) : 0,
+            });
+          }
+        }
       }
 
       // Occasional bridges over the avenues (very high or quite low so the
@@ -664,6 +754,10 @@ export function generateCity(seed: number): CityData {
   }
   for (const r of roofs) [r[0], r[2]] = warp(r[0], r[2]);
   for (const l of landmarks) [l[0], l[2]] = warp(l[0], l[2]);
+  for (const c of cables) {
+    [c.a[0], c.a[2]] = warp(c.a[0], c.a[2]);
+    [c.b[0], c.b[2]] = warp(c.b[0], c.b[2]);
+  }
 
   // Sort segments spatially for culling locality.
   segments.sortBy(k => {
@@ -673,7 +767,7 @@ export function generateCity(seed: number): CityData {
     const cz = Math.floor((s.z + CITY_HALF_SIZE) / 600);
     return cx * 1000 + cz;
   });
-  return {seed, segments, slots, roofs, obstacles, landmarks};
+  return {seed, segments, slots, roofs, obstacles, landmarks, cables};
 }
 
 /**
