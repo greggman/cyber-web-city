@@ -7,6 +7,11 @@ and Shanghai. Everything is rendered with raw **WebGPU** and uses **no runtime
 libraries**. The city, the signage, the ads, the holograms, the traffic and the
 NURBS flying car are all generated procedurally.
 
+[Live](https://greggman.github.io/cyber-web-city/)
+
+<img src="screenshots/cyber-web-city.png">
+
+
 - [DESIGN.md](DESIGN.md) is the brief.
 - [PLAN.md](PLAN.md) is the plan, with its status and deviations.
 - [docs/NURBS.md](docs/NURBS.md) documents the NURBS modeling API used for the
