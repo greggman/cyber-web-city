@@ -144,16 +144,19 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let dropN = fx.xy * 2.0 - 1.0;
   let fog = fx.z;
   let screenUv = i.pos.xy * frame.invResolution;
-  let refractOff = dropN * 0.04 + n.xy * 0.004;
+  let refractOff = dropN * 0.012 + n.xy * 0.002;
   var behind = textureSampleLevel(sceneColor, linearSampler, screenUv + refractOff, 0.0).rgb;
   // Condensation scatters light: blur by sampling around.
   if (fog > 0.01) {
-    var acc = behind;
-    for (var k = 0; k < 6; k++) {
-      let a = f32(k) * 1.047;
-      acc += textureSampleLevel(sceneColor, linearSampler, screenUv + vec2f(cos(a), sin(a)) * 0.03 * fog, 0.0).rgb;
+    // Jittered disk blur (rotated per pixel and frame; TAA resolves the noise).
+    let rot = hash31(u32(i.pos.x), u32(i.pos.y), frame.frameIndex) * TAU;
+    var acc = vec3f(0.0);
+    for (var k = 0; k < 8; k++) {
+      let a = rot + f32(k) * 2.39996;
+      let r = sqrt((f32(k) + 0.5) / 8.0) * 0.022 * fog;
+      acc += textureSampleLevel(sceneColor, linearSampler, screenUv + vec2f(cos(a), sin(a)) * r, 0.0).rgb;
     }
-    behind = mix(behind, acc / 7.0, fog);
+    behind = mix(behind, acc / 8.0, saturate(fog * 1.5));
   }
   var sf: Surface;
   sf.normal = n;
@@ -168,7 +171,12 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let condensation = vec3f(0.05, 0.055, 0.065) * fog + behind * fog * 0.35;
   // A little extra sheen at grazing angles so the canopy reads as glass.
   let rim = smoothstep(0.55, 0.0, nv) * vec3f(0.05, 0.06, 0.08);
-  let c = refl * (fres * 2.0 + 0.03) + condensation + rim;
+  // Drops: darker refracting rim and a small specular glint.
+  let cov = fx.w;
+  let dropEdge = smoothstep(0.3, 0.9, length(dropN)) * cov;
+  behind *= 1.0 - dropEdge * 0.5;
+  let glint = pow(saturate(1.0 - length(dropN - vec2f(-0.3, 0.3))), 8.0) * cov;
+  let c = refl * (fres * 2.0 + 0.03) + condensation + rim + glint * vec3f(0.6, 0.65, 0.7);
   // The glass samples what is behind it itself (refraction), so it simply
   // replaces the pixel.
   return vec4f(c + behind * tint * transmit + behind * fres * 0.0, 1.0);

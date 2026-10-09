@@ -13,7 +13,7 @@ import {Rng} from '../math/random';
 import canopyWgsl from '../shaders/canopy.wgsl';
 
 const SIZE = 512;
-const DROPS = 1500;
+const DROPS = 1100;
 
 export class Canopy {
   private params: GPUBuffer;
@@ -49,7 +49,7 @@ export class Canopy {
           rng.next(),
           0,
           0,
-          rng.range(0.002, 0.007),
+          rng.range(0.0012, 0.005),
           rng.range(0, 20),
           rng.next(),
           rng.next(),

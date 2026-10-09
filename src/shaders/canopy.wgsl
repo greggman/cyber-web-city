@@ -24,7 +24,7 @@ fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
     // Respawn as a new raindrop hit (rate scales with rain).
     if (rnd(s, 1u) < P.rain * 0.9) {
       d.uv = vec2f(rnd(s, 2u), rnd(s, 3u));
-      d.radius = mix(0.002, 0.009, pow(rnd(s, 4u), 3.0));
+      d.radius = mix(0.0012, 0.006, pow(rnd(s, 4u), 3.0));
       d.vel = vec2f(0.0);
       d.life = mix(6.0, 30.0, rnd(s, 5u));
       d.stick = rnd(s, 6u);
@@ -36,7 +36,7 @@ fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
   if (d.radius > 0.0) {
     // Big drops slide: airflow pushes them back (+v) with speed, gravity
     // pulls them toward the sides of the bubble. Stick-slip motion.
-    let heavy = smoothstep(0.005, 0.009, d.radius);
+    let heavy = smoothstep(0.0045, 0.007, d.radius);
     let side = sign(d.uv.x - 0.5) * smoothstep(0.1, 0.5, abs(d.uv.x - 0.5));
     let air = vec2f(0.0, 0.004 * P.speed);
     let grav = vec2f(side * 0.05, 0.02);
@@ -47,7 +47,7 @@ fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
     // Moving drops lose water to their trail.
     d.radius = max(0.0, d.radius - length(d.vel) * P.dt * 0.02);
     // Rain occasionally lands on a drop and grows it.
-    if (rnd(s, 9u) < 0.002 * P.rain) { d.radius = min(0.012, d.radius + 0.002); }
+    if (rnd(s, 9u) < 0.002 * P.rain) { d.radius = min(0.008, d.radius + 0.0015); }
   }
   drops[i] = d;
 }
@@ -102,7 +102,8 @@ fn fs_drop(i: DOut) -> @location(0) vec4f {
 fn fs_wipe(i: DOut) -> @location(0) vec4f {
   let r = length(i.local / vec2f(1.0, 1.0 + 1.5 * i.moving));
   if (r > 1.2) { discard; }
-  return vec4f(0.0);
+  // Partial wipe: trails stay a little fogged.
+  return vec4f(0.3);
 }
 
 struct FsO { @builtin(position) pos: vec4f, @location(0) uv: vec2f };

@@ -255,6 +255,11 @@ async function main() {
       [center[0], center[1] + 0.2, center[2]],
       45,
     ],
+    under: [
+      [center[0] - d * 0.5, bmin[1] - 1.2, center[2] - d * 0.6],
+      [center[0], center[1], center[2]],
+      45,
+    ],
     interior: [
       [eye[0] + 0.9, eye[1] + 1.1, eye[2] + 1.2],
       [eye[0] - 0.2, eye[1] - 0.4, eye[2] - 0.6],
