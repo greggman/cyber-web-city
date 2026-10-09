@@ -365,7 +365,8 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     if (hb < ws.blinds) {
       let cover = 0.3 + 0.6 * u2f_rot(hRoom, 23u);
       let stripes = 0.7 + 0.3 * step(0.5, fract(fr.y * 20.0));
-      inner = mix(inner, lc * 0.45 * stripes, step(1.0 - cover, fr.y));
+      // Blinds: dim slatted light (flat bright panels read as pastel tiles).
+      inner = mix(inner, lc * 0.16 * stripes * stripes, step(1.0 - cover, fr.y));
     } else if (hb < ws.blinds + ws.curtains) {
       let cc = mix(vec3f(0.9, 0.3, 0.2), vec3f(0.3, 0.5, 0.9), u2f_rot(hRoom, 25u));
       let folds = 0.75 + 0.25 * sin(fr.x * 40.0);
@@ -645,7 +646,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
       if (k == 1u) { hue = vec3f(0.6, 0.8, 0.68); }
       if (k == 2u) { hue = vec3f(0.88, 0.8, 0.55); }
       if (k == 3u) { hue = vec3f(0.6, 0.72, 0.86); }
-      concrete = mix(hue, vec3f(dot(hue, vec3f(0.333))), 0.5) * (0.42 + 0.08 * u2f_rot(ph, 8u));
+      concrete = mix(hue, vec3f(dot(hue, vec3f(0.333))), 0.1) * (0.5 + 0.1 * u2f_rot(ph, 8u));
     }
     if (((ph >> 4u) & 3u) == 0u) {
       let fl = c.facade.y / s.floorH;

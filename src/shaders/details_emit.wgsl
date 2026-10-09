@@ -343,7 +343,9 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
     let L = max(RX, RZ);
     let S = min(RX, RZ);
     let up = vec3f(0.0, 1.0, 0.0);
-    let core = roof_core(s);
+    // Clusters gather around the roof centre (the core penthouse where
+    // there is one); helipads keep the centre clear.
+    let core = !helipad(s);
     let cA = 0.16 * L;
     let cB = 0.16 * S;
     let hh = hash_u(s.seed ^ 0x2b2ae3u);

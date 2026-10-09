@@ -509,7 +509,7 @@ export function setbackTower(
   for (let t = 0; t < tiers; t++) {
     const h = perTier[t] * block;
     const tierStyle =
-      style === Style.GlassOffice && r.chance(0.06) ? Style.LedFacade : style;
+      style; // curtain walls stay glass (LED skins only on Market frames)
     seg(ctx, {
       x: cx,
       z: cz,
@@ -1050,7 +1050,8 @@ export function gateTower(ctx: BuildCtx, lot: Lot, H: number) {
     w: (alongX ? w : thick) * 1.02,
     d: (alongX ? thick : d) * 1.02,
     h: spanH,
-    style: Style.LedFacade,
+    // ART_BIBLE.md C4: the span is a glazed bridge, not an LED skin.
+    style: Style.Bridge,
     colorB,
     flags: SegFlags.EdgeGlow,
   });
