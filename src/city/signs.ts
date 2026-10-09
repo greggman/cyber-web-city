@@ -98,10 +98,101 @@ function slotAccent(slot: FacadeSlot): [number, number, number] | null {
 }
 let seedForPalette = 0;
 
+/**
+ * Rejects signs that would sit inside a building (z-fighting with or
+ * buried in a wall or a bolted-on piece) or overlap a sign already placed.
+ */
+function makePlacer(
+  inside: ((x: number, y: number, z: number) => number) | undefined,
+) {
+  const CELL = 12;
+  const grid = new Map<number, {s: Sign; pts: Float64Array}[]>();
+  const key = (cx: number, cz: number) => (cx + 8192) * 16384 + (cz + 8192);
+  // 3x3 sample points over a sign's face (its right x up plane), flat.
+  const samples = (s: Sign): Float64Array => {
+    const pts = new Float64Array(27);
+    let o = 0;
+    for (const a of [-0.48, 0, 0.48]) {
+      for (const b of [-0.48, 0, 0.48]) {
+        pts[o++] = s.pos[0] + s.right[0] * a * s.width;
+        pts[o++] = s.pos[1] + b * s.height;
+        pts[o++] = s.pos[2] + s.right[2] * a * s.width;
+      }
+    }
+    return pts;
+  };
+  // Does any sample point fall within sign t's slab (rectangle, thickened)?
+  const hits = (t: Sign, pts: Float64Array) => {
+    const hd = t.thickness / 2 + 0.25;
+    const ha = t.width / 2 + 0.1;
+    const hh = t.height / 2 + 0.1;
+    for (let o = 0; o < 27; o += 3) {
+      const dx = pts[o] - t.pos[0];
+      const dy = pts[o + 1] - t.pos[1];
+      const dz = pts[o + 2] - t.pos[2];
+      if (
+        Math.abs(dx * t.normal[0] + dz * t.normal[2]) < hd &&
+        Math.abs(dx * t.right[0] + dz * t.right[2]) < ha &&
+        Math.abs(dy) < hh
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return (s: Sign): boolean => {
+    const pts = samples(s);
+    if (inside) {
+      // Corners and centre, slightly in front of the face so the wall it
+      // hangs on is clear.
+      for (const k of [0, 2, 4, 6, 8]) {
+        const o = k * 3;
+        const x = pts[o] + s.normal[0] * 0.05;
+        const z = pts[o + 2] + s.normal[2] * 0.05;
+        if (inside(x, pts[o + 1], z) >= 0) return false;
+      }
+    }
+    // Each sign is registered in every grid cell its extent covers, so
+    // a query only needs those same cells.
+    const ext = Math.max(s.width, s.height) / 2 + 1;
+    const x0 = Math.floor((s.pos[0] - ext) / CELL);
+    const x1 = Math.floor((s.pos[0] + ext) / CELL);
+    const z0 = Math.floor((s.pos[2] - ext) / CELL);
+    const z1 = Math.floor((s.pos[2] + ext) / CELL);
+    const y0 = s.pos[1] - s.height / 2 - 0.5;
+    const y1 = s.pos[1] + s.height / 2 + 0.5;
+    for (let i = x0; i <= x1; i++) {
+      for (let j = z0; j <= z1; j++) {
+        const list = grid.get(key(i, j));
+        if (!list) continue;
+        for (const t of list) {
+          const ty = t.s.pos[1];
+          const th = t.s.height / 2;
+          if (ty + th < y0 || ty - th > y1) continue;
+          if (hits(t.s, pts) || hits(s, t.pts)) return false;
+        }
+      }
+    }
+    const entry = {s, pts};
+    for (let i = x0; i <= x1; i++) {
+      for (let j = z0; j <= z1; j++) {
+        const k = key(i, j);
+        let a = grid.get(k);
+        if (!a) grid.set(k, (a = []));
+        a.push(entry);
+      }
+    }
+    return true;
+  };
+}
+
 export function generateSigns(
   seed: number,
   slots: FacadeSlot[],
+  /** Point-in-building test (inside.ts); signs inside buildings are dropped. */
+  inside?: (x: number, y: number, z: number) => number,
 ): {signs: Sign[]; lights: LightDesc[]} {
+  const place = makePlacer(inside);
   const rng = new Rng(seed, 4242);
   seedForPalette = seed;
   const signs: Sign[] = [];
@@ -197,6 +288,7 @@ export function generateSigns(
         lightbox,
         thickness: thick,
       };
+      if (!place(sign)) continue;
       signs.push(sign);
       const area = Math.sqrt(w * h);
       const intensity = (lightbox ? 4 : 3) * Math.min(2.5, area / 6);
@@ -261,8 +353,7 @@ export function generateSigns(
       const acc = k === 0 ? slotAccent(slot) : null;
       const col = acc ?? slotPalette(srng, slot);
       const col2 = slotPalette(srng, slot);
-      first ??= col;
-      signs.push({
+      const sign: Sign = {
         pos: [
           slot.x + right[0] * along + normal[0] * out,
           yc,
@@ -278,7 +369,10 @@ export function generateSigns(
         glyphs: brandGlyphs(srng, true),
         lightbox: srng.chance(0.4),
         thickness: 0.4,
-      });
+      };
+      if (!place(sign)) continue;
+      first ??= col;
+      signs.push(sign);
     }
     if (first) {
       const i = 2.2 * Math.min(2, n / 3);

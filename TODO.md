@@ -9,5 +9,5 @@
     auto camera (unless it's inside the vehicle). As it is it snaps away
 [x] Make C change the camera like the camera button.
 [x] remove the hiss/rain from the audio
-[ ] there are several places where signs z-fight with buildings or 2 signs are stacked
+[x] there are several places where signs z-fight with buildings or 2 signs are stacked
     on top of each other and are z-fighting

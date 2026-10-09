@@ -6,6 +6,7 @@ import {generateSigns, brandGlyphs, packSigns} from './city/signs';
 import {LIGHT_FLOATS, packLights} from './render/lightClusters';
 import type {PackedSigns} from './render/signRenderer';
 import {generateAds} from './city/ads';
+import {makeInsideTest} from './city/inside';
 import type {SegmentTransfer} from './city/segments';
 
 /** What the worker posts back when done (main.ts). */
@@ -27,7 +28,11 @@ self.onmessage = (e: MessageEvent<{seed: number}>) => {
   const city = generateCity(seed, progress);
   const flight = new FlightPath(seed, city.obstacles);
   progress(0.9);
-  const {signs, lights} = generateSigns(seed, city.slots);
+  const {signs, lights} = generateSigns(
+    seed,
+    city.slots,
+    makeInsideTest(city.segments),
+  );
   progress(0.97);
   const ads = generateAds(
     seed,

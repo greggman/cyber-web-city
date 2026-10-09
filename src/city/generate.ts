@@ -815,6 +815,50 @@ export function generateCity(
     const sn = Math.sin(a);
     [sl.nx, sl.nz] = [c * sl.nx - sn * sl.nz, sn * sl.nx + c * sl.nz];
   }
+  // Snap each slot back onto its segment's real face: the segment was
+  // moved rigidly (and maybe snapped to bays or shrunk for the corridors),
+  // while the slot was warped point by point, so it drifted into or off
+  // the wall (signs on it z-fought or were buried).
+  for (const sl of slots) {
+    if (sl.seg < 0) continue;
+    const s = segments.get(sl.seg);
+    if (s.shape > Shape.BoxTwist) continue;
+    const c = Math.cos(s.rotY);
+    const sn = Math.sin(s.rotY);
+    // World -> segment local (inverse rotation).
+    const dx = sl.x - s.x;
+    const dz = sl.z - s.z;
+    const lx = c * dx + sn * dz;
+    const lz = -sn * dx + c * dz;
+    const nlx = c * sl.nx + sn * sl.nz;
+    const nlz = -sn * sl.nx + c * sl.nz;
+    const h = Math.min(1, Math.max(0, (sl.y + sl.height / 2 - s.y) / s.sy));
+    const tp = 1 + (s.taper - 1) * h;
+    const hx = (s.sx / 2) * tp;
+    const hz = (s.sz / 2) * tp;
+    let px: number;
+    let pz: number;
+    let fnx: number;
+    let fnz: number;
+    if (Math.abs(nlx) > Math.abs(nlz)) {
+      fnx = Math.sign(nlx);
+      fnz = 0;
+      px = fnx * hx;
+      sl.width = Math.min(sl.width, 2 * hz - 1);
+      pz = Math.max(-hz + sl.width / 2, Math.min(hz - sl.width / 2, lz));
+    } else {
+      fnx = 0;
+      fnz = Math.sign(nlz);
+      pz = fnz * hz;
+      sl.width = Math.min(sl.width, 2 * hx - 1);
+      px = Math.max(-hx + sl.width / 2, Math.min(hx - sl.width / 2, lx));
+    }
+    sl.x = s.x + c * px - sn * pz;
+    sl.z = s.z + sn * px + c * pz;
+    sl.nx = c * fnx - sn * fnz;
+    sl.nz = sn * fnx + c * fnz;
+    sl.height = Math.min(sl.height, s.y + s.sy - sl.y);
+  }
   for (const r of roofs) [r[0], r[2]] = warp(r[0], r[2]);
   for (const l of landmarks) [l[0], l[2]] = warp(l[0], l[2]);
   for (const c of cables) {
