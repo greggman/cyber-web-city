@@ -401,12 +401,14 @@ For each face, walk **columns** (bay index i), then **rows**:
 
 ## 10. Lighting and colour script
 
+This section sets light *budgets* (how much, where). Every *colour* value (hues, shares, haze tints, curtain and sign colours, including those in section 4) is set by the colour script in section 15, which wins on any conflict.
+
 | District | Window lit % | Warm : cool : tinted | Neon budget | Edge strips | Haze |
 |---|---|---|---|---|---|
 | Core | 40% (office runs) | 30 : 60 : 10 | 1 crown light per tower; 1 ring set per landmark | only C3 landmarks, top 30%; ≤1 per superblock | thin, blue-grey; towers fade by 1.2 km |
 | Megablock | 45% | 70 : 15 : 15 | sky-street strip + 1 roof sign | **none** | medium, warm-brown at the base |
 | Slum | 50% | 60 : 20 green-fluoro : 20 | 1 small sign per building, at most 5 m wide | **none** | thick and low: steam and smoke to 60 m |
-| Market | 55% | 50 : 20 : 30 | high: blades and projecting signs, as in section 7 | allowed only on K2 LED frames | coloured by signs; magenta/cyan bounce |
+| Market | 55% | 50 : 20 : 30 | high: blades and projecting signs, as in section 7 | allowed only on K2 LED frames | coloured by signs; red-amber bounce (section 15) |
 | Corporate | 25% | 90 amber : 10 | summit light, 1 logo | none | clean, sharp silhouettes |
 
 - **District palette.** Each superblock has 1 dominant neon hue (60% of signs), 1 secondary (30%) and white or warm (10%). This keeps `setPalette`, enforced.
@@ -437,7 +439,7 @@ For each face, walk **columns** (bay index i), then **rows**:
 
 ## 12. Surface relief (normal / parallax)
 
-**Goal.** No wall may read as paint on a cube. Every frame, sill, joint and slat must catch light: a magenta sign 20 m away should draw a thin highlight along every sill and mullion edge on the wet facade, and grazing light should rake every panel joint.
+**Goal.** No wall may read as paint on a cube. Every frame, sill, joint and slat must catch light: a red sign 20 m away should draw a thin highlight along every sill and mullion edge on the wet facade, and grazing light should rake every panel joint.
 
 Today `window_facade` already ray-traces the window opening and interior-maps the room. Every other surface is flat paint. The rules below layer on top of that.
 
@@ -561,7 +563,184 @@ Today `window_facade` already ray-traces the window opening and interior-maps th
 9. Are rooftop props **clustered** around a penthouse or core, with clear paths and empty roof area, not spread evenly?
 10. At street level, do shopfronts vary in canopy depth, sign size and height, with at least 3 sign sizes visible and blade signs above the canopies?
 11. Do cables, lanterns or stalls fill the street canyon in Market and Slum shots?
-12. Can each district be told apart from a single shot by its massing **and** its light palette (amber Corporate, warm Megablock, green-fluoro Slum, magenta/cyan Market, cool Core)?
+12. Can each district be told apart from a single shot by its massing **and** its light mix (section 15.3: gold Corporate, sodium Megablock, smoky tungsten Slum, red Market, xenon-and-tungsten Core), while all five still read as one film?
 13. In skyline shots, are there clear height classes, with landmarks spaced apart and not a forest of equal towers?
 14. Do slum buildings differ *from each other* (bay widths, tones, floor lines) while each one is internally consistent?
 15. Are the windows on corner bays whole: no clipped half-windows at building edges?
+16. **Colour: atmosphere.** Is the sky and haze amber-brown low and near, and grey-steel high and far, with **no violet or magenta cast** anywhere in the haze, sky or shadows (sample the sky at the horizon and at 30° up: hue between 20° and 40° low, saturation below 15% high)?
+17. **Colour: share.** Is at least 70% of the frame's emissive light sodium, tungsten or warm-white, and is red the only saturated sign hue that recurs? Is there **no** saturated cyan, magenta, violet or green neon (hologram rose and ice, and slum fluoro, are allowed only where section 15 places them)?
+18. **Colour: blocks.** Within one block, do the signs show one dominant hue plus one secondary, so that you could name the block's colour in one word? Is no frame a confetti of five or more sign hues?
+19. **Colour: grade.** Do the brightest sources (beams, headlights, sign cores, flares) roll off to warm or neutral white instead of clipping to a saturated colour, with no tinted anamorphic streaks (streaks take their source's colour), and are the deepest shadows near-neutral rather than teal or purple?
+
+---
+
+## 15. Colour script
+
+### 15.0 What the films actually do (and what we got wrong)
+
+- **Blade Runner (1982).** Cronenweth wanted *Citizen Kane*: high contrast, hard backlight and shafts of light, so the sets were filled with smoke ("just before I lose consciousness") and lit through it. The aerial "surveillance" beams were **xenon** advertising searchlights; on tungsten-balanced film they read **blue-white**. Street neons sat on dimmers "just above where they would start to flicker", and the crowds were dressed "rather colorless" (ASC, *Blade Runner: Cronenweth's Photography*). The Tyrell office is **amber**: arcs through amber gels behind a sunrise plate. The Hades opening is etched-brass miniatures lit from below by thousands of fibre-optic pinpoints (white and amber), in layers of smoke, with **orange gas-flare fireballs** projected into the miniature (Trumbull / EEG). The ads (Coca-Cola, Atari, TDK, Pan Am, the geisha) are mostly corporate **red and white** plus skin tones; Pan Am's blue globe is the one cool logo. The street neon is mostly red and warm white, with a few green and blue tubes, kept dim.
+- **Blade Runner 2049.** Deakins's Los Angeles is grey, rain- and snow-soaked and desaturated. The only strong colour is the ads: the Joi advert is **pink and blue** and "was basically lighting the whole shot". Las Vegas is an orange monochrome (Lee 105 Orange plus Moroccan Pink, Golden Amber on skylights). Wallace's spaces are amber water caustics.
+- **Correction.** The user is right. There is **no magenta** in either film's atmosphere, and **no saturated cyan neon** as a recurring sign colour. Blue does appear, but as a *light* (xenon beams, steel-blue night fill, 2049's grey-teal rain), not as a sign hue. Orange does appear, but as **sodium, fire and tungsten**, never as a pure "neon orange" sign colour. Red is the one saturated sign colour that recurs.
+
+**What reads as random in our build** (out/review-s13):
+
+1. **A violet bath.** The sky horizon `(0.13, 0.06, 0.11)`, `fogColor (0.06, 0.035, 0.055)`, ambient sky `(0.26, 0.18, 0.34)` and the reflection horizon `(0.11, 0.05, 0.075)` are all magenta-purple. Every frame (`chase-030`, `chase-060`, `skyline-200`) sits in purple haze that no reference has.
+2. **Hue confetti.** `NEON` holds 8 equal-saturation hues. `setPalette` picks any of them per 3×3 superblocks, and `slotPalette` adds a wildcard from all 8. `skyline-200` shows pink, green, amber, cyan and violet rings side by side with no dominant.
+3. **Five unrelated palettes.** `NEON`, rooftop `NEONS`, WGSL `neon_accent`, `LANTERN_COLORS` and the facade's `tinted` colours are separate lists, plus ads and holograms that `rng.pick(NEON)` twice.
+4. **Cool used as an effect.** The anamorphic streak is tinted `(0.35, 0.55, 1.0)` (the cyan bars in `chase-060` and `slum1`), and the grade pushes shadows teal.
+5. **Five films.** The district haze tints swing hue by ±35% (Market magenta, Slum green, Core blue).
+6. **Candy windows.** Pink and teal rooms, saturated TV blue and `(0.62, 1, 0.72)` green fluoro (`slum1`).
+
+### 15.1 Concept and value structure
+
+*A sodium city under a smoke ceiling. It is lit from below by amber and tungsten practicals, cut from above by blue-white xenon beams, and red is its only shout.* Warm lives low and near, and cool lives high and far. Colour saturation is spent only on red signs and on the rare hologram.
+
+- **Darkest:** the unlit mid-height masses of buildings (soot, about 0.004 linear) and the zenith.
+- **Brightest:** the canyon floor (shopfronts and lamps), beam cores, and flare and sign cores.
+- **Contrast lives in silhouette:** dark towers against lit haze, and smoke backlit by beams, not hue against hue. A frame must still read in greyscale.
+
+### 15.2 Master palette
+
+All code values are **linear**. Energy share is the share of the frame's emissive energy in a chase shot at flight altitude, with the street-view share in brackets.
+
+| # | Name | sRGB | Linear | Role | Energy share |
+|---|---|---|---|---|---|
+| A1 | Smog Amber | `#5A4030` | 0.102, 0.051, 0.030 | low and near haze, horizon glow, cloud underside | atmosphere |
+| A2 | Rain Steel | `#46505A` | 0.061, 0.080, 0.102 | high and far haze, top-face ambient, distant silhouettes | atmosphere |
+| A3 | Soot | `#0E0F12` | 0.004, 0.005, 0.006 | zenith, unlit masses, deepest shadow | none |
+| P1 | Sodium | `#FF9A3C` | 1.0, 0.323, 0.045 | street lamps, Megablock windows, canyon bounce, Corporate gold | 25% (20%) |
+| P2 | Tungsten | `#FFB46B` | 1.0, 0.456, 0.147 | windows, shop interiors, lanterns | 30% (35%) |
+| P3 | Xenon | `#DCE8FF` | 0.716, 0.807, 1.0 | searchlights, spinner and car beams, office fluorescents | 15% (8%) |
+| X1 | Signal Red | `#FF3A22` | 1.0, 0.042, 0.016 | the sign colour; tail lights, beacons, ads | 15% (20%) |
+| X2 | Neon White | `#FFDDB0` | 1.0, 0.723, 0.434 | warm-white tube lettering, fascias, screen text | 8% (12%) |
+| X3 | Holo Rose + Holo Ice | `#D98CA0` + `#8FB4C8` | 0.694, 0.262, 0.352 + 0.275, 0.456, 0.578 | **a pair**, used only together, on holograms and some screens | 5% (5%) |
+
+**Derived tints.** These are not new hues and may only be used where named. They must stay at 2% or less of the energy.
+
+- Fluoro `#D8F0D8` (0.687, 0.871, 0.687): Slum interiors only.
+- TV Blue `#8C9EC8` (0.262, 0.342, 0.578): flicker inside rooms only.
+- Flare `#FF7A1E` (1.0, 0.195, 0.013): Hades flare stacks only.
+- Tube Green `#86C89A` (0.238, 0.578, 0.323): at most 1 Market tube sign per block.
+
+Everything warm (P1, P2, X1, X2) totals at least **70%** of the energy.
+
+### 15.3 Districts (one film, five mixes)
+
+Shares are of the district's practical and sign energy. The haze tint multiplies the base fog colour and must stay within ±15% per channel of 1.0.
+
+| District | Mix | Haze tint (`district_tint`) | Read |
+|---|---|---|---|
+| Core | Tungsten 35, Xenon 35, Sodium 10, Red 12 (crowns, beacons), Holo 8 | `(0.94, 0.98, 1.06)` | the coolest district: xenon offices, beams on crowns |
+| Megablock | Sodium 45, Tungsten 35, Xenon 8, Red 12 | `(1.08, 1.0, 0.9)` | sodium-brown plateaus |
+| Slum | Tungsten 45, Fluoro 20, Sodium 20, Red 15 | `(1.04, 1.0, 0.9)`, density ×1.4 below 60 m | smoky and dim, with one red sign per building |
+| Market | Red 35, Tungsten 25, Sodium 15, Neon White 15, Holo 7, Tube Green ≤3 | `(1.12, 0.97, 0.9)` | a red canyon (the BR street) |
+| Corporate | Sodium-gold 60 (Tyrell), Xenon 30 (searchlights), Red 10 (beacons) | `(1.06, 1.0, 0.94)`, density ×0.7 | gold pyramids raked by white beams |
+
+### 15.4 Signage rules
+
+Sign set: **Red, Sodium (amber), Neon White, Holo Ice**, plus Tube Green in Market only.
+
+| Sign kind (brightness rank, section 7) | Red | Neon White | Amber | Ice | Green |
+|---|---|---|---|---|---|
+| Blades and screens (1.0) | 45 | 30 | 15 | 10 | 0 |
+| Projecting signs (0.6) | 40 | 25 | 30 | 0 | ≤5 (Market) |
+| Fascias (0.35) | 20 | 50 | 25 | 5 | 0 |
+
+- **Block rule.** Each superblock rolls one **dominant** from {Red 0.5, Amber 0.3, Neon White 0.2} and one **secondary**, which is a different member of that set or Ice (p=0.15). Then signs are dominant 60%, secondary 30%, and the size table above 10%. There is no global wildcard.
+- **Text versus body.** Glyphs are Neon White or the sign hue. The sign body or border is the *other* one, never two saturated hues on one sign.
+- **Never:** magenta, violet, pink neon or saturated cyan. Ice appears only on screens and blades, and is never adjacent to another Ice sign.
+- **Dim the street.** Neon tube peak is at most 2.5× a lit window's luminance (Cronenweth's "just above flicker"). Blades may reach 4×.
+
+### 15.5 Atmosphere
+
+- **Fog colour by altitude.** World y below 80 m: Smog Amber. From 80 to 400 m: lerp to a neutral umber-grey `(0.07, 0.06, 0.055)`. Above 400 m, or beyond 1.5 km distance: Rain Steel. Looking down into canyons, fog goes *warmer and brighter*, because it is lit sodium.
+- **Sky.**
+  - Horizon `(0.10, 0.06, 0.035)`, mid `(0.03, 0.026, 0.024)`, zenith `(0.004, 0.005, 0.007)`.
+  - The cloud underside is lit amber near the horizon `(0.20, 0.11, 0.05)` and fades to steel overhead `(0.045, 0.048, 0.055)`.
+  - No hue may sit between 260° and 340° (violet and magenta).
+- **Beams (new).** Xenon searchlights, 3 to 6 per km², from Corporate and Core crowns, with slow sweeps of 0.05 to 0.15 rad/s. The volumetric colour is `(0.72, 0.81, 1.0)`. Beams are the main source of cool light in the frame, and they backlight the smoke.
+- **Hades flares (new, optional).** Refinery stacks on the city edge burst Flare orange every 8 to 20 s and light the cloud underside within 1.5 km.
+
+### 15.6 Practicals
+
+- **Windows:**
+  - Residential: Tungsten 60, Sodium 15, Xenon-fluoro 15, TV Blue flicker 7, curtain 3. Curtains are ochre, rust or faded red, never pink or teal.
+  - Office: Xenon 55, Tungsten 40, TV 5.
+  - Slum: Tungsten 50, Fluoro 25, Sodium 15, curtain 10.
+  - Monolith and Corporate: Sodium-gold 90, Xenon 10.
+- **Shopfronts:** Tungsten 55, Xenon-fluoro 30, sign-set hue 15.
+- **Street lamps:** 85% sodium, 15% mercury xenon.
+- **Traffic:**
+  - Head lights are xenon. Tail lights are Red.
+  - The `kind 4` emissive becomes xenon at 0.5.
+  - The taxi body stays yellow (a surface colour, not light).
+- **Aircraft beacons:** Red only, blinking at 0.5 to 1 Hz, on masts and crowns.
+- **Helipad perimeter lights:** sodium-yellow, not green.
+- **Hero car:**
+  - Head lights are xenon, and tail lights are red.
+  - The lift and thruster light is sodium-amber.
+  - The light bar is xenon plus red, as on a BR police spinner.
+  - The underglow is amber, not blue.
+  - The dash is amber monochrome CRT plus one dim green-phosphor panel. Drop the teal grid.
+- **Lanterns:** red and tungsten only.
+
+### 15.7 Ads and holograms
+
+**Screens and LED facades.** These are the **only** place Holo Rose and Ice may be large. Values must stay at 1.2 or less before bloom.
+
+| Scene | colA | colB | Background |
+|---|---|---|---|
+| 0 bottle (the Coke ad) | Red | Neon White | deep red-brown `(0.08, 0.01, 0.005)` |
+| 1 dancer (Joi) | Holo Rose | Holo Ice | near-black steel |
+| 2 koi | Red | Tungsten | black |
+| 3 face (geisha) | Red | Neon White | black; skin, red lips, black hair as now |
+| 4 noodles | Tungsten | Red | dark brown |
+| 5 pharma | Holo Ice | Neon White | dark steel |
+| 6 jellyfish | Holo Ice | Holo Rose | black |
+| 7 logo | Neon White | Red | black |
+
+**Holograms.**
+
+- Colours come only from the hologram pair (Rose and Ice), or Neon White and Red for the logo, desaturated to a saturation of 0.45 or less.
+- Draw them at 60% additive opacity with a white core (mix 0.3).
+- The giant route holograms alternate face/Rose-led and dancer/Ice-led, so you never see two different pairs in one view.
+
+### 15.8 Grade (`tonemap.wgsl`)
+
+- **Keep AgX.** Change the split toning:
+  - Shadows to near-neutral steel `(0.97, 1.0, 1.03)` (from the teal `0.85, 1.0, 1.12`).
+  - Highlights to warm `(1.04, 1.0, 0.92)`.
+- **Saturation.** Global ×0.88 in display space. Above luminance 0.75, ramp the saturation down to 0.4, so that sign and beam cores roll off to warm or neutral white the way film does.
+- **Clamp.** No display pixel may have a hue in 260° to 340° with a saturation above 0.35. This is a safety clamp; flag any pixel it changes in the debug view.
+- **Streaks and bloom.** The anamorphic streak takes the **source colour** × `(1.0, 0.95, 0.9)`, instead of the fixed `(0.35, 0.55, 1.0)`. Keep the bloom mix at 0.12.
+- **Grain.** Keep the 0.025 grain. Black level must stay at 0.004 or below. Never lift the shadows with colour.
+
+### 15.9 Code mapping (priority order)
+
+| # | Location | Change |
+|---|---|---|
+| 1 | `main.ts` `fogColor` | `[0.06, 0.035, 0.055]` → `[0.05, 0.035, 0.022]` (Smog Amber ×0.5) |
+| 2 | `sky.wgsl` `sky_color` | horizon, mid, zenith and cloud glow per 15.5; the below-horizon colour `(0.14, 0.06, 0.04)` → `(0.12, 0.07, 0.035)` |
+| 3 | `sky.wgsl` `fog_color` | add the altitude and distance lerp: Smog Amber (y < 80) → umber-grey → Rain Steel (y > 400 or d > 1.5 km); `fog_color` takes the distance |
+| 4 | `lighting.wgsl` `ambient_light` | sky `(0.26, 0.18, 0.34)` → `(0.17, 0.18, 0.2)` (cool from above); horizon `(0.24, 0.16, 0.22)` → `(0.2, 0.16, 0.12)`; ground stays `(0.2, 0.1, 0.06)` |
+| 5 | `lighting.wgsl` `reflection_env` | horizon `(0.11, 0.05, 0.075)` → `(0.10, 0.06, 0.035)`; above `(0.016, 0.013, 0.028)` → `(0.014, 0.016, 0.02)` |
+| 6 | `buildings.ts` `NEON` | replace with the sign set `SIGN = {red, amber(sodium), white(Neon White), ice, green}` in linear values from 15.2; export a `HOLO = {rose, ice}` pair; delete magenta, violet, pink, gold and cyan |
+| 7 | `generate.ts` palette block and `setPalette` | per superblock: dominant from {red .5, amber .3, white .2}; secondary is another member or ice (p=0.15); weights `[6, 3, 1]` with the 10% slot drawn from the size table |
+| 8 | `signs.ts` `slotPalette` | use the same hash as #7 (share one `blockPalette(i, j)` function); remove the `rng.int(0, 8)` wildcard; take a `kind` argument (blade, projecting or fascia) and apply the 15.4 table; `col2` is Neon White when `col` is saturated |
+| 9 | `tonemap.wgsl` | split-tone, saturation roll-off and violet clamp per 15.8; streak tint `(0.35, 0.55, 1.0)` → source colour × `(1.0, 0.95, 0.9)` |
+| 10 | `composite.wgsl` `district_tint` | the 15.3 values (Core `0.94, 0.98, 1.06`; Megablock `1.08, 1.0, 0.9`; Slum `1.04, 1.0, 0.9`; Market `1.12, 0.97, 0.9`; Corporate `1.06, 1.0, 0.94`) |
+| 11 | `facade.wgsl` `light_color` | warm `(1, 0.64, 0.34)` → Tungsten `(1, 0.456, 0.147)`, and the 30% tint mix → Sodium; cool → Xenon; fluoro `(0.62, 1, 0.72)` → `(0.69, 0.87, 0.69)`; tinted pink and teal → curtain rust `(0.8, 0.3, 0.12)` / ochre `(0.75, 0.5, 0.15)`; tv `(0.4, 0.5, 1)` → `(0.26, 0.34, 0.58)`; shares per 15.6 |
+| 12 | `facade.wgsl` shopfront | `shopCol` warm → Tungsten, cool → Xenon; the "tinted" branch `unpack_color(hash)` → a sign-set colour from the block palette; shutter graffiti → {red, ochre, white} ×0.4; TV flicker `(0.25, 0.35, 0.9)` → TV Blue |
+| 13 | `ads.ts` tiles | `colorA/B` from the 15.7 table by `scene`, not `rng.pick(NEON)` |
+| 14 | `ads.ts` holograms | `color/color2` = the HOLO pair (logo: Neon White/Red); `hologram.wgsl` desaturates to 0.45 or less |
+| 15 | `details_emit.wgsl` `neon_accent` | becomes `sign_accent(h)`: red .45, amber .3, white .25. Enclosure windows (`details.wgsl` part 3) use window light (Tungsten 70 / Fluoro 30) instead. AC LEDs are red or amber. Awning fabric uses `laundry_color` |
+| 16 | `details_emit.wgsl` `laundry_color` | random RGB → pick from fabric {indigo `0.08, 0.1, 0.18`, rust `0.35, 0.12, 0.05`, ochre `0.45, 0.32, 0.1`, faded red `0.4, 0.08, 0.06`, off-white `0.6, 0.58, 0.52`, grey `0.3`} |
+| 17 | `signs.ts` street lamps | 70/30 → 85/15; warm `[5, 2.6, 1]` → `[5, 1.6, 0.23]` (Sodium); cool `[2.2, 3.4, 5]` → `[3.6, 4, 5]` (Xenon) |
+| 18 | `buildings.ts` `pearlTower`, `ledSlab` | the magenta `colorB (1, 0.15, 0.6)` → Red; pink `colorA` → Neon White; `ledSlab` `neon(r)` ×2 → the ad pairs of 15.7 |
+| 19 | `facade.wgsl` `ST_NEONRING`, `F_BANDS`, `F_TOPGLOW`, `F_EDGE` | the accent must be Red, Neon White, Sodium or Xenon (assert in TS when packing `colorB` for these flags) |
+| 20 | `rooftops.ts` `NEONS`, `neonPair` | delete; billboards use the 15.7 ad pairs; shack windows stay Tungsten |
+| 21 | `render/cables.ts` `LANTERN_COLORS` | `[1, 0.22, 0.5]` (pink) → Tungsten; keep red, amber and warm |
+| 22 | `traffic.wgsl` | head `(10, 9, 7.5)` → Xenon ×10; the `kind 4` emissive `(0.2, 0.5, 0.8)` → Xenon ×0.5; tail stays |
+| 23 | `carRenderer.ts` `carLights`, `spinner.ts` | headlights `[16, 15, 13]` → `[11.5, 13, 16]`; underglow `(0.8, 2, 4)` → `[3, 1.6, 0.5]`; `HEAD [6, 5, 4]` → `[4.3, 4.8, 6]`; `CYAN [0.4, 5, 7]` → Xenon `[4.3, 4.8, 6]`; `car.wgsl` dash teal `(0, 0.35, 0.55)` → amber CRT `(0.5, 0.2, 0.03)` |
+| 24 | `facade.wgsl` helipad dots | `(0.2, 1, 0.4)` → Sodium |
+| 25 | new: `volumetric.wgsl` / lights | xenon searchlight beams (15.5); optional Hades flares |
