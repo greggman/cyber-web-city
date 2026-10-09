@@ -98,14 +98,19 @@ interface SegOpts {
 }
 
 export function seg(ctx: BuildCtx, o: SegOpts) {
+  // Backstop against z-fighting: pieces generated independently can end up
+  // sharing an exact plane (same width, same top). A deterministic sub-
+  // percent jitter of size and top keeps any two pieces from being exactly
+  // coplanar without visibly changing the design.
+  const j = (k: number) => 1 + (ctx.rng.next() - 0.5) * k;
   ctx.segs.push({
     x: o.x,
     y: o.y,
     z: o.z,
     rotY: o.rotY ?? 0,
-    sx: o.w,
-    sy: o.h,
-    sz: o.d,
+    sx: o.w * j(0.008),
+    sy: o.h * j(0.004),
+    sz: o.d * j(0.008),
     taper: o.taper ?? 1,
     twist: o.twist ?? 0,
     shape: o.shape ?? Shape.Box,
@@ -737,6 +742,7 @@ export function gateTower(ctx: BuildCtx, lot: Lot, H: number) {
   const colorB = neon(r);
   const cx = (lot.x0 + lot.x1) / 2;
   const cz = (lot.z0 + lot.z1) / 2;
+  const spanH = H * 0.12;
   for (const s of [-1, 1]) {
     const off = s * ((alongX ? w : d) / 2 - legW / 2);
     seg(ctx, {
@@ -745,20 +751,20 @@ export function gateTower(ctx: BuildCtx, lot: Lot, H: number) {
       y: 0,
       w: alongX ? legW : thick,
       d: alongX ? thick : legW,
-      h: H,
+      // Legs stop inside the span so their roofs never share its plane.
+      h: H - spanH * 0.5,
       style: Style.GlassOffice,
       colorA: tint(r, 'neutral'),
       colorB,
       flags: SegFlags.EdgeGlow,
     });
   }
-  const spanH = H * 0.12;
   seg(ctx, {
     x: cx,
     z: cz,
     y: H - spanH,
-    w: alongX ? w : thick,
-    d: alongX ? thick : d,
+    w: (alongX ? w : thick) * 1.02,
+    d: (alongX ? thick : d) * 1.02,
     h: spanH,
     style: Style.LedFacade,
     colorB,
