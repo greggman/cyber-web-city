@@ -31,9 +31,14 @@ The site deploys to GitHub Pages on every push to `main`
 
 ## Controls
 
+The camera icon (top left) picks a camera or chase framing; the gear icon
+(top right) opens settings (pause, sound, stats, flight speed, rain, haze,
+brightness, reflections, light shafts, anti-aliasing). Settings are saved
+in the browser. Keyboard shortcuts:
+
 | Key | Action |
 |---|---|
-| C | Cycle camera: chase, cockpit, skyline |
+| C | Cycle camera: chase, cockpit, skyline, top-down map |
 | 1–5 | Pick a chase framing (classic, low, high wide, side, front three-quarter) |
 | 0 | Cycle framings automatically |
 | Space | Pause |
@@ -54,6 +59,7 @@ The site deploys to GitHub Pages on every push to `main`
 | `debug=1..6` | Debug views: albedo, normals, emissive, lights, ambient, light count per cluster |
 | `quality=low` | Turns SSR off and thins the rain |
 | `taa=0`, `occlusion=0`, `ssr=0`, `rain=0`, `mute=1` | Turn individual features off |
+| `ui=0` | Hide the on-screen controls (also hidden with `paused=1`) |
 
 The car preview page is
 `car-preview.html?view=three-quarter|side|front|rear|rear-three-quarter|top|low|under|interior|pov&env=studio|city`.

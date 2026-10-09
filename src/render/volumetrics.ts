@@ -23,6 +23,9 @@ export class Volumetrics {
   private integrateBg!: GPUBindGroup;
   readonly view: GPUTextureView;
   enabled = true;
+  private strengthBuf!: GPUBuffer;
+  private strength = 1;
+  private written = -1;
 
   constructor(private readonly device: GPUDevice) {
     const usage =
@@ -50,8 +53,10 @@ export class Volumetrics {
       d,
       'volume/strength',
       new Float32Array([strength, 0, 0, 0]),
-      GPUBufferUsage.UNIFORM,
+      GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     );
+    this.strengthBuf = strengthBuf;
+    this.strength = strength;
     const il = bgl(d, 'volume/inject/layout', [
       ['c', 'storage-tex-3d:rgba16float', 0],
       ['c', 'uniform', 3],
@@ -115,7 +120,18 @@ export class Volumetrics {
   }
 
   run(encoder: GPUCommandEncoder, sceneBg: GPUBindGroup) {
-    if (!this.enabled) return;
+    // Disabled: integrate once with zero strength so the composite reads
+    // an empty volume, then skip the work entirely.
+    const want = this.enabled ? this.strength : 0;
+    if (want !== this.written) {
+      this.device.queue.writeBuffer(
+        this.strengthBuf,
+        0,
+        new Float32Array([want, 0, 0, 0]),
+      );
+    }
+    if (!this.enabled && this.written === 0) return;
+    this.written = want;
     let pass = encoder.beginComputePass({
       label: 'volume/inject',
       timestampWrites: tw('volume/inject'),

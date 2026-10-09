@@ -26,6 +26,13 @@ import {DYNAMIC_LIGHTS} from './render/renderer';
 import {Rain} from './render/rain';
 import {Canopy} from './render/canopy';
 import {Ambience} from './audio/ambience';
+import {
+  CameraMode,
+  Controls,
+  DEFAULTS,
+  loadSaved,
+  type UiState,
+} from './ui/controls';
 import {generateTraffic} from './city/traffic';
 import {Traffic} from './render/traffic';
 
@@ -176,39 +183,115 @@ async function main() {
     taa: params.get('taa') !== '0',
     occlusion: params.get('occlusion') !== '0',
   };
-  if (params.get('paused') === '1' || params.get('nohelp') === '1') {
-    document.getElementById('help')!.style.display = 'none';
-  }
   const camParam = params.get('cam');
-  let cameraMode = camParam === 'pov' ? 1 : camParam === 'skyline' ? 2 : 0;
+  // UI state: defaults, then saved settings, then URL parameters.
+  const ui: UiState = {...DEFAULTS, ...loadSaved()};
+  ui.camera =
+    camParam === 'pov'
+      ? CameraMode.Cockpit
+      : camParam === 'skyline'
+        ? CameraMode.Skyline
+        : camParam === 'map'
+          ? CameraMode.Map
+          : CameraMode.Chase;
+  if (params.has('shot')) ui.shot = Number(params.get('shot'));
+  if (params.has('rain')) ui.rain = Number(params.get('rain'));
+  if (params.get('mute') === '1') ui.sound = false;
+  if (params.get('ssr') === '0' || params.get('quality') === 'low')
+    ui.ssr = false;
+  if (params.get('taa') === '0') ui.taa = false;
+  if (params.has('hud')) ui.hud = params.get('hud') === '1';
+  ui.paused = params.get('paused') === '1';
   // Inspection cameras: cam=screen&n=K or cam=holo&n=K frame an ad/hologram.
   const inspect =
     camParam === 'screen' || camParam === 'holo' ? camParam : null;
   const inspectN = Number(params.get('n') ?? 0);
-  let paused = params.get('paused') === '1';
-  let showHud = params.get('hud') === '1';
   let time = Number(params.get('t') ?? 0);
   // anim=S offsets animation time only (camera stays put): for flicker tests.
   const animOffset =
     Number(params.get('anim') ?? 0) - (params.has('anim') ? time : 0);
 
   const audio = new Ambience();
+  audio.setMuted(!ui.sound);
   const startAudio = () => {
-    if (params.get('mute') !== '1') audio.start();
+    if (ui.sound) audio.start();
   };
   window.addEventListener('pointerdown', startAudio);
-  window.addEventListener('keydown', e => {
-    if (e.key === 'm' || e.key === 'M') {
-      audio.start();
-      audio.toggleMute();
-      return;
+
+  // Apply a UI setting to the renderer/simulation.
+  const apply = (key: keyof UiState) => {
+    switch (key) {
+      case 'sound':
+        if (ui.sound) audio.start();
+        audio.setMuted(!ui.sound);
+        break;
+      case 'rain':
+        rain.intensity = ui.rain;
+        settings.rain = ui.rain;
+        settings.wetness = Math.min(1, ui.rain * 2);
+        break;
+      case 'haze':
+        settings.fogDensity = 0.0009 * ui.haze;
+        break;
+      case 'exposure':
+        settings.exposure = ui.exposure;
+        break;
+      case 'ssr':
+        renderer.ssr.enabled = ui.ssr;
+        break;
+      case 'volumetrics':
+        renderer.volume.enabled = ui.volumetrics;
+        break;
+      case 'taa':
+        settings.taa = ui.taa;
+        break;
+      case 'camera':
+        chase.fixedShot = ui.shot;
+        break;
     }
-    startAudio();
-    if (e.key === 'c' || e.key === 'C') cameraMode = (cameraMode + 1) % 3;
-    else if (e.key === ' ') paused = !paused;
-    else if (e.key === 'h' || e.key === 'H') showHud = !showHud;
-    else if (e.key >= '1' && e.key <= '5')
-      time = [20, 95, 170, 260, 340][Number(e.key) - 1];
+  };
+  (
+    ['rain', 'haze', 'exposure', 'ssr', 'volumetrics', 'taa', 'camera'] as const
+  ).forEach(apply);
+  const controls = new Controls(ui, apply);
+  // Screenshot/test runs (paused=1, nohelp=1 or ui=0) hide the overlay UI.
+  if (ui.paused || params.get('nohelp') === '1' || params.get('ui') === '0') {
+    document.getElementById('help')!.style.display = 'none';
+    controls.setVisible(false);
+  }
+
+  window.addEventListener('keydown', e => {
+    // Arrows/space belong to a focused slider or checkbox; other keys work.
+    if (
+      e.target instanceof HTMLInputElement &&
+      (e.key.startsWith('Arrow') || e.key === ' ')
+    )
+      return;
+    if (e.key === 'm' || e.key === 'M') {
+      ui.sound = !ui.sound;
+      apply('sound');
+    } else {
+      startAudio();
+    }
+    if (e.key === 'c' || e.key === 'C') {
+      ui.camera = ((ui.camera + 1) % 4) as CameraMode;
+      ui.shot = undefined;
+      apply('camera');
+    } else if (e.key === ' ') {
+      ui.paused = !ui.paused;
+      e.preventDefault();
+    } else if (e.key === 'h' || e.key === 'H') ui.hud = !ui.hud;
+    else if (e.key >= '1' && e.key <= '5') {
+      // Pick a chase framing (0 cycles automatically again).
+      ui.camera = CameraMode.Chase;
+      ui.shot = Number(e.key) - 1;
+      apply('camera');
+    } else if (e.key === '0') {
+      ui.camera = CameraMode.Chase;
+      ui.shot = undefined;
+      apply('camera');
+    }
+    controls.refresh();
   });
 
   let last = performance.now();
@@ -225,12 +308,12 @@ async function main() {
       fpsAccum = 0;
       fpsFrames = 0;
     }
-    const dt = paused ? 0 : realDt;
+    const dt = ui.paused ? 0 : realDt * ui.timeScale;
     time += dt;
     const pose = flight.pose(time);
     renderer.carToWorld = pose.matrix;
-    renderer.cameraMode = cameraMode;
-    if (camParam === 'map') {
+    renderer.cameraMode = ui.camera;
+    if (ui.camera === CameraMode.Map) {
       // Top-down view over the car (layout inspection).
       const p = pose.position;
       camera.camToWorld = lookAtCamera([p[0], 3200, p[2] + 1], [p[0], 0, p[2]]);
@@ -264,7 +347,7 @@ async function main() {
             ];
       camera.camToWorld = lookAtCamera(eye, c);
       camera.fovY = (50 * Math.PI) / 180;
-    } else if (cameraMode === 2) {
+    } else if (ui.camera === CameraMode.Skyline) {
       // Establishing shot: slowly orbit high above the car's area.
       const a = time * 0.02;
       const p = pose.position;
@@ -273,7 +356,7 @@ async function main() {
         [p[0], 250, p[2]],
       );
       camera.fovY = (50 * Math.PI) / 180;
-    } else if (cameraMode === 0) {
+    } else if (ui.camera === CameraMode.Chase) {
       const c = chase.update(pose, time, Math.max(dt, 1 / 60));
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
       camera.fovY = (chase.fov * Math.PI) / 180;
@@ -300,10 +383,10 @@ async function main() {
       pose.forward[2] * pose.speed,
     ];
     Object.assign(canopyState, {
-      dt: Math.max(dt, paused ? 1 / 60 : 0),
+      dt: Math.max(dt, ui.paused ? 1 / 60 : 0),
       time,
       speed: pose.speed,
-      pov: cameraMode === 1,
+      pov: ui.camera === CameraMode.Cockpit,
     });
     audio.update(time, pose.speed);
     rain.setFrame(camera.position, camera.forward, [
@@ -312,7 +395,7 @@ async function main() {
       pose.forward[2] * pose.speed,
     ]);
     renderer.render(camera, time + animOffset, dt, settings);
-    if (showHud) {
+    if (ui.hud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
         `segments ${renderer.city.count}  holograms ${adData.holograms.length}  screens ${adData.screens.length}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +

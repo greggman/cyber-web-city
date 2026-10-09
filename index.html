@@ -20,7 +20,7 @@
         font: 12px/1.3 ui-monospace, monospace; white-space: pre-wrap; display: none;
       }
       #hud {
-        position: fixed; left: 8px; top: 8px; color: #9fc;
+        position: fixed; left: 10px; top: 56px; color: #9fc;
         font: 11px/1.3 ui-monospace, monospace; white-space: pre;
         text-shadow: 0 0 2px #000; pointer-events: none;
       }
@@ -28,13 +28,14 @@
         position: fixed; right: 10px; bottom: 8px; color: rgba(200, 255, 255, 0.45);
         font: 11px ui-monospace, monospace; pointer-events: none;
       }
+      @media (max-width: 640px), (hover: none) { #help { display: none; } }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
     <div id="loadmsg">Loading</div>
     <div id="hud"></div>
-    <div id="help">C: camera &nbsp; Space: pause &nbsp; 1-5: framing (0: auto) &nbsp; M: sound &nbsp; H: hud</div>
+    <div id="help">C: camera &nbsp; 1-5: framing (0: auto) &nbsp; Space: pause &nbsp; M: sound &nbsp; H: stats</div>
     <div id="errors"></div>
     <script type="module" src="main.js"></script>
   </body>

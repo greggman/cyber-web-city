@@ -70,7 +70,10 @@ export class Ambience {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = 0;
-    this.master.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 4);
+    this.master.gain.linearRampToValueAtTime(
+      this.muted ? 0 : 0.8,
+      ctx.currentTime + 4,
+    );
     const comp = ctx.createDynamicsCompressor();
     this.master.connect(comp).connect(ctx.destination);
     const reverb = ctx.createConvolver();
@@ -149,7 +152,11 @@ export class Ambience {
   }
 
   toggleMute() {
-    this.muted = !this.muted;
+    this.setMuted(!this.muted);
+  }
+
+  setMuted(muted: boolean) {
+    this.muted = muted;
     if (this.ctx)
       this.master.gain.setTargetAtTime(
         this.muted ? 0 : 0.8,

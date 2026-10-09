@@ -10,7 +10,7 @@
     "lint": "gts lint",
     "fix": "gts fix",
     "test:unit": "node build.mjs --tests && node --test out/tests/*.mjs",
-    "test": "npm run build && npm run test:unit && node test/smoke.mjs && node test/route-check.mjs",
+    "test": "npm run build && npm run test:unit && node test/smoke.mjs && node test/route-check.mjs && node test/ui.mjs",
     "shots": "npm run build && node test/shots.mjs"
   },
   "repository": {
