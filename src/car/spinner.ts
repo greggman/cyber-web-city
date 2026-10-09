@@ -676,6 +676,28 @@ function interior(all: Part[]) {
     color: [0.035, 0.032, 0.032],
     tessellation: {segmentsU: 20, segmentsV: 30},
   });
+  // Cowl: the dash top continues up and forward to the hood's rear lip at
+  // the windscreen base (without it the firewall showed as a black band
+  // between hood and dash from the driver's seat). Cabin frame: z + CAB.
+  {
+    const top = topSection(zC0).points.map(
+      q => [q[0], q[1] - 0.015, q[2] + CAB + 0.005] as Vec3,
+    );
+    const ex = Math.max(...top.map(q => Math.abs(q[0])));
+    const bottom = top.map(
+      q => [q[0] * Math.min(1, (xe - 0.02) / ex), 0.845, -1.02 + 0.15] as Vec3,
+    );
+    parts.push({
+      name: 'dash-cowl',
+      surface: orient(
+        loft([NurbsCurve.fromPoints(bottom), NurbsCurve.fromPoints(top)], 1),
+        [0, 1, 0.4],
+      ),
+      material: 'leather',
+      color: [0.035, 0.032, 0.032],
+      tessellation: {segmentsU: 20, segmentsV: 2},
+    });
+  }
   parts.push(
     box(
       'dash-accent',
@@ -1466,18 +1488,20 @@ export function buildSpinner(): Model {
     tessellation: {segmentsU: 6, segmentsV: 30},
   });
 
-  // Firewall closing the cabin under the cowl.
+  // Firewall closing the cabin under the cowl. Its top follows the hood's
+  // crowned section (a straight top left a see-through slit under the
+  // hood's arch, visible from the cockpit between hood and dash).
   const fz = zC0 - 0.02;
+  const fwTop = topSection(fz).points.map(
+    p => [p[0], p[1] - 0.012, p[2]] as Vec3,
+  );
   parts.push({
     name: 'firewall',
     surface: orient(
       loft(
         [
-          NurbsCurve.line([-edgeX(fz), FLOOR, fz], [edgeX(fz), FLOOR, fz]),
-          NurbsCurve.line(
-            [-edgeX(fz), edgeY(fz) - 0.01, fz],
-            [edgeX(fz), edgeY(fz) - 0.01, fz],
-          ),
+          NurbsCurve.fromPoints(fwTop.map(p => [p[0], FLOOR, p[2]] as Vec3)),
+          NurbsCurve.fromPoints(fwTop),
         ],
         1,
       ),
