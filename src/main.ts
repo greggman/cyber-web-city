@@ -5,6 +5,7 @@
 //   t=SECONDS     start time along the flight path
 //   cam=chase|pov|skyline camera mode (skyline: high establishing shot)
 //   paused=1      freeze time (deterministic screenshots)
+//   anim=S        animation time S with the camera at t (flicker tests)
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
@@ -186,6 +187,9 @@ async function main() {
   let paused = params.get('paused') === '1';
   let showHud = params.get('hud') === '1';
   let time = Number(params.get('t') ?? 0);
+  // anim=S offsets animation time only (camera stays put): for flicker tests.
+  const animOffset =
+    Number(params.get('anim') ?? 0) - (params.has('anim') ? time : 0);
 
   const audio = new Ambience();
   const startAudio = () => {
@@ -301,7 +305,7 @@ async function main() {
       pose.forward[1] * pose.speed,
       pose.forward[2] * pose.speed,
     ]);
-    renderer.render(camera, time, dt, settings);
+    renderer.render(camera, time + animOffset, dt, settings);
     if (showHud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +

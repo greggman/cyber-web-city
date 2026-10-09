@@ -164,8 +164,8 @@ fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function,
     }
     em = inner * lit;
     // Unlit windows: occasional TV flicker.
-    if (lit < 0.5 && u2f(hRoom >> 3u) < 0.06) {
-      let flick = 0.5 + 0.5 * sin(c.time * (7.0 + 9.0 * u2f(hRoom)) + f32(hRoom & 255u));
+    if (lit < 0.5 && u2f(hRoom >> 3u) < 0.015) {
+      let flick = 0.75 + 0.25 * sin(c.time * (1.5 + 2.0 * u2f(hRoom)) + f32(hRoom & 255u));
       em = vec3f(0.25, 0.35, 0.9) * flick * 0.6 * smoothstep(0.0, 1.0, 1.0 - fr.y);
     }
   }
@@ -202,14 +202,18 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
     v = pow(band, 4.0) + 0.15 * step(0.5, fract(p.x / 2.4 + p.y / 2.4));
     col = mix(colA, colB, step(0.5, fract(p.y / 80.0 - t * 0.175)));
   } else if (mode == 3u) {
-    // Giant blocky glyphs (like characters in a sign).
-    let g = floor(p / vec2f(18.0, 18.0));
-    let cellp = fract(p / 18.0);
-    let gh = hash3_u(c.seed, u_of(g.x), u_of(g.y + floor(t * 0.5)));
+    // Giant characters scrolling smoothly upward in columns (a vertical
+    // ticker). Glyphs are fixed per position along the strip, so nothing
+    // blinks; the motion is continuous.
+    let colW = 18.0;
+    let colId = floor(p.x / colW);
+    let speed = 4.0 + 3.0 * hash11(u32(colId + 300.0));
+    let yy = p.y + t * speed;
+    let g = floor(vec2f(p.x, yy) / colW);
+    let cellp = fract(vec2f(p.x, yy) / colW);
+    let gh = hash3_u(c.seed, u_of(g.x), u_of(g.y));
     let sub = floor(cellp * 5.0);
     let bit = (gh >> u32(sub.x + sub.y * 5.0)) & 1u;
-    // Each lit sub-block is drawn as a neon outline (with a dim fill) so
-    // the glyphs don't read as flat lit slabs up close.
     let sb = fract(cellp * 5.0);
     let ring = 1.0 - step(0.16, sb.x) * step(sb.x, 0.84) * step(0.16, sb.y) * step(sb.y, 0.84);
     v = f32(bit) * (0.15 + 0.85 * ring) * step(0.1, cellp.x) * step(cellp.x, 0.9) * step(0.1, cellp.y) * step(cellp.y, 0.9);
@@ -222,12 +226,16 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
     v = pow(y, 6.0);
     col = colB;
   } else {
-    // Twinkling pixel clusters (random LED blocks switching on and off).
-    let blk = floor(p / vec2f(3.0, 3.0));
-    let tick = floor(t * 2.0 + hash21(u32(blk.x * 7.0 + 3.0), u32(blk.y)) * 10.0);
-    let on = step(0.72, u2f(hash3_u(c.seed, u_of(blk.x * 31.0 + blk.y), u_of(tick))));
-    v = on * (0.5 + 0.5 * hash21(u_of(blk.x), u_of(blk.y)));
-    col = mix(colA, colB, hash21(u_of(blk.y), 9u));
+    // Equalizer: continuous vertical bars rising and falling smoothly.
+    let barW = 2.4;
+    let bar = floor(p.x / barW);
+    let hb = hash11(u32(bar + 700.0) ^ c.seed);
+    let level = 0.5 + 0.35 * sin(t * (0.8 + hb) + hb * 20.0) + 0.15 * sin(t * 2.3 + bar * 0.7);
+    let span = 60.0;
+    let local = fract(p.y / span);
+    let inBar = step(0.12, fract(p.x / barW)) * step(fract(p.x / barW), 0.88);
+    v = inBar * step(local, level) * (0.4 + 0.6 * local / max(level, 0.05));
+    col = mix(colA, colB, local);
   }
   // LED pixel grid visible up close.
   let det = detail(vec2f(pix, pix), c.fw);
@@ -328,7 +336,10 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
       let sp = fract(c.facade / vec2f(9.0, 7.0));
       let m = aa_box(sp.x, 0.2, 0.8, 0.05) * aa_box(sp.y, 0.35, 0.65, 0.05);
       let col = select(accent, vec3f(1.0) - accent * 0.5, (sh & 32u) == 0u);
-      let flick = select(1.0, step(0.3, fract(c.time * 3.0 + f32(sh & 255u) * 0.1)), (sh & 64u) == 0u);
+      // Steady, except a rare faulty tube that stutters now and then.
+      let faulty = (sh & 448u) == 0u;
+      let burst = step(0.92, fract(c.time * 0.13 + f32(sh & 255u) * 0.37));
+      let flick = select(1.0, 1.0 - burst * step(0.5, fract(c.time * 9.0)), faulty);
       (*sf).emissive += col * m * 4.0 * flick;
     }
   } else if (style == ST_MONOLITH) {
@@ -399,7 +410,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).roughness = 0.4;
     (*sf).reflectivity = 0.3;
     let lp = fract(c.facade / vec2f(8.0, 24.0)) - vec2f(0.5, 0.5);
-    let blink = step(0.5, fract(c.time * 0.5 + hash11(c.seed) ));
+    let blink = 0.6 + 0.4 * sin(c.time * 1.2 + hash11(c.seed) * 6.28);
     (*sf).emissive += accent * smoothstep(0.08, 0.0, length(lp * vec2f(8.0, 24.0)) / 8.0) * 6.0 * blink;
   } else if (style == ST_NEONRING) {
     let pulse = 0.75 + 0.25 * sin(c.time * 2.0 + c.facade.x * 0.05);
