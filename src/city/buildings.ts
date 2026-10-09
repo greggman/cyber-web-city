@@ -706,7 +706,8 @@ export function pearlTower(ctx: BuildCtx, lot: Lot, H: number) {
   const cx = (lot.x0 + lot.x1) / 2;
   const cz = (lot.z0 + lot.z1) / 2;
   const base = Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0);
-  const colorB = packColor(1, 0.15, 0.6);
+  // Signal red spheres (ART_BIBLE.md 15.9 #18).
+  const colorB = packColor(RED[0], RED[1], RED[2]);
   // Central column.
   seg(ctx, {
     x: cx,

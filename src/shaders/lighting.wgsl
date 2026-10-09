@@ -20,14 +20,14 @@ fn ambient_light(n: vec3f, worldY: f32, dist: f32) -> vec3f {
   // make ledges, fins and greebles read at night.
   // ART_BIBLE.md 15: steel from above, amber from the horizon, sodium
   // bounce from the streets.
-  let sky = vec3f(0.17, 0.18, 0.2) * frame.cityGlow;
+  let sky = vec3f(0.12, 0.13, 0.15) * frame.cityGlow;
   // The smog glow is brighter toward the city core: faces turned toward
   // it are lit more than the others, so building forms separate.
   let face = 0.55 + 0.45 * dot(normalize(n.xz + vec2f(1e-4)), vec2f(0.6, 0.8)) * (1.0 - abs(n.y));
   // Fill light is for reading form up close; far away the city should be
   // carried by its lights, not by evenly lit grey walls.
   let far = mix(1.0, 0.35, smoothstep(150.0, 900.0, dist));
-  let horizon = vec3f(0.2, 0.16, 0.12) * face * far * frame.cityGlow;
+  let horizon = vec3f(0.14, 0.11, 0.085) * face * far * frame.cityGlow;
   let depthBoost = 1.0 + 3.0 * exp(-max(worldY, 0.0) / 90.0);
   let ground = vec3f(0.2, 0.1, 0.06) * depthBoost * frame.cityGlow;
   return sky * smoothstep(-0.1, 1.0, n.y) + horizon * (1.0 - abs(n.y)) + ground * smoothstep(0.1, -1.0, n.y);

@@ -15,6 +15,19 @@ import {
   type RGB,
 } from './palette';
 
+/** Ad tiles carrying the Market magenta signature. */
+function magentaTile(i: number): boolean {
+  const scene = i % AD_SCENES;
+  return i >= AD_SCENES && (scene === 1 || scene === 6);
+}
+
+function pickTile(rng: Rng, market: boolean): number {
+  for (;;) {
+    const t = rng.int(0, AD_TILES);
+    if (market || !magentaTile(t)) return t;
+  }
+}
+
 /** Ad scene colours (ART_BIBLE.md 15.7), by scene id. */
 const AD_COLORS: [RGB, RGB][] = [
   [RED, NEON_WHITE], // bottle
@@ -82,8 +95,7 @@ export function generateAds(
     // dancer and jellyfish tiles carry the Market magenta signature.
     const scene = i % AD_SCENES;
     let [a, b] = AD_COLORS[scene % AD_COLORS.length];
-    if (i >= AD_SCENES && (scene === 1 || scene === 6))
-      [a, b] = [MAGENTA, CYAN];
+    if (magentaTile(i)) [a, b] = [MAGENTA, CYAN];
     tiles.push({
       scene,
       colorA: a,
@@ -127,7 +139,8 @@ export function generateAds(
       normal: [s.nx, 0, s.nz],
       width: w,
       height: h,
-      tile: rng.int(0, AD_TILES),
+      // Magenta signature tiles only on Market screens (15.2b).
+      tile: pickTile(rng, s.district === District.Market),
       seg: s.seg,
     });
   }

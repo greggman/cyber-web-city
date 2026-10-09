@@ -2,7 +2,7 @@
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
-import {CYAN, blockPalette} from './palette';
+import {AMBER, CYAN, MAGENTA, NEON_WHITE, RED, blockPalette} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -278,10 +278,26 @@ export function generateCity(seed: number): CityData {
             // Core landmarks carry the district's cyan accent on their crown
             // lights and rings (ART_BIBLE.md 15.2b).
             // Only true landmarks (supertalls), not every block's tallest.
-            if (landmarkEdges && top > 800) {
-              const cyan = packColor(CYAN[0], CYAN[1], CYAN[2]);
+            // Building light accents (rings, crowns, bands, edges) are
+            // never a random hue: Core supertalls carry cyan; everything
+            // else takes its block's warm dominant (ART_BIBLE.md 15.2b).
+            {
+              const pal = blockPalette(seed, i, j, info.district);
+              const warm =
+                pal.dominant === RED ||
+                pal.dominant === AMBER ||
+                pal.dominant === NEON_WHITE
+                  ? pal.dominant
+                  : RED;
+              const c =
+                landmarkEdges && top > 800
+                  ? CYAN
+                  : info.district === District.Market && pal.magenta
+                    ? MAGENTA
+                    : warm;
+              const packed = packColor(c[0], c[1], c[2]);
               for (let k = s0; k < segments.count; k++)
-                segments.setAccent(k, cyan);
+                segments.setAccent(k, packed);
             }
             // Hero dressing: buildings whose footprint comes within 60 m of
             // an avenue centreline (the flight corridors) get the denser kit.

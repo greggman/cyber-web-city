@@ -144,14 +144,24 @@ export class Volumetrics {
       }))
       .filter(b => b.d < 2500)
       .sort((a, b) => a.d - b.d)
-      .slice(0, BEAMS);
+      // A few per view, not a forest of bars.
+      .slice(0, 5);
     const data = new Float32Array(BEAMS * 8);
     near.forEach(({s, i}, k) => {
       // Slow sweep (0.05-0.15 rad/s) at 55-80 degrees elevation.
-      const h = Math.sin(i * 12.9898) * 43758.5453;
-      const r = h - Math.floor(h);
-      const az = r * Math.PI * 2 + time * (0.05 + 0.1 * r) * (i % 2 ? 1 : -1);
-      const el = 0.96 + 0.3 * Math.sin(time * 0.07 + i);
+      const rnd = (k: number) => {
+        const h = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+        return h - Math.floor(h);
+      };
+      // Each beam its own heading, rate, direction and elevation swing, so
+      // neighbours never run parallel.
+      const az =
+        rnd(1) * Math.PI * 2 +
+        time * (0.05 + 0.1 * rnd(2)) * (rnd(3) < 0.5 ? 1 : -1);
+      const el =
+        0.85 +
+        0.45 * rnd(4) +
+        0.18 * Math.sin(time * (0.05 + 0.06 * rnd(5)) + rnd(6) * 6.28);
       const ce = Math.cos(el);
       data.set(
         [
@@ -162,7 +172,7 @@ export class Volumetrics {
           Math.cos(az) * ce,
           Math.sin(el),
           Math.sin(az) * ce,
-          20.0,
+          14.0,
         ],
         k * 8,
       );

@@ -7,7 +7,7 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
   // Base gradient (ART_BIBLE.md 15.5): smog amber at the horizon, through
   // umber, to a soot zenith.
   let horizon = vec3f(0.10, 0.06, 0.035);
-  let mid = vec3f(0.03, 0.026, 0.024);
+  let mid = vec3f(0.024, 0.027, 0.032); // steel by ~30 degrees up
   let zenith = vec3f(0.004, 0.005, 0.007);
   var c = mix(horizon, mid, smoothstep(0.0, 0.18, up));
   c = mix(c, zenith, smoothstep(0.15, 0.7, up));
@@ -47,7 +47,7 @@ fn fog_amount(camPos: vec3f, worldPos: vec3f) -> f32 {
   return max(1.0 - exp(-integral), 1.0 - exp(-dist / 6500.0));
 }
 
-fn fog_color(dir: vec3f, worldY: f32) -> vec3f {
+fn fog_color(dir: vec3f, worldY: f32, dist: f32) -> vec3f {
   // Match the sky at the horizon so distant geometry dissolves seamlessly;
   // darker looking down into the canyons.
   let d = normalize(dir);
@@ -55,5 +55,7 @@ fn fog_color(dir: vec3f, worldY: f32) -> vec3f {
   let low = mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
   // Warm (sodium-lit) low, cooler rain steel high up.
   let steel = vec3f(0.061, 0.080, 0.102) * 0.9 * frame.cityGlow;
-  return mix(low, steel, 0.6 * smoothstep(80.0, 400.0, worldY));
+  // Rain steel high up and far away (ART_BIBLE.md 15.5).
+  let k = max(smoothstep(80.0, 400.0, worldY), smoothstep(600.0, 1800.0, dist));
+  return mix(low, steel, 0.8 * k);
 }
