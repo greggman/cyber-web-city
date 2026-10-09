@@ -25,6 +25,7 @@ const F_BEACON = 4u;
 const F_NOWIN = 8u;
 const F_TOPGLOW = 16u;
 const F_RING = 64u;
+const F_GAUDY = 256u;
 
 // Per-fragment context passed to the style functions.
 struct Ctx {
@@ -790,8 +791,9 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   // LED strips and bands.
   let flags = s.flags;
   if ((flags & F_BANDS) != 0u) {
-    // Mechanical floors only (every 15 floors), never every few floors.
-    let every = s.floorH * 15.0;
+    // Mechanical floors only (every 15 floors); gaudy towers band every
+    // few floors (a Shenzhen light-show tower).
+    let every = s.floorH * select(15.0, f32(3u + c.seed % 4u), (s.flags & F_GAUDY) != 0u);
     let fb = fract(c.facade.y / every);
     let band = aa_box(fb, 0.0, 0.6 / every, c.fw.y / every);
     let chase = 0.6 + 0.4 * sin(c.facade.x * 0.05 - c.time * 1.5);
@@ -1022,7 +1024,7 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     // Vertical LED strips on box edges.
     // Edge strips: landmarks light only their top 30%; LED frames run full
     // height (ART_BIBLE.md 10).
-    if ((s.flags & F_EDGE) != 0u && (c.hRel > 0.7 || s.style == ST_LED)) {
+    if ((s.flags & F_EDGE) != 0u && (c.hRel > 0.7 || s.style == ST_LED || (s.flags & F_GAUDY) != 0u)) {
       let accent = unpack_color(s.colorB);
       var ed = 1e9;
       if (s.shape == 0u || s.shape == 1u || s.shape == 6u) {

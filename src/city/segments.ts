@@ -29,6 +29,7 @@ export const enum SegFlags {
   RoofExposed = 32, // roof (mostly) open: rooftop kitbash goes here
   RoofRing = 64, // the roof's center is built on: kitbash only around the edge
   Hero = 128, // faces the flight corridor: denser kit (ART_BIBLE.md 8)
+  Gaudy = 256, // showy light program: full-height edges, chasing bands
 }
 
 export interface Segment {
@@ -111,6 +112,10 @@ export class SegmentList {
 
   getFlags(i: number): number {
     return this.u32[i * 16 + 14];
+  }
+
+  setStyle(i: number, style: number) {
+    this.u32[i * 16 + 10] = style;
   }
 
   /** Replaces the accent colour's rgb, keeping its alpha (typology) byte. */

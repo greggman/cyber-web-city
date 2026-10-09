@@ -32,6 +32,8 @@ export interface FacadeSlot {
   avenue: boolean;
   /** Segment the facade belongs to (-1 if unknown). */
   seg: number;
+  /** The building's own colour (its owner's taste), set per building. */
+  color?: [number, number, number];
 }
 
 export interface BuildCtx {

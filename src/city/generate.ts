@@ -2,7 +2,7 @@
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
-import {AMBER, CYAN, MAGENTA, NEON_WHITE, RED, blockPalette} from './palette';
+import {CYAN, blockPalette, ownerColor} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -236,6 +236,7 @@ export function generateCity(seed: number): CityData {
           const build = (lot: Lot, fn: (ctx: BuildCtx, lot: Lot) => number) => {
             const ctx = ctxFor(sideOnAvenue(lot));
             const s0 = segments.count;
+            const sl0 = slots.length;
             minH = Math.min(minH, fn(ctx, inset(lot, 2.5)));
             // Light budget (ART_BIBLE.md 10): neon is rare and placed.
             // Edge strips only on Market LED frames and at most one Core
@@ -278,26 +279,44 @@ export function generateCity(seed: number): CityData {
             // Core landmarks carry the district's cyan accent on their crown
             // lights and rings (ART_BIBLE.md 15.2b).
             // Only true landmarks (supertalls), not every block's tallest.
-            // Building light accents (rings, crowns, bands, edges) are
-            // never a random hue: Core supertalls carry cyan; everything
-            // else takes its block's warm dominant (ART_BIBLE.md 15.2b).
+            // Every building has an owner with their own taste (ART_BIBLE.md
+            // 15.2c): its rings, crowns, edges and signs share one colour,
+            // which differs from its neighbours'. Core supertalls stay cyan.
+            const pal = blockPalette(seed, i, j, info.district);
+            const own =
+              landmarkEdges && top > 800
+                ? CYAN
+                : ownerColor(hb(50), hb(51), pal, info.district);
             {
-              const pal = blockPalette(seed, i, j, info.district);
-              const warm =
-                pal.dominant === RED ||
-                pal.dominant === AMBER ||
-                pal.dominant === NEON_WHITE
-                  ? pal.dominant
-                  : RED;
-              const c =
-                landmarkEdges && top > 800
-                  ? CYAN
-                  : info.district === District.Market && pal.magenta
-                    ? MAGENTA
-                    : warm;
-              const packed = packColor(c[0], c[1], c[2]);
+              const packed = packColor(own[0], own[1], own[2]);
               for (let k = s0; k < segments.count; k++)
                 segments.setAccent(k, packed);
+              for (let k = sl0; k < slots.length; k++) slots[k].color = own;
+            }
+            // Gaudy buildings (Shenzhen, Chongqing, Hong Kong): about 1 in 8,
+            // more in Core and Market and on the avenues, get a showy light
+            // program in their owner's colour: full-height outlines, chasing
+            // floor bands, a lit crown, sometimes an LED skin.
+            const gaudyP =
+              [0.18, 0.08, 0.06, 0.25, 0.12][info.district] *
+              (ctx.avenueSides.some(Boolean) ? 1.4 : 0.6);
+            if (top > 60 && hb(52) < gaudyP) {
+              const ledSkin = hb(53) < 0.3;
+              for (let k = s0; k < segments.count; k++) {
+                const g = segments.get(k);
+                if (g.style === Style.Podium || g.style === Style.Structure)
+                  continue;
+                let fl =
+                  g.flags |
+                  SegFlags.Gaudy |
+                  SegFlags.EdgeGlow |
+                  SegFlags.TopGlow;
+                if (hb(54) < 0.6) fl |= SegFlags.FloorBands;
+                segments.setFlags(k, fl);
+                if (ledSkin && g.sy > 40 && g.shape <= Shape.Oct) {
+                  segments.setStyle(k, Style.LedFacade);
+                }
+              }
             }
             // Hero dressing: buildings whose footprint comes within 60 m of
             // an avenue centreline (the flight corridors) get the denser kit.

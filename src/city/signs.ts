@@ -65,7 +65,16 @@ function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
   const [gu, gv] = unwarp(slot.x, slot.z);
   const i = Math.floor(gu / SUPER);
   const j = Math.floor(gv / SUPER);
-  return paletteColor(rng, blockPalette(seedForPalette, i, j, slot.district));
+  const block = blockPalette(seedForPalette, i, j, slot.district);
+  // The building's own colour leads; some signs follow the neighbourhood,
+  // some are plain warm white (ART_BIBLE.md 15.2c).
+  if (slot.color) {
+    const r = rng.next();
+    if (r < 0.55) return slot.color;
+    if (r < 0.8) return block.dominant;
+    return [1.0, 0.723, 0.434];
+  }
+  return paletteColor(rng, block);
 }
 
 /** The district accent for one deliberate sign (one per Slum tenement). */

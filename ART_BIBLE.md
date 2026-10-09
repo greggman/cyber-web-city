@@ -642,6 +642,14 @@ Rules:
 - **Motivated colour only in the air.** Haze takes an accent only as *bounce* below about 60 m from a big source of it (a Market canyon glows magenta-red near the street); never as a global tint.
 - Accents never tint the grade, the ambient light or the streaks.
 
+### 15.2c Owners, not one designer (user direction)
+
+A real city is designed by thousands of owners with different tastes. One block palette made whole areas agree, as if one person designed the city. So:
+
+- **Every building has an owner colour**, consistent within the building (its rings, crown, edges and its signs at 55%), varied across the street. About 30% of owners follow the neighbourhood's dominant; the rest pick from their district's taste (Market: red, magenta, cyan, green, amber, pink, violet...; Core: white, ice, cyan, gold, red, deep blue; Slum: amber, red, green, white, teal, pink; Megablock: amber, white, red, teal, ice; Corporate: gold, white, ice).
+- **Gaudy buildings exist.** About 1 in 8 buildings (more in Core and Market and on avenues) runs a showy program in its owner colour: full-height neon outlines, floor bands chasing every 3-6 floors, a lit crown, sometimes a full LED skin, as on Shenzhen and Chongqing light-show towers. These are deliberate loud owners, not a global default.
+- The colour script still governs the *air* (amber/steel, no violet wash), the grade, and the practicals; variety lives in owned objects, coherence in the atmosphere.
+
 ### 15.3 Districts (one film, five mixes)
 
 Shares are of the district's practical and sign energy. The haze tint multiplies the base fog colour and must stay within ±15% per channel of 1.0.

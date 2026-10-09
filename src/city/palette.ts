@@ -134,3 +134,76 @@ export function paletteColor(rng: Rng, p: BlockPalette): RGB {
   if (r < 0.9) return p.secondary;
   return NEON_WHITE;
 }
+
+// More colours real owners pick (ART_BIBLE.md 15.2c).
+export const GOLD: RGB = [1.0, 0.62, 0.12];
+export const ICE_BLUE: RGB = [0.35, 0.62, 1.0];
+export const PINK: RGB = [1.0, 0.25, 0.55];
+export const TEAL: RGB = [0.05, 0.85, 0.6];
+export const DEEP_BLUE: RGB = [0.12, 0.25, 1.0];
+
+/**
+ * A building's own colour (ART_BIBLE.md 15.2c): every building is designed
+ * by a different owner. About a third follow the neighbourhood's dominant,
+ * the rest pick from the district's wider taste. Consistent within a
+ * building, varied across a street. `h` and `h2` are per-building randoms.
+ */
+export function ownerColor(
+  h: number,
+  h2: number,
+  block: BlockPalette,
+  d: District,
+): RGB {
+  if (h < 0.3) return block.dominant;
+  const taste: [RGB, number][] =
+    d === District.Market
+      ? [
+          [RED, 2],
+          [MAGENTA, 2],
+          [CYAN, 1.5],
+          [ACID_GREEN, 1],
+          [AMBER, 1.5],
+          [PINK, 1.2],
+          [NEON_WHITE, 1],
+          [ULTRAVIOLET, 0.8],
+          [ICE_BLUE, 0.8],
+        ]
+      : d === District.Core
+        ? [
+            [NEON_WHITE, 2],
+            [ICE_BLUE, 1.5],
+            [CYAN, 1.2],
+            [GOLD, 1.2],
+            [RED, 1],
+            [DEEP_BLUE, 0.8],
+            [MAGENTA, 0.6],
+            [ULTRAVIOLET, 0.5],
+          ]
+        : d === District.Slum
+          ? [
+              [AMBER, 2],
+              [RED, 1.5],
+              [ACID_GREEN, 1.2],
+              [NEON_WHITE, 1.2],
+              [TEAL, 0.8],
+              [PINK, 0.8],
+              [ICE_BLUE, 0.5],
+            ]
+          : d === District.Megablock
+            ? [
+                [AMBER, 2],
+                [NEON_WHITE, 1.5],
+                [RED, 1.2],
+                [TEAL, 1],
+                [ICE_BLUE, 1],
+                [ACID_GREEN, 0.6],
+                [PINK, 0.6],
+              ]
+            : [
+                [GOLD, 3],
+                [NEON_WHITE, 1.5],
+                [ICE_BLUE, 1],
+                [RED, 0.6],
+              ];
+  return pick(h2, taste);
+}
