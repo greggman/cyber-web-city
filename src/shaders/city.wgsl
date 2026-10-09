@@ -1,6 +1,5 @@
 // City building segments: GPU-driven instanced draw.
-#include "frame.wgsl"
-#include "common.wgsl"
+#include "scene.wgsl"
 
 struct Segment {
   pos: vec3f, rotY: f32,
@@ -11,7 +10,6 @@ struct Segment {
 
 struct Bucket { base: u32, lod: u32, _p0: u32, _p1: u32 };
 
-@group(0) @binding(0) var<uniform> frame: Frame;
 @group(1) @binding(0) var<storage, read> segments: array<Segment>;
 @group(1) @binding(1) var<storage, read> visible: array<u32>;
 @group(1) @binding(2) var<uniform> bucket: Bucket;
@@ -112,6 +110,7 @@ fn velocity_from(clipCur: vec4f, clipPrev: vec4f) -> vec2f {
 
 @fragment
 fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
+  g_fragCoord = i.pos;
   // Derivatives must be taken in uniform control flow, before any branching.
   let fw = fwidth(i.facade);
   let s = segments[i.seg];

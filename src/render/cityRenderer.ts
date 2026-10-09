@@ -65,8 +65,8 @@ export class CityRenderer {
 
   async init(
     segments: SegmentList,
-    frameBuffer: GPUBuffer,
-    frameLayout: GPUBindGroupLayout,
+    sceneBindGroup: GPUBindGroup,
+    sceneLayout: GPUBindGroupLayout,
   ) {
     const device = this.device;
     const lib = buildShapeLibrary();
@@ -206,11 +206,9 @@ export class CityRenderer {
         {binding: 2, resource: {buffer: this.bucketUniforms, size: 16}},
       ],
     });
-    this.frameBindGroup = bindGroup(device, 'city/frame', frameLayout, [
-      {buffer: frameBuffer},
-    ]);
+    this.frameBindGroup = sceneBindGroup;
     const layout = pipelineLayout(device, 'city/draw/pipelineLayout', [
-      frameLayout,
+      sceneLayout,
       drawLayout,
     ]);
     const module = createShaderModule(device, {label: 'city', code: cityWgsl});

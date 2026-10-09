@@ -12,6 +12,7 @@ import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
 import {generateCity} from './city/generate';
+import {generateSigns} from './city/signs';
 import {FlightPath, ChaseCamera} from './camera/flight';
 import {lookAtCamera} from './math/vec';
 
@@ -36,10 +37,11 @@ async function main() {
   const t0 = performance.now();
   const city = generateCity(seed);
   const flight = new FlightPath(seed, city.obstacles);
+  const {signs, lights} = generateSigns(seed, city.slots);
   const genMs = performance.now() - t0;
   const renderer = new Renderer(gpu);
   loadmsg.textContent = 'Compiling shaders';
-  await renderer.init(city.segments);
+  await renderer.init({segments: city.segments, signs, lights});
   const camera = new Camera();
   const chase = new ChaseCamera();
   const settings: RenderSettings = {
@@ -52,7 +54,11 @@ async function main() {
     cityGlow: 1,
     debugView: Number(params.get('debug') ?? 0),
     quality: params.get('quality') === 'low' ? 0 : 1,
+    taa: params.get('taa') !== '0',
   };
+  if (params.get('paused') === '1' || params.get('nohelp') === '1') {
+    document.getElementById('help')!.style.display = 'none';
+  }
   const camParam = params.get('cam');
   let cameraMode = camParam === 'pov' ? 1 : camParam === 'skyline' ? 2 : 0;
   let paused = params.get('paused') === '1';
@@ -120,7 +126,7 @@ async function main() {
     if (showHud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
-        `segments ${renderer.city.count}  gen ${genMs.toFixed(0)} ms\n` +
+        `segments ${renderer.city.count}  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
         `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m`;
     } else {
       hud.textContent = '';

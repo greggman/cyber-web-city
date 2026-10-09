@@ -39,7 +39,7 @@ const results = await page.evaluate(async sources => {
     const lines = code.split('\n');
     out[name] = info.messages
       .filter(x => x.type !== 'info')
-      .map(x => `${x.type} ${x.lineNum}:${x.linePos} ${x.message}\n    ${lines[x.lineNum - 1]?.trim()}`);
+      .map(x => `${x.type} ${x.lineNum}:${x.linePos} ${x.message.split('\n')[0]}\n    ${lines[x.lineNum - 1]?.trim()}`);
   }
   return out;
 }, sources);
