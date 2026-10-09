@@ -311,6 +311,29 @@ fn grime(c: Ctx) -> f32 {
   return 0.65 + 0.35 * s * b;
 }
 
+// Weathering on top of a wall's material: per-panel tint jitter, rain
+// streaks running down from every floor's sills and from the parapet, and
+// splash dirt near the ground. Fades to its average where it would alias.
+fn weathering(c: Ctx, s: Segment) -> f32 {
+  let fh = s.floorH;
+  let detP = detail(vec2f(3.0, fh), c.fw);
+  let detS = detail(vec2f(0.6, 2.0), c.fw);
+  let pid = floor(vec2f(c.facade.x / 3.0, c.facade.y / fh));
+  let panel = 0.88 + 0.24 * hash31(s.seed ^ 0x2c1b3c6du, u_of(pid.x), u_of(pid.y));
+  // Streaks: per 0.3 m column strength, longest right under the sill.
+  let col = floor(c.facade.x / 0.3);
+  let hs = hash3_u(s.seed ^ 0x297a2d39u, u_of(col), u_of(pid.y));
+  let len = 0.3 + 0.7 * u2f(hs);
+  let below = 1.0 - fract(c.facade.y / fh); // 0 at the sill, 1 at the floor
+  let streak = step(u2f(hs >> 8u), 0.35) * smoothstep(len, 0.0, below) * (0.5 + 0.5 * vnoise2(vec2f(c.facade.x * 3.0, c.facade.y * 0.7)));
+  // Runoff from the parapet and splash dirt at street level.
+  let top = s.pos.y + s.size.y - c.world.y;
+  let runoff = smoothstep(14.0, 0.0, top) * (0.4 + 0.6 * vnoise2(vec2f(c.facade.x * 1.3, c.world.y * 0.08)));
+  let splash = smoothstep(4.0, 0.0, c.world.y) * 0.5;
+  let fine = mix(0.9, 1.0 - 0.28 * streak, detS);
+  return mix(1.0, panel, detP) * fine * (1.0 - 0.3 * runoff) * (1.0 - splash);
+}
+
 fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   let tint = unpack_color(s.colorA);
   let accent = unpack_color(s.colorB);
@@ -681,6 +704,9 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     c.viewT = vec3f(dot(vd, c.t), dot(vd, c.b), -dot(vd, n));
     shade_wall(c, s, &sf);
     sf.albedo *= g_revealAO;
+    if (s.style != ST_LED && s.style != ST_NEONRING) {
+      sf.albedo *= weathering(c, s);
+    }
     apply_wet(c, &sf, false);
     // Vertical LED strips on box edges.
     if ((s.flags & F_EDGE) != 0u) {
