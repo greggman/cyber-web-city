@@ -158,7 +158,7 @@ fn fs(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   }
   // Grime and rust on painted/metal parts (not glass or emissive).
   if (i.part != 2u && i.part != 3u) {
-    sf.albedo *= 0.75 + 0.45 * grime.x;
+    sf.albedo *= 0.85 + 0.25 * smoothstep(0.2, 0.8, grime.x);
     sf.roughness = clamp(sf.roughness + (grime.w - 0.5) * 0.5, 0.05, 1.0);
   }
   // Rain: darker, glossier, especially on top faces.

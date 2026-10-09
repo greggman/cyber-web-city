@@ -82,7 +82,7 @@ fn material(layer: u32, uv_in: vec2f) -> vec2f {
     case 3u: {
       // Rust and grime for kit pieces.
       let r = fbm(uv, 5, 13u);
-      let flake = smoothstep(0.55, 0.75, fbm(uv, 24, 14u));
+      let flake = smoothstep(0.6, 0.8, fbm(uv, 8, 14u));
       return vec2f(0.5 + 0.2 * (r - 0.5) - 0.15 * flake, 0.5 + 0.4 * smoothstep(0.45, 0.75, r));
     }
     case 4u: {

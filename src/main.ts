@@ -4,6 +4,7 @@
 //   seed=N        world seed
 //   t=SECONDS     start time along the flight path
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
+//   cam=facade&n=K[&d=D]  inspect a building face (optionally of district D)
 //   paused=1      freeze time (deterministic screenshots)
 //   anim=S        animation time S with the camera at t (flicker tests)
 //   hud=1         show stats
@@ -386,8 +387,14 @@ async function main() {
       camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'facade') {
       // A residential/slum facade from ~30 m, slightly off-axis and above.
+      // d=K limits it to one district (2 = slum, 3 = market...).
+      const dist = params.has('d') ? Number(params.get('d')) : -1;
       facadeList ??= city.slots.filter(
-        sl => sl.height > 40 && sl.width > 25 && sl.district !== 0,
+        sl =>
+          sl.width > 25 &&
+          (dist >= 0
+            ? sl.district === dist && sl.height > 20
+            : sl.height > 40 && sl.district !== 0),
       );
       const sl = facadeList[inspectN % facadeList.length];
       const y = sl.y + Math.min(sl.height * 0.5, 60);

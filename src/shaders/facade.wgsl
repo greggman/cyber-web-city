@@ -635,7 +635,25 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let r = win_rect(s, BAY_W);
     ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 2.0, 5.0, 0.22, 1.6, 0.2, 0.45);
     let w = window_facade(c, ws, style, tint, sf);
-    let concrete = mix(vec3f(0.3, 0.28, 0.26), vec3f(0.36, 0.3, 0.25), hash11(c.seed + 3u)) * g;
+    var concrete = mix(vec3f(0.3, 0.28, 0.26), vec3f(0.36, 0.3, 0.25), hash11(c.seed + 3u));
+    // Housing paint (ART_BIBLE.md M1, Choi Hung): half of the stacks get
+    // one muted pastel each; a quarter get a repainted band of 3-6 floors.
+    let ph = hash_u(c.seed ^ 0x6c8e9cf5u);
+    if ((ph & 1u) == 0u) {
+      var hue = vec3f(0.85, 0.6, 0.55);
+      let k = (ph >> 1u) % 4u;
+      if (k == 1u) { hue = vec3f(0.6, 0.8, 0.68); }
+      if (k == 2u) { hue = vec3f(0.88, 0.8, 0.55); }
+      if (k == 3u) { hue = vec3f(0.6, 0.72, 0.86); }
+      concrete = mix(hue, vec3f(dot(hue, vec3f(0.333))), 0.5) * (0.42 + 0.08 * u2f_rot(ph, 8u));
+    }
+    if (((ph >> 4u) & 3u) == 0u) {
+      let fl = c.facade.y / s.floorH;
+      let b0 = s.pos.y / s.floorH + 4.0 + floor(u2f_rot(ph, 12u) * max(s.size.y / s.floorH - 10.0, 1.0));
+      let bh = 3.0 + floor(u2f_rot(ph, 20u) * 4.0);
+      if (fl >= b0 && fl < b0 + bh) { concrete = concrete * vec3f(1.12, 1.08, 1.02) + vec3f(0.03); }
+    }
+    concrete *= g;
     // Slab edge line at every floor (the balconies, AC units, cages and
     // risers are kit pieces on the bay grid: details_emit.wgsl).
     let fy = fract(c.facade.y / s.floorH);

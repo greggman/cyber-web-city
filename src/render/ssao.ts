@@ -6,11 +6,16 @@ import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import type {Targets} from './targets';
 import type {MaterialAtlas} from './materialAtlas';
 import ssaoWgsl from '../shaders/ssao.wgsl';
+import blurWgsl from '../shaders/ssao_blur.wgsl';
 
 export class Ssao {
   readonly aoLayout: GPUBindGroupLayout;
   private inLayout: GPUBindGroupLayout;
   private pipeline!: GPURenderPipeline;
+  private blurPipeline!: GPURenderPipeline;
+  private blurLayout: GPUBindGroupLayout;
+  private blurBg!: GPUBindGroup;
+  private raw: GPUTexture | null = null;
   private sampler: GPUSampler;
   private tex: GPUTexture | null = null;
   private white: GPUTexture;
@@ -34,6 +39,10 @@ export class Ssao {
       ['f', 'sampler'],
     ]);
     this.inLayout = bgl(device, 'ssao/in/layout', [['f', 'tex-depth']]);
+    this.blurLayout = bgl(device, 'ssao/blur/layout', [
+      ['f', 'tex-unfilterable'],
+      ['f', 'tex-depth'],
+    ]);
     this.sampler = createSampler(device, {
       label: 'ssao/sampler',
       magFilter: 'linear',
@@ -63,17 +72,34 @@ export class Ssao {
   }
 
   async init(frameLayout: GPUBindGroupLayout) {
-    this.pipeline = await fullscreenPipeline(
-      this.device,
-      'ssao',
-      ssaoWgsl,
-      [frameLayout, this.inLayout],
-      [{format: 'r8unorm'}],
-    );
+    [this.pipeline, this.blurPipeline] = await Promise.all([
+      fullscreenPipeline(
+        this.device,
+        'ssao',
+        ssaoWgsl,
+        [frameLayout, this.inLayout],
+        [{format: 'r8unorm'}],
+      ),
+      fullscreenPipeline(
+        this.device,
+        'ssao/blur',
+        blurWgsl,
+        [frameLayout, this.blurLayout],
+        [{format: 'r8unorm'}],
+      ),
+    ]);
   }
 
   private rebuild(t: Targets) {
     this.tex?.destroy();
+    this.raw?.destroy();
+    this.raw = createTexture(this.device, {
+      label: 'ssao/half/raw',
+      size: [Math.max(1, t.width >> 1), Math.max(1, t.height >> 1)],
+      format: 'r8unorm',
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
     this.tex = createTexture(this.device, {
       label: 'ssao/half',
       size: [Math.max(1, t.width >> 1), Math.max(1, t.height >> 1)],
@@ -82,6 +108,10 @@ export class Ssao {
         GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     this.inBg = bindGroup(this.device, 'ssao/in', this.inLayout, [
+      t.views.depth,
+    ]);
+    this.blurBg = bindGroup(this.device, 'ssao/blur', this.blurLayout, [
+      this.raw.createView({label: 'ssao/half/raw/view'}),
       t.views.depth,
     ]);
     this.aoBindGroup = bindGroup(this.device, 'ssao/ao', this.aoLayout, [
@@ -104,9 +134,16 @@ export class Ssao {
     runFullscreen(
       encoder,
       'ssao',
-      this.tex!.createView({label: 'ssao/half/rt'}),
+      this.raw!.createView({label: 'ssao/half/raw/rt'}),
       this.pipeline,
       [frameBg, this.inBg],
+    );
+    runFullscreen(
+      encoder,
+      'ssao/blur',
+      this.tex!.createView({label: 'ssao/half/rt'}),
+      this.blurPipeline,
+      [frameBg, this.blurBg],
     );
   }
 }

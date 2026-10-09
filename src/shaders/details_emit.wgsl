@@ -394,7 +394,8 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
             col = rgba(vec3f(0.3, 0.3, 0.31));
           }
         } else {
-        if (q >= nH || (k >= 30 && (L < 25.0 || !core))) { continue; }
+        let ringRoof = (s.flags & 64u) != 0u;
+        if (q >= nH || (k >= 30 && (L < 25.0 || !(core || ringRoof)))) { continue; }
         let spacing = hvacS + 1.5;
         a = (f32(q) - f32(nH - 1) * 0.5) * spacing;
         b = select(S * 0.5 - 3.1 - hvacS * 0.5, cB + 3.0 + hvacS * 0.5, core) * select(side, -side, k >= 30);

@@ -11,8 +11,8 @@
 fn vs(@builtin(vertex_index) vi: u32) -> FsOut { return fullscreen_vertex(vi); }
 
 const TAPS = 12;
-const RADIUS = 2.2; // meters
-const INTENSITY = 2.6;
+const RADIUS = 1.2; // meters
+const INTENSITY = 2.0;
 
 fn view_pos(uv: vec2f, d: f32) -> vec3f {
   let ndc = vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
@@ -44,7 +44,9 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   // Projected radius in pixels.
   let z = -P.z;
   let projScale = full.y / (2.0 * frame.tanHalfFov.y);
-  let rPx = min(RADIUS * projScale / max(z, 0.1), 80.0);
+  // Capped footprint: up close a big kernel turns thin props into wide,
+  // noisy halos on the wall behind them.
+  let rPx = min(RADIUS * projScale / max(z, 0.1), 32.0);
   if (rPx < 1.0) { return vec4f(1.0); }
   let rot = hash31(u32(i.pos.x), u32(i.pos.y), frame.frameIndex % 8u) * TAU;
   var occ = 0.0;
