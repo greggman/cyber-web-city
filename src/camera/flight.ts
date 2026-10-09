@@ -76,6 +76,8 @@ export class FlightPath {
   private timeToDist: number[] = [];
   readonly totalLength: number;
   readonly duration: number;
+  /** Avenue intersections the route passes through, in order. */
+  readonly intersections: [number, number][] = [];
 
   constructor(seed: number, obstacles: Obstacle[]) {
     const rng = new Rng(seed, 777);
@@ -137,6 +139,7 @@ export class FlightPath {
         });
       }
       alt = target;
+      this.intersections.push([na * SUPER, nb * SUPER]);
       a = na;
       b = nb;
       // Turn left or right (or continue straight sometimes).

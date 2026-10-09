@@ -47,6 +47,8 @@ export function generateAds(
     y0: number,
     y1: number,
   ) => boolean = () => true,
+  /** Intersections along the flight route (giant holograms go on some). */
+  route: [number, number][] = [],
 ): {screens: Screen[]; holograms: Hologram[]; tiles: AdTile[]} {
   const rng = new Rng(seed, 5150);
   const tiles: AdTile[] = [];
@@ -109,7 +111,7 @@ export function generateAds(
     if (!rng.chance(0.7)) continue;
     const scale = rng.range(50, 110);
     // Keep clear of neighbouring towers (the roof itself is below y0).
-    if (!isClear(r[0], r[2], scale * 0.6, r[1] + 1, r[1] + scale * 2.3))
+    if (!isClear(r[0], r[2], scale * 0.35, r[1] + 1, r[1] + scale * 2.3))
       continue;
     const c = rng.pick(NEON);
     const c2 = rng.pick(NEON);
@@ -123,12 +125,36 @@ export function generateAds(
     });
   }
   // Giant ones rising beside landmarks.
-  // Giants standing in the avenue intersections near landmarks (open air).
+  // Giants standing in avenue intersections on the flight route, roughly
+  // every 1.5-2.5 km, so the flight regularly passes (and flies through)
+  // them; then a few more near landmarks.
   const giants: [number, number][] = [];
+  let lastGiant = -1e9;
+  let along = 0;
+  for (let i = 0; i < route.length; i++) {
+    const [ix, iz] = route[i];
+    if (i > 0) along += Math.hypot(ix - route[i - 1][0], iz - route[i - 1][1]);
+    if (along - lastGiant < rng.range(1500, 2500)) continue;
+    if (giants.some(([gx, gz]) => gx === ix && gz === iz)) continue;
+    const scale = rng.range(150, 250);
+    if (!isClear(ix, iz, 26, 0, scale * 2.3)) continue;
+    giants.push([ix, iz]);
+    lastGiant = along;
+    holograms.push({
+      pos: [ix, 0, iz],
+      scale,
+      kind: rng.pick([0, 1, 3, 2, 0, 1]),
+      color: rng.pick(NEON),
+      color2: rng.pick(NEON),
+      rot: rng.range(0, Math.PI * 2),
+    });
+    if (giants.length >= 60) break;
+  }
+  const routeGiants = giants.length;
   for (const [x, , z] of landmarks) {
     const ix = Math.round(x / SUPER) * SUPER;
     const iz = Math.round(z / SUPER) * SUPER;
-    if (giants.length >= 12) break;
+    if (giants.length >= routeGiants + 8) break;
     if (giants.some(([gx, gz]) => Math.hypot(gx - ix, gz - iz) < 1500))
       continue;
     giants.push([ix, iz]);

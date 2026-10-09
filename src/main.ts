@@ -81,7 +81,14 @@ async function main() {
     city.landmarks,
     r => brandGlyphs(r, false),
     makeClearanceTest(city.segments),
+    flight.intersections,
   );
+  // Exposed for test scripts (hologram visibility along the route, etc.).
+  (window as unknown as {__debug: unknown}).__debug = {
+    holograms: adData.holograms,
+    pose: (t: number) => flight.pose(t),
+    duration: flight.duration,
+  };
   const ads = new AdSystem(
     gpu.device,
     adData.tiles,
@@ -236,14 +243,16 @@ async function main() {
         h.pos[2],
       ];
       const a = time * 0.05;
-      camera.camToWorld = lookAtCamera(
-        [
-          c[0] + Math.cos(a) * h.scale * 4,
-          c[1] + h.scale * 0.3,
-          c[2] + Math.sin(a) * h.scale * 4,
-        ],
-        c,
-      );
+      // Giants stand in avenue intersections: look down the open avenue.
+      const eye: [number, number, number] =
+        h.pos[1] === 0
+          ? [c[0] + h.scale * 3, c[1], c[2]]
+          : [
+              c[0] + Math.cos(a) * h.scale * 4,
+              c[1] + h.scale * 0.3,
+              c[2] + Math.sin(a) * h.scale * 4,
+            ];
+      camera.camToWorld = lookAtCamera(eye, c);
       camera.fovY = (50 * Math.PI) / 180;
     } else if (cameraMode === 2) {
       // Establishing shot: slowly orbit high above the car's area.
