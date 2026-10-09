@@ -79,20 +79,20 @@ export function addRooftopMassing(segments: SegmentList, seed: number) {
       const fz = (rng.chance(0.5) ? 1 : -1) * rng.range(0.45, 0.7);
       return [fx, fz];
     };
-    // Mechanical penthouse (most roofs).
-    if (!ring && !helipad && rng.chance(0.65)) {
-      const w = tx * rng.range(0.3, 0.55);
-      const d = tz * rng.range(0.3, 0.55);
-      const fx = rng.range(-0.25, 0.25);
-      const fz = rng.range(-0.25, 0.25);
-      const h = rng.range(4, 9);
-      put(fx, fz, w, d, h, {
+    // Core penthouse, centred: the GPU rooftop clusters are composed around
+    // it (roof_core() in segment.wgsl must agree).
+    const core = !ring && !helipad && ((g.seed >>> 3) & 7) < 5;
+    if (core) {
+      const w = tx * 0.32;
+      const d = tz * 0.32;
+      const h = rng.range(4, 8);
+      put(0, 0, w, d, h, {
         style: rng.chance(0.5) ? Style.MetalPanel : Style.Monolith,
         flags: SegFlags.NoWindows,
       });
-      // A second, smaller stage.
+      // A second, smaller stage (lift motor room).
       if (rng.chance(0.45)) {
-        put(fx, fz, w * 0.55, d * 0.6, rng.range(3, 6), {
+        put(0, 0, w * 0.55, d * 0.6, rng.range(3, 6), {
           y: top + h,
           flags: SegFlags.NoWindows,
         });
@@ -113,8 +113,9 @@ export function addRooftopMassing(segments: SegmentList, seed: number) {
         },
       );
     }
-    // Water tanks in a cluster.
-    if (rng.chance(0.6)) {
+    // Water tanks in a cluster (on roofs without a core; the GPU groups
+    // tanks around the core otherwise).
+    if (rng.chance(0.6) && !core) {
       const [fx, fz] =
         ring || helipad
           ? corner()

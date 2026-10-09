@@ -779,7 +779,8 @@ fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
   let h = hash3_u(s.seed, u_of(cell.x), u_of(cell.y));
   let half = s.size.xz * 0.5 * s.taper;
   let inner = all(abs(cell * 6.0 + 3.0) < half - 4.0);
-  if ((h & 15u) <= 1u && inner && (s.flags & F_RING) == 0u) {
+  // Skylights only as a row over a monolith atrium (ART_BIBLE.md 9).
+  if (s.style == ST_MONOLITH && abs(q.y) < 4.0 && abs(q.x) < 9.0 && inner) {
     // Skylight: a glazed strip with warm light from below.
     let fc = fract(q / 6.0);
     let m = aa_box(fc.x, 0.2, 0.8, c.fw.x / 6.0) * aa_box(fc.y, 0.3, 0.7, c.fw.y / 6.0);

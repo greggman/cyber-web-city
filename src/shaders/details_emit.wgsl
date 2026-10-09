@@ -319,48 +319,107 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
   let darkMetal = vec3f(0.07, 0.075, 0.085);
   let cellRange = 360.0 * P.distScale;
 
-  // ---- Rooftop kitbash on exposed roofs: HVAC units, water tanks, dishes,
-  // vent stacks on a jittered grid.
+  // ---- Rooftops (ART_BIBLE.md 9): composed around the core penthouse
+  // (rooftops.ts places it: roof_core()), not scattered. HVAC units in a
+  // row along its long side, a tank group at one end, vent stacks along
+  // its wall, dishes near the parapet, a 1.1 m parapet on every edge; the
+  // rest of the roof stays clear.
   if (has_roof(s)) {
     let tp = s.taper;
-    let nx = max(i32(s.size.x * tp / 8.0), 1);
-    let nz = max(i32(s.size.z * tp / 8.0), 1);
+    let RX = s.size.x * tp;
+    let RZ = s.size.z * tp;
+    let longX = RX >= RZ;
+    let L = max(RX, RZ);
+    let S = min(RX, RZ);
     let up = vec3f(0.0, 1.0, 0.0);
-    for (var k = i32(li); k < nx * nz; k += 64) {
-      let ix = k % nx;
-      let iz = k / nx;
-      let h = hash3_u(s.seed ^ 0x6a09e667u, bitcast<u32>(ix), bitcast<u32>(iz));
-      let pick = u2f(h);
-      if (pick > 0.62) { continue; }
-      let lu = ((f32(ix) + 0.5) / f32(nx) - 0.5) * 0.9 + (u2f_rot(h, 4u) - 0.5) * 0.4 / f32(nx);
-      let lv = ((f32(iz) + 0.5) / f32(nz) - 0.5) * 0.9 + (u2f_rot(h, 8u) - 0.5) * 0.4 / f32(nz);
-      // Center built on (penthouse/crown): only around the edge.
-      if ((s.flags & 64u) != 0u && max(abs(lu), abs(lv)) < 0.3) { continue; }
-      // Keep helipads (see shade_roof) clear.
-      if (helipad(s) && length(vec2f(lu * s.size.x, lv * s.size.z) * tp) < 13.0) { continue; }
-      // Round roofs: keep inside the circle.
+    let core = roof_core(s);
+    let cA = 0.16 * L;
+    let cB = 0.16 * S;
+    let hh = hash_u(s.seed ^ 0x2b2ae3u);
+    let side = select(-1.0, 1.0, (hh & 1u) != 0u);
+    let nH = 2 + i32((hh >> 4u) % 5u);
+    let nT = 2 + i32((hh >> 8u) % 5u);
+    let nV = 3 + i32((hh >> 12u) % 4u);
+    let nD = i32((hh >> 16u) % 5u);
+    let hvacS = 3.0 + 2.5 * u2f_rot(hh, 20u);
+    let tankS = 2.4 + 1.4 * u2f_rot(hh, 24u);
+    let ang = s.rotY + s.twist + select(PI * 0.5, 0.0, longX);
+    let dirA = vec3f(cos(ang), 0.0, sin(ang));
+    for (var k = i32(li); k < 36; k += 64) {
+      var a = 0.0;
+      var b = 0.0;
+      var t = T_HVAC;
+      var scl = vec3f(1.0);
+      var fixedSize = false;
+      var col = rgba(vec3f(0.36, 0.37, 0.38));
+      var flags = 0u;
+      if (k < 6 || k >= 30) {
+        // HVAC rows: one along the core, a second on its far side on big
+        // roofs.
+        let q = select(k, k - 30, k >= 30);
+        if (q >= nH || (k >= 30 && (L < 35.0 || !core))) { continue; }
+        let spacing = hvacS + 1.5;
+        a = (f32(q) - f32(nH - 1) * 0.5) * spacing;
+        b = select(S * 0.5 - 3.1 - hvacS * 0.5, cB + 3.0 + hvacS * 0.5, core) * select(side, -side, k >= 30);
+        scl = vec3f(hvacS, hvacS * 0.7, 1.6);
+        flags = IF_LIT;
+      } else if (k < 12) {
+        let q = k - 6;
+        if (q >= nT) { continue; }
+        let c2 = q / 2;
+        let r2 = q % 2;
+        let pitch = tankS + 0.8;
+        let a0 = select(L * 0.5 - 3.1 - tankS * 0.5 - f32(c2) * pitch, cA + 2.0 + tankS * 0.5 + f32(c2) * pitch, core);
+        a = a0 * select(1.0, -1.0, (hh & 2u) != 0u);
+        b = (f32(r2) - 0.5) * pitch - select(S * 0.5 - 3.1 - pitch, 0.0, core) * side;
+        t = T_TANK;
+        scl = vec3f(tankS);
+        fixedSize = true;
+        col = rgba(mix(vec3f(0.3, 0.22, 0.16), vec3f(0.32, 0.33, 0.34), u2f_rot(hh, 28u)));
+      } else if (k < 18) {
+        let q = k - 12;
+        if (!core || q >= nV) { continue; }
+        a = (f32(q) - f32(nV - 1) * 0.5) * 2.0;
+        b = -side * (cB + 1.0);
+        t = T_VENTSTACK;
+        scl = vec3f(1.6);
+        fixedSize = true;
+        col = rgba(vec3f(0.3, 0.3, 0.31));
+      } else if (k < 22) {
+        let q = k - 18;
+        if (q >= nD) { continue; }
+        let hd = hash_u(hh + u32(q) * 31u);
+        a = (u2f(hd) - 0.5) * (L - 6.0);
+        b = select(-1.0, 1.0, (hd & 256u) != 0u) * (S * 0.5 - 1.3);
+        t = T_DISH;
+        scl = vec3f(1.5 + 1.5 * u2f_rot(hd, 12u));
+        fixedSize = true;
+        col = rgba(vec3f(0.55, 0.55, 0.53));
+      } else if (k < 26) {
+        if (s.shape > 1u) { continue; }
+        // Parapet on each edge (the ledge mesh, standing 1.1 m tall).
+        let f = u32(k - 22);
+        if (f >= 4u) { continue; }
+        let fc = face_of(s, f, 4u);
+        let top = s.pos.y + s.size.y;
+        emit(T_LEDGE, spot(s, fc, 0.0, top + 0.55), vec3f(face_width(s, fc, top) + 0.2, 1.1, 0.22), 0.0, rgba(vec3f(0.24, 0.23, 0.22)), 0u, 0u, 1.0, false);
+        continue;
+      } else {
+        continue;
+      }
+      // Ring roofs keep the centre clear.
+      if ((s.flags & 64u) != 0u && abs(a) < cA + 2.0 && abs(b) < cB + 2.0) { continue; }
+      if (abs(a) > L * 0.5 - 1.0 || abs(b) > S * 0.5 - 1.0) { continue; }
+      let lu = select(b / RX, a / RX, longX);
+      let lv = select(a / RZ, b / RZ, longX);
+      if (helipad(s) && length(vec2f(lu * RX, lv * RZ)) < 13.0) { continue; }
       if (s.shape >= 2u && length(vec2f(lu, lv)) > 0.42) { continue; }
       let x = seg_transform(s, vec3f(lu, 1.0, lv), up);
-      let ang = s.rotY + s.twist + f32((h >> 12u) % 4u) * PI * 0.5;
       var sp: Spot;
       sp.pos = x.world;
       sp.n = up;
-      sp.t = vec3f(cos(ang), 0.0, sin(ang));
-      let rank = u2f_rot(h, 16u);
-      if (pick < 0.3) {
-        let sx = 3.0 + 3.5 * u2f_rot(h, 20u);
-        emit(T_HVAC, sp, vec3f(sx, sx * (0.5 + 0.4 * u2f_rot(h, 24u)), 1.2 + 1.2 * u2f_rot(h, 26u)), 0.0,
-             rgba(vec3f(0.36, 0.37, 0.38)), neon_accent(h >> 5u), IF_LIT, rank, false);
-      } else if (pick < 0.42) {
-        let sc = 2.4 + 2.2 * u2f_rot(h, 20u);
-        emit(T_TANK, sp, vec3f(sc), 0.0, rgba(mix(vec3f(0.3, 0.22, 0.16), vec3f(0.32, 0.33, 0.34), u2f_rot(h, 24u))), 0u, 0u, rank, true);
-      } else if (pick < 0.48) {
-        let sc = 1.5 + 2.0 * u2f_rot(h, 20u);
-        emit(T_DISH, sp, vec3f(sc), 0.0, rgba(vec3f(0.55, 0.55, 0.53)), 0u, 0u, rank, true);
-      } else {
-        let sc = 1.0 + 2.2 * u2f_rot(h, 20u);
-        emit(T_VENTSTACK, sp, vec3f(sc), 0.0, rgba(vec3f(0.3, 0.3, 0.31)), 0u, 0u, rank, true);
-      }
+      sp.t = dirA;
+      emit(t, sp, scl, 0.0, col, neon_accent(hh >> 5u), flags, 1.0, fixedSize);
     }
   }
   if (!has_details(s)) { return; }

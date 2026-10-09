@@ -162,3 +162,13 @@ fn shop_params(s: Segment, idx: i32, n: i32) -> vec4f {
   let closed = select(0.0, 1.0, ((h >> 24u) & 255u) < 38u);
   return vec4f(depth, mount, fascia, closed);
 }
+
+// Rooftop core penthouse (placed by rooftops.ts, used as the anchor for
+// the GPU rooftop clusters): present on ~5/8 of open, non-helipad box
+// roofs, centred, 32% of the roof in each direction.
+fn roof_core(s: Segment) -> bool {
+  let tx = s.size.x * s.taper;
+  let tz = s.size.z * s.taper;
+  let helipad = s.shape <= 1u && min(tx, tz) > 40.0 && (s.seed & 7u) < 2u && (s.flags & 64u) == 0u;
+  return s.shape <= 1u && (s.flags & 64u) == 0u && !helipad && ((s.seed >> 3u) & 7u) < 5u;
+}
