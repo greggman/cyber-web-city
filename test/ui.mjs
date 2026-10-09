@@ -106,4 +106,18 @@ await withPage('index.html?t=40&mute=1', async page => {
   void p0;
   void p1;
 });
+// Startup shows progress for both city generation and shader compiles.
+await withPage('index.html?t=40&mute=1', async page => {
+  const log = await page.evaluate(() => window.__loadLog);
+  const gen = log.filter(m => /Generating city \d+%/.test(m));
+  const sh = log.filter(m => /Compiling shaders \d+\/\d+/.test(m));
+  const last = sh.at(-1)?.match(/(\d+)\/(\d+)/);
+  check(gen.length >= 3, `city generation progress shown (${gen.length} updates)`);
+  check(
+    sh.length >= 3 && last && last[1] === last[2],
+    `shader compile progress shown (${sh.length} updates, last "${last?.[0]}")`,
+  );
+  const s = await page.evaluate(() => window.__stats.startupMs);
+  console.log(`  startup ${Math.round(s.total)} ms (city arrived ${Math.round(s.cityArrived)}, shaders static ${Math.round(s.static)})`);
+});
 process.exit(failed ? 1 : 0);

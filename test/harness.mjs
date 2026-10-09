@@ -25,6 +25,16 @@ export async function withPage(pagePath, fn, opts = {}) {
             window.__ticks = (window.__ticks || 0) + 1;
             raf(tick);
           })();
+          // Record every loading message (startup progress tests).
+          window.__loadLog = [];
+          document.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('loadmsg');
+            if (!el) return;
+            new MutationObserver(() => window.__loadLog.push(el.textContent)).observe(
+              el,
+              {childList: true, characterData: true, subtree: true},
+            );
+          });
         });
         const ctx = {errors: [], logs: []};
         page.on('console', msg => {

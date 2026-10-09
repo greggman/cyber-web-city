@@ -169,6 +169,33 @@ export class CityRenderer {
       usage: GPUTextureUsage.TEXTURE_BINDING,
     });
 
+    void this.prepare(sceneLayout, aoLayout);
+    this.cullBindGroupParts = [shapeBuffer, baseBuffer];
+    this.rebuildCullBindGroup();
+
+    this.drawBindGroup = device.createBindGroup({
+      label: 'city/draw',
+      layout: this.drawLayout,
+      entries: [
+        {binding: 0, resource: {buffer: this.segmentBuffer}},
+        {binding: 1, resource: {buffer: this.visibleBuffer}},
+        {binding: 2, resource: {buffer: this.bucketUniforms, size: 16}},
+      ],
+    });
+    this.frameBindGroup = sceneBindGroup;
+    await this.pipelines;
+  }
+
+  private pipelines: Promise<void> | null = null;
+  private drawLayout!: GPUBindGroupLayout;
+
+  /**
+   * Creates layouts and starts compiling the cull and draw pipelines. Needs
+   * no city data, so it can run while the city is being generated.
+   */
+  prepare(sceneLayout: GPUBindGroupLayout, aoLayout: GPUBindGroupLayout) {
+    if (this.pipelines) return this.pipelines;
+    const device = this.device;
     // Culling pipeline.
     this.cullLayout = bgl(device, 'city/cull/layout', [
       ['c', 'uniform'],
@@ -179,8 +206,6 @@ export class CityRenderer {
       ['c', 'storage-ro'],
       ['c', 'tex-unfilterable'],
     ]);
-    this.cullBindGroupParts = [shapeBuffer, baseBuffer];
-    this.rebuildCullBindGroup();
     const cullModule = createShaderModule(device, {
       label: 'city/cull',
       code: cullWgsl,
@@ -192,26 +217,15 @@ export class CityRenderer {
       ]),
       compute: {module: cullModule, entryPoint: 'cs_cull'},
     });
-
     // Draw pipelines.
-    const drawLayout = bgl(device, 'city/draw/layout', [
+    this.drawLayout = bgl(device, 'city/draw/layout', [
       ['vf', 'storage-ro'],
       ['v', 'storage-ro'],
       ['v', 'uniform-dyn'],
     ]);
-    this.drawBindGroup = device.createBindGroup({
-      label: 'city/draw',
-      layout: drawLayout,
-      entries: [
-        {binding: 0, resource: {buffer: this.segmentBuffer}},
-        {binding: 1, resource: {buffer: this.visibleBuffer}},
-        {binding: 2, resource: {buffer: this.bucketUniforms, size: 16}},
-      ],
-    });
-    this.frameBindGroup = sceneBindGroup;
     const layout = pipelineLayout(device, 'city/draw/pipelineLayout', [
       sceneLayout,
-      drawLayout,
+      this.drawLayout,
       aoLayout,
     ]);
     const module = createShaderModule(device, {label: 'city', code: cityWgsl});
@@ -256,8 +270,16 @@ export class CityRenderer {
         depthCompare: 'equal',
       },
     });
-    [this.cullPipeline, this.depthPipeline, this.colorPipeline] =
-      await Promise.all([cullPromise, depthPromise, colorPromise]);
+    this.pipelines = Promise.all([
+      cullPromise,
+      depthPromise,
+      colorPromise,
+    ]).then(([c, d, col]) => {
+      this.cullPipeline = c;
+      this.depthPipeline = d;
+      this.colorPipeline = col;
+    });
+    return this.pipelines;
   }
 
   private cullBindGroupParts: GPUBuffer[] = [];

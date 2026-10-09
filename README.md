@@ -22,7 +22,8 @@ NURBS flying car are all generated procedurally.
 ```sh
 npm ci
 npm run dev        # builds in watch mode and serves http://localhost:8080/
-npm run build      # production build into dist/
+npm run build      # development build into dist/ (prints gzipped sizes)
+npm run build:prod # minified production build (what GitHub Pages deploys)
 npm test           # build, unit tests, puppeteer smoke test (fails on any WebGPU error)
 npm run shots      # deterministic screenshot set into out/shots/
 node test/car-shots.mjs spinner   # car preview renders into out/car/
@@ -120,6 +121,14 @@ number of draws no matter how large the city is.
    bloom, anamorphic streaks, then an AgX tonemap blended with a
    hue-preserving curve, a split-tone grade, chromatic aberration, vignette
    and grain.
+
+**Startup.** The city is generated in a Web Worker (`src/city-worker.ts`)
+while the main thread compiles every pipeline that doesn't need city data
+(post-processing, the city and kit shaders, the glyph atlas, the car). The
+worker transfers packed segments, signs and lights back as buffers; then
+the scene-dependent setup runs with all remaining compiles in parallel.
+The loading screen shows both city-generation percent and compiled-shader
+count; `__stats.startupMs` has the timings (about 3 s total).
 
 All rendering is at CSS resolution, with no `devicePixelRatio` scaling.
 Every WebGPU object is labeled. `uncapturederror` events and device loss are

@@ -56,6 +56,12 @@ export function packColor(r: number, g: number, b: number, a = 1): number {
   return (c(r) | (c(g) << 8) | (c(b) << 16) | (c(a) << 24)) >>> 0;
 }
 
+export interface SegmentTransfer {
+  buffer: ArrayBuffer;
+  count: number;
+  shapeCounts: Uint32Array;
+}
+
 export class SegmentList {
   private f32: Float32Array;
   private u32: Uint32Array;
@@ -66,6 +72,24 @@ export class SegmentList {
   constructor(capacity = 1024) {
     this.f32 = new Float32Array(capacity * 16);
     this.u32 = new Uint32Array(this.f32.buffer);
+  }
+
+  /** Plain data for postMessage (the buffer is transferred, not copied). */
+  toTransfer(): SegmentTransfer {
+    return {
+      buffer: this.f32.buffer as ArrayBuffer,
+      count: this.count,
+      shapeCounts: this.shapeCounts.slice(),
+    };
+  }
+
+  static fromTransfer(t: SegmentTransfer): SegmentList {
+    const s = new SegmentList(1);
+    s.f32 = new Float32Array(t.buffer);
+    s.u32 = new Uint32Array(t.buffer);
+    s.count = t.count;
+    s.shapeCounts.set(t.shapeCounts);
+    return s;
   }
 
   private grow() {

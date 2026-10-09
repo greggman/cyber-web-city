@@ -17,6 +17,12 @@ import {createGlyphAtlas} from './glyphs';
 import {DEPTH_FORMAT, GEOMETRY_TARGETS} from './targets';
 import signsWgsl from '../shaders/signs.wgsl';
 
+/** Signs already packed for the GPU (e.g. by the city worker). */
+export interface PackedSigns {
+  packed: ArrayBuffer;
+  count: number;
+}
+
 export class SignRenderer {
   private pipeline!: GPURenderPipeline;
   private cullPipeline!: GPUComputePipeline;
@@ -30,14 +36,23 @@ export class SignRenderer {
 
   constructor(private readonly device: GPUDevice) {}
 
-  async init(signs: Sign[], sceneLayout: GPUBindGroupLayout) {
+  /** Builds the glyph atlas (needs no city data; slow, so done early). */
+  prepareAtlas(): GPUTexture {
+    this.glyphAtlas ??= createGlyphAtlas(this.device);
+    return this.glyphAtlas;
+  }
+
+  async init(signs: Sign[] | PackedSigns, sceneLayout: GPUBindGroupLayout) {
     const d = this.device;
     const U = GPUBufferUsage;
-    this.count = signs.length;
+    const p = Array.isArray(signs)
+      ? {packed: packSigns(signs), count: signs.length}
+      : signs;
+    this.count = p.count;
     const buffer = createBufferWithData(
       d,
       'signs/instances',
-      new Uint8Array(packSigns(signs)),
+      new Uint8Array(p.packed),
       U.STORAGE,
     );
     const visible = createBuffer(d, {
@@ -60,8 +75,7 @@ export class SignRenderer {
       size: 16,
       usage: U.UNIFORM | U.COPY_DST,
     });
-    const atlas = createGlyphAtlas(d);
-    this.glyphAtlas = atlas;
+    const atlas = this.prepareAtlas();
     const sampler = createSampler(d, {
       label: 'signs/sampler',
       magFilter: 'linear',

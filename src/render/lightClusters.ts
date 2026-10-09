@@ -58,14 +58,19 @@ export class LightClusters {
 
   constructor(
     private readonly device: GPUDevice,
-    staticLights: LightDesc[],
+    /** Light list, or already packed (LIGHT_FLOATS per light). */
+    staticLights: LightDesc[] | Float32Array,
     dynamicCapacity: number,
   ) {
-    this.staticCount = staticLights.length;
+    const packed = staticLights instanceof Float32Array;
+    this.staticCount = packed
+      ? staticLights.length / LIGHT_FLOATS
+      : staticLights.length;
     this.dynamicCapacity = dynamicCapacity;
     const total = Math.max(1, this.staticCount + dynamicCapacity);
     const data = new Float32Array(total * LIGHT_FLOATS);
-    packLights(staticLights, data);
+    if (packed) data.set(staticLights);
+    else packLights(staticLights, data);
     const U = GPUBufferUsage;
     this.lightBuffer = createBufferWithData(
       device,

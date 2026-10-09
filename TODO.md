@@ -1,12 +1,13 @@
-[x] let user orbit the camera. If they don't touch it for 6 second the go back to auto director camera
-[x] The auto director should go inside the vehicle and look around
-[x] The's a gap between the vehicle's front hood and the dash so when inside
-    the vehicle you can see between the hood and the dash
-[x] Sound should start on touch
-[x] The propulsion under the car needs to slightly flicker or something. It's too static
-[x] Remove the map view from the camera cycle. keep it only via search parameter
-[x] it's not clear if the window scales match from building to building.
-    In the real world windows are not all the same size but floors behind them
-    generally are I think? As it is, some buildings appear to have floors that
-    are twice as big as buildings near them.
-[x] don't need the rain sound in the audio
+[x] If possible, pipelines should be created using the async functions
+    and the other work should happen (generating the city?) so that hopefully
+    the pipelines are done in parallel.
+[x] Generating the world and Compiling Shaders should show some kind of progress
+[x] Please add a gzip size during build that shows the sum of the size of the
+    gzipped files for index.html, main.js, audio-renderer.js. On the github
+    action "production" build, minimize/tersify the JS.
+[x] The orbit camera should pick up where it is then the user interrupts the
+    auto camera (unless it's inside the vehicle). As it is it snaps away
+[x] Make C change the camera like the camera button.
+[x] remove the hiss/rain from the audio
+[x] there are several places where signs z-fight with buildings or 2 signs are stacked
+    on top of each other and are z-fighting

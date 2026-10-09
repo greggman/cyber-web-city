@@ -10,14 +10,13 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
-import {SegFlags, type SegmentList, type Segment} from './city/segments';
+import {SegFlags, SegmentList, type Segment} from './city/segments';
+import type {GeneratedCity} from './city-worker';
 import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
-import {generateCity, makeClearanceTest} from './city/generate';
+import {makeClearanceTest} from './city/generate';
 import {unwarp} from './city/warp';
-import {generateSigns, brandGlyphs} from './city/signs';
-import {generateAds} from './city/ads';
 import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
 import {FlightPath, ChaseCamera, insideAt, lookAround} from './camera/flight';
 import {OrbitControl} from './camera/orbit';
@@ -65,29 +64,77 @@ async function main() {
   onGpuError(showError);
   const canvas = document.getElementById('c') as HTMLCanvasElement;
   const gpu = await initGpu(canvas);
-  loadmsg.textContent = 'Generating city';
-  await new Promise(r => setTimeout(r, 0));
-  const t0 = performance.now();
-  const city = generateCity(seed);
-  const flight = new FlightPath(seed, city.obstacles);
-  const {signs, lights} = generateSigns(seed, city.slots);
-  const genMs = performance.now() - t0;
   const renderer = new Renderer(gpu);
   const tShaders = performance.now();
-  loadmsg.textContent = 'Compiling shaders';
-  await renderer.init({
+  // Startup progress: city generation (in a worker) and shader compiles
+  // run at the same time; show both.
+  let genF = 0;
+  let shadersDone = 0;
+  let shadersTotal = 0;
+  const showProgress = () => {
+    const g =
+      genF < 1 ? `Generating city ${Math.round(genF * 100)}%` : 'City ready';
+    loadmsg.textContent = `${g}\nCompiling shaders ${shadersDone}/${shadersTotal}`;
+  };
+  const track = <T>(p: Promise<T>): Promise<T> => {
+    shadersTotal++;
+    showProgress();
+    return p.then(v => {
+      shadersDone++;
+      showProgress();
+      return v;
+    });
+  };
+  Renderer.track = track;
+  const worker = new Worker('city-worker.js', {type: 'module'});
+  const generated = new Promise<GeneratedCity>((resolve, reject) => {
+    worker.onerror = e => reject(new Error(`city worker: ${e.message}`));
+    worker.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'progress') {
+        genF = e.data.f;
+        showProgress();
+      } else {
+        genF = 1;
+        showProgress();
+        resolve(e.data as GeneratedCity);
+        worker.terminate();
+      }
+    };
+  });
+  worker.postMessage({seed});
+  // Everything that doesn't need the city compiles meanwhile.
+  const lowQuality = params.get('quality') === 'low';
+  const carEntry = MODELS.spinner;
+  const carMesh = buildModelMesh(carEntry.build());
+  const car = new CarRenderer(gpu.device);
+  const rain = new Rain(gpu.device, lowQuality ? 18000 : 35000);
+  const canopy = new Canopy(gpu.device);
+  const staticReady = Promise.all([
+    renderer.initStatic(),
+    track(car.init(carMesh, renderer.sceneLayout)),
+    track(rain.init(renderer.sceneLayout)),
+    track(canopy.init()),
+  ]);
+  void staticReady.then(() => (startupMs.static = performance.now() - tStart));
+  const gen = await generated;
+  startupMs.cityArrived = performance.now() - tStart;
+  const city = {
+    ...gen.city,
+    segments: SegmentList.fromTransfer(gen.city.segments),
+  };
+  const {signs, lights} = gen;
+  const genMs = gen.genMs;
+  const flight = new FlightPath(seed, city.obstacles);
+  await renderer.initScene({
     segments: city.segments,
     signs,
     lights,
     districts: city.districts,
   });
+  startupMs.scene = performance.now() - tStart;
   // Quality preset: low drops SSR and thins the rain.
   renderer.ssr.enabled =
     params.get('quality') !== 'low' && params.get('ssr') !== '0';
-  const carEntry = MODELS.spinner;
-  const carMesh = buildModelMesh(carEntry.build());
-  const car = new CarRenderer(gpu.device);
-  await car.init(carMesh, renderer.sceneLayout);
   renderer.opaqueDrawers.push(pass =>
     car.drawOpaque(pass, renderer.sceneBindGroup, renderer.targets),
   );
@@ -100,21 +147,15 @@ async function main() {
   // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
   // 1024+ traffic (GPU).
   const cableRenderer = new CableRenderer(gpu.device, city.cables);
-  await cableRenderer.init(renderer.sceneLayout);
+  const lateInits: Promise<unknown>[] = [
+    track(cableRenderer.init(renderer.sceneLayout)),
+  ];
   renderer.opaqueDrawers.push(p =>
     cableRenderer.draw(p, renderer.sceneBindGroup),
   );
   const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
   void DYNAMIC_LIGHTS;
-  const adData = generateAds(
-    seed,
-    city.slots,
-    city.roofs,
-    city.landmarks,
-    r => brandGlyphs(r, false),
-    makeClearanceTest(city.segments),
-    flight.intersections,
-  );
+  const adData = gen.ads;
   // Exposed for test scripts (hologram visibility along the route, etc.).
   (window as unknown as {__debug: unknown}).__debug = {
     holograms: adData.holograms,
@@ -141,20 +182,28 @@ async function main() {
     renderer.lights.staticCount + SCREEN_LIGHT_SLOT,
     SCREEN_LIGHT_SLOTS,
   );
-  await ads.init(
-    renderer.sceneLayout,
-    renderer.signs.glyphAtlas,
-    renderer.lights.lightBuffer,
+  lateInits.push(
+    track(
+      ads.init(
+        renderer.sceneLayout,
+        renderer.signs.glyphAtlas,
+        renderer.lights.lightBuffer,
+      ),
+    ),
   );
   const adState = {time: 0, camVel: [0, 0, 0] as [number, number, number]};
   // Traffic: a coarse tessellation of the hero car stands in for traffic.
   const trafficMesh = buildModelMesh(carEntry.build(), 3);
   const traffic = new Traffic(gpu.device, generateTraffic(seed), 1024, 1024);
-  await traffic.init(
-    renderer.frameLayout,
-    renderer.sceneLayout,
-    renderer.lights.lightBuffer,
-    trafficMesh,
+  lateInits.push(
+    track(
+      traffic.init(
+        renderer.frameLayout,
+        renderer.sceneLayout,
+        renderer.lights.lightBuffer,
+        trafficMesh,
+      ),
+    ),
   );
   renderer.preLightHooks.push(e =>
     traffic.update(
@@ -180,16 +229,13 @@ async function main() {
   renderer.transparentDrawers.unshift(p =>
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
-  const lowQuality = params.get('quality') === 'low';
-  const rain = new Rain(gpu.device, lowQuality ? 18000 : 35000);
-  await rain.init(renderer.sceneLayout);
   rain.intensity = Number(params.get('rain') ?? 1);
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
   renderer.transparentDrawers.push(p =>
     rain.render(p, renderer.sceneBindGroup),
   );
-  const canopy = new Canopy(gpu.device);
-  await canopy.init();
+  await Promise.all([staticReady, ...lateInits]);
+  startupMs.late = performance.now() - tStart;
   car.setCanopyFx(canopy.fxView);
   const canopyState = {dt: 0, time: 0, speed: 0, pov: false};
   renderer.computeHooks.push(e =>
@@ -613,7 +659,7 @@ async function main() {
     if (ui.hud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
-        `segments ${renderer.city.count}  holograms ${adData.holograms.length}  screens ${adData.screens.length}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
+        `segments ${renderer.city.count}  holograms ${adData.holograms.length}  screens ${adData.screens.length}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.count}  lights ${renderer.lights.staticCount}  gen ${genMs.toFixed(0)} ms\n` +
         `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m` +
         `\nvisible segments ${renderer.city.visibleSegments}` +
         (renderer.timer.enabled

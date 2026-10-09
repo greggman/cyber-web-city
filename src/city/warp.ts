@@ -22,17 +22,29 @@ const AZ: [number, number, number][] = [
   [16, 650, 0.9],
 ];
 
+// Flattened (amplitude, angular frequency, phase) triples: wave() is hot
+// (city generation and sign placement call it millions of times).
+const flat = (t: [number, number, number][]) =>
+  Float64Array.from(t.flatMap(([a, l, p]) => [a, TAU / l, p]));
+const AXF = flat(AX);
+const AZF = flat(AZ);
+
 function wave(t: number, terms: [number, number, number][]): number {
-  let s = 0;
-  for (const [a, l, p] of terms) s += a * Math.sin((t * TAU) / l + p);
-  return s;
+  const f = terms === AX ? AXF : AZF;
+  return (
+    f[0] * Math.sin(t * f[1] + f[2]) +
+    f[3] * Math.sin(t * f[4] + f[5]) +
+    f[6] * Math.sin(t * f[7] + f[8])
+  );
 }
 
 function dwave(t: number, terms: [number, number, number][]): number {
-  let s = 0;
-  for (const [a, l, p] of terms)
-    s += a * (TAU / l) * Math.cos((t * TAU) / l + p);
-  return s;
+  const f = terms === AX ? AXF : AZF;
+  return (
+    f[0] * f[1] * Math.cos(t * f[1] + f[2]) +
+    f[3] * f[4] * Math.cos(t * f[4] + f[5]) +
+    f[6] * f[7] * Math.cos(t * f[7] + f[8])
+  );
 }
 
 export function warp(u: number, v: number): [number, number] {

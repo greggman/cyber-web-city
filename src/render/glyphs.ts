@@ -33,19 +33,26 @@ function drawGlyphs(blur: number): Uint8ClampedArray {
   const ctx = canvas.getContext('2d', {willReadFrequently: true})!;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#fff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `600 ${GLYPH_CELL * 0.72}px "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Microsoft YaHei", "Yu Gothic", sans-serif`;
-  if (blur > 0) ctx.filter = `blur(${blur}px)`;
-  ctx.lineWidth = blur > 0 ? 6 : 0;
+  // Glyphs are drawn sharp (stroked too for the glow), then blurred once:
+  // a blur filter set while drawing re-blurs the canvas on every glyph.
+  const src = blur > 0 ? new OffscreenCanvas(size, size) : canvas;
+  const g = blur > 0 ? src.getContext('2d')! : ctx;
+  g.fillStyle = '#fff';
+  g.strokeStyle = '#fff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `600 ${GLYPH_CELL * 0.72}px "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Microsoft YaHei", "Yu Gothic", sans-serif`;
+  g.lineWidth = blur > 0 ? 6 : 0;
   [...GLYPHS].forEach((ch, i) => {
     const x = (i % GLYPH_GRID) * GLYPH_CELL + GLYPH_CELL / 2;
     const y = Math.floor(i / GLYPH_GRID) * GLYPH_CELL + GLYPH_CELL / 2 + 2;
-    ctx.fillText(ch, x, y);
-    if (blur > 0) ctx.strokeText(ch, x, y);
+    g.fillText(ch, x, y);
+    if (blur > 0) g.strokeText(ch, x, y);
   });
+  if (blur > 0) {
+    ctx.filter = `blur(${blur}px)`;
+    ctx.drawImage(src, 0, 0);
+  }
   return ctx.getImageData(0, 0, size, size).data;
 }
 
@@ -79,16 +86,17 @@ export function createGlyphAtlas(device: GPUDevice): GPUTexture {
     if (w === 1) break;
     const nw = w / 2;
     const next = new Uint8Array(nw * nw * 4);
+    const row = w * 4;
     for (let y = 0; y < nw; y++) {
       for (let x = 0; x < nw; x++) {
+        const a = (y * 2 * w + x * 2) * 4;
+        const o = (y * nw + x) * 4;
         for (let c = 0; c < 4; c++) {
-          const i = (yy: number, xx: number) =>
-            ((y * 2 + yy) * w + x * 2 + xx) * 4 + c;
-          next[(y * nw + x) * 4 + c] =
-            (level[i(0, 0)] +
-              level[i(0, 1)] +
-              level[i(1, 0)] +
-              level[i(1, 1)] +
+          next[o + c] =
+            (level[a + c] +
+              level[a + 4 + c] +
+              level[a + row + c] +
+              level[a + row + 4 + c] +
               2) >>
             2;
         }

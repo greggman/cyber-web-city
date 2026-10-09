@@ -4,7 +4,7 @@ import {Rng} from '../math/random';
 import {unwarp, warp3} from './warp';
 import type {LightDesc} from '../render/lightClusters';
 import {type FacadeSlot} from './buildings';
-import {blockPalette, paletteColor} from './palette';
+import {type BlockPalette, blockPalette, paletteColor} from './palette';
 import {AVENUE_W, CITY_RADIUS_SUPERS, District, SUPER} from './layout';
 import {
   CJK_COUNT,
@@ -59,13 +59,28 @@ export function brandGlyphs(rng: Rng, vertical: boolean): number[] {
   return out.slice(0, 8);
 }
 
+// The block palette of a slot, computed once (unwarping is not cheap and
+// signs ask for it per sign).
+const blockCache = new WeakMap<FacadeSlot, BlockPalette>();
+function slotBlock(slot: FacadeSlot): BlockPalette {
+  let p = blockCache.get(slot);
+  if (!p) {
+    const [gu, gv] = unwarp(slot.x, slot.z);
+    p = blockPalette(
+      seedForPalette,
+      Math.floor(gu / SUPER),
+      Math.floor(gv / SUPER),
+      slot.district,
+    );
+    blockCache.set(slot, p);
+  }
+  return p;
+}
+
 /** Signs use their block's palette (palette.ts): dominant 60%, secondary
  * 30%, warm white 10%. */
 function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
-  const [gu, gv] = unwarp(slot.x, slot.z);
-  const i = Math.floor(gu / SUPER);
-  const j = Math.floor(gv / SUPER);
-  const block = blockPalette(seedForPalette, i, j, slot.district);
+  const block = slotBlock(slot);
   // The building's own colour leads; some signs follow the neighbourhood,
   // some are plain warm white (ART_BIBLE.md 15.2c).
   if (slot.color) {
@@ -79,14 +94,7 @@ function slotPalette(rng: Rng, slot: FacadeSlot): [number, number, number] {
 
 /** The district accent for one deliberate sign (one per Slum tenement). */
 function slotAccent(slot: FacadeSlot): [number, number, number] | null {
-  const [gu, gv] = unwarp(slot.x, slot.z);
-  const p = blockPalette(
-    seedForPalette,
-    Math.floor(gu / SUPER),
-    Math.floor(gv / SUPER),
-    slot.district,
-  );
-  return slot.district === District.Slum ? p.accent : null;
+  return slot.district === District.Slum ? slotBlock(slot).accent : null;
 }
 let seedForPalette = 0;
 

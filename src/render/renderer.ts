@@ -18,7 +18,7 @@ import {mat4, type Mat4, type Vec3} from '../math/vec';
 import {FrameUniforms} from './frame';
 import {Targets, HDR_FORMAT} from './targets';
 import {CityRenderer} from './cityRenderer';
-import {SignRenderer} from './signRenderer';
+import {SignRenderer, type PackedSigns} from './signRenderer';
 import {LightClusters, type LightDesc} from './lightClusters';
 import {Post, taaJitter} from './post';
 import {Ssr} from './ssr';
@@ -48,8 +48,8 @@ export interface RenderSettings {
 
 export interface SceneData {
   segments: SegmentList;
-  signs: Sign[];
-  lights: LightDesc[];
+  signs: Sign[] | PackedSigns;
+  lights: LightDesc[] | Float32Array;
   /** District per superblock (for the district-tinted haze). */
   districts: {n: number; data: Uint8Array};
 }
@@ -138,8 +138,65 @@ export class Renderer {
     return this.gpu.device;
   }
 
+  /** Counts startup work (shader compiles) for a progress display. */
+  static track: <T>(p: Promise<T>) => Promise<T> = p => p;
+
   async init(scene: SceneData) {
+    await this.initStatic();
+    await this.initScene(scene);
+  }
+
+  /**
+   * Everything that doesn't depend on the generated city: post-processing,
+   * atmosphere, SSAO and the material atlas. Can run while the city is
+   * being generated.
+   */
+  async initStatic() {
     const device = this.gpu.device;
+    const t = Renderer.track;
+    this.frameBindGroup = bindGroup(device, 'frame', this.frameLayout, [
+      {buffer: this.frame.buffer},
+    ]);
+    const [composite, tonemap] = await Promise.all([
+      t(
+        fullscreenPipeline(
+          device,
+          'composite',
+          compositeWgsl,
+          [this.frameLayout, this.compositeLayout],
+          [{format: HDR_FORMAT}],
+        ),
+      ),
+      t(
+        fullscreenPipeline(
+          device,
+          'tonemap',
+          tonemapWgsl,
+          [this.frameLayout, this.tonemapLayout],
+          [{format: this.gpu.presentationFormat}],
+        ),
+      ),
+      t(this.ssao.init(this.frameLayout)),
+      t(this.atlas.bake()),
+      t(this.post.init(this.frameLayout)),
+      t(this.ssr.init(this.frameLayout)),
+      t(this.hiz.init()),
+      t(this.volume.init(this.sceneLayout, 0.18)),
+      // The big city and kit shaders compile now too; their data comes in
+      // initScene().
+      t(this.city.prepare(this.sceneLayout, this.ssao.aoLayout)),
+      t(this.details.prepare(this.sceneLayout, this.ssao.aoLayout)),
+      // Glyph atlas (Canvas2D rasterising, ~2.5 s of CPU).
+      t(Promise.resolve().then(() => this.signs.prepareAtlas())),
+    ]);
+    this.compositePipeline = composite;
+    this.tonemapPipeline = tonemap;
+  }
+
+  /** The city, its signs and lights (after generation). */
+  async initScene(scene: SceneData) {
+    const device = this.gpu.device;
+    const t = Renderer.track;
     // Superblock district map for the composite's district-tinted haze.
     const dn = scene.districts.n * 2;
     this.districtTex = device.createTexture({
@@ -160,52 +217,31 @@ export class Renderer {
       [dn, dn],
     );
     this.lights = new LightClusters(device, scene.lights, DYNAMIC_LIGHTS);
-    this.frameBindGroup = bindGroup(device, 'frame', this.frameLayout, [
-      {buffer: this.frame.buffer},
-    ]);
     this.sceneBindGroup = bindGroup(device, 'scene', this.sceneLayout, [
       {buffer: this.frame.buffer},
       {buffer: this.lights.lightBuffer},
       {buffer: this.lights.clusterCounts},
       {buffer: this.lights.clusterLights},
     ]);
-    const [composite, tonemap] = await Promise.all([
-      fullscreenPipeline(
-        device,
-        'composite',
-        compositeWgsl,
-        [this.frameLayout, this.compositeLayout],
-        [{format: HDR_FORMAT}],
+    await Promise.all([
+      t(
+        this.city.init(
+          scene.segments,
+          this.sceneBindGroup,
+          this.sceneLayout,
+          this.ssao.aoLayout,
+        ),
       ),
-      fullscreenPipeline(
-        device,
-        'tonemap',
-        tonemapWgsl,
-        [this.frameLayout, this.tonemapLayout],
-        [{format: this.gpu.presentationFormat}],
-      ),
-      this.city.init(
-        scene.segments,
-        this.sceneBindGroup,
+      t(this.signs.init(scene.signs, this.sceneLayout)),
+      t(this.lights.init(this.frame.buffer)),
+    ]);
+    await t(
+      this.details.init(
+        this.city.segmentBuffer,
+        this.city.count,
         this.sceneLayout,
         this.ssao.aoLayout,
       ),
-      this.ssao.init(this.frameLayout),
-      this.atlas.bake(),
-      this.signs.init(scene.signs, this.sceneLayout),
-      this.lights.init(this.frame.buffer),
-      this.post.init(this.frameLayout),
-      this.ssr.init(this.frameLayout),
-      this.hiz.init(),
-      this.volume.init(this.sceneLayout, 0.18),
-    ]);
-    this.compositePipeline = composite;
-    this.tonemapPipeline = tonemap;
-    await this.details.init(
-      this.city.segmentBuffer,
-      this.city.count,
-      this.sceneLayout,
-      this.ssao.aoLayout,
     );
   }
 

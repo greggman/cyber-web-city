@@ -121,7 +121,10 @@ function heightClass(rng: Rng, tallest: number): number {
   return tallest * rng.range(0.18, 0.35);
 }
 
-export function generateCity(seed: number): CityData {
+export function generateCity(
+  seed: number,
+  onProgress: (f: number) => void = () => {},
+): CityData {
   const segments = new SegmentList(1 << 18);
   const slots: FacadeSlot[] = [];
   const roofs: [number, number, number, number][] = [];
@@ -155,6 +158,7 @@ export function generateCity(seed: number): CityData {
   }
 
   for (let i = -N; i < N; i++) {
+    onProgress(((i + N) / (2 * N)) * 0.85);
     for (let j = -N; j < N; j++) {
       const rng = new Rng(seed, (i + 1000) * 4096 + (j + 1000));
       const info = superblockInfo(i, j, seed);

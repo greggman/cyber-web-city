@@ -148,16 +148,32 @@ export class DetailRenderer {
     ]);
   }
 
+  private prepared: Promise<void> | null = null;
+
+  /** Builds the meshes and compiles the pipelines (no city data needed). */
+  prepare(sceneLayout: GPUBindGroupLayout, aoLayout: GPUBindGroupLayout) {
+    this.prepared ??= this.preparePipelines(sceneLayout, aoLayout);
+    return this.prepared;
+  }
+
   async init(
     segmentBuffer: GPUBuffer,
     segCount: number,
     sceneLayout: GPUBindGroupLayout,
     aoLayout: GPUBindGroupLayout,
   ) {
-    const d = this.device;
     this.segmentBuffer = segmentBuffer;
     this.segCount = segCount;
     this.uploadBlockers([]);
+    this.rebuildComputeBg();
+    await this.prepare(sceneLayout, aoLayout);
+  }
+
+  private async preparePipelines(
+    sceneLayout: GPUBindGroupLayout,
+    aoLayout: GPUBindGroupLayout,
+  ) {
+    const d = this.device;
     // Merge the meshes.
     const meshes = buildDetailMeshes();
     const verts: number[] = [];
@@ -188,7 +204,6 @@ export class DetailRenderer {
       new Uint32Array(idx),
       GPUBufferUsage.INDEX,
     );
-    this.rebuildComputeBg();
     const drawLayout = bgl(d, 'details/draw/layout', [
       ['vf', 'storage-ro'],
       ['vf', 'uniform-dyn'],
