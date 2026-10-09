@@ -155,7 +155,8 @@ export function generateAds(
   for (const r of tall.slice(0, 40)) {
     if (!rng.chance(0.7)) continue;
     const scale = rng.range(50, 110);
-    if (placed.some(([x, z]) => Math.hypot(x - r[0], z - r[2]) < 700)) continue;
+    if (placed.some(([x, z]) => Math.hypot(x - r[0], z - r[2]) < 1200))
+      continue;
     placed.push([r[0], r[2]]);
     // Keep clear of neighbouring towers (the roof itself is below y0).
     if (!isClear(r[0], r[2], scale * 0.35, r[1] + 1, r[1] + scale * 2.3))

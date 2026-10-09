@@ -426,7 +426,8 @@ async function main() {
       camera.camToWorld = lookAtCamera(
         eye,
         [eye[0] + look[0] * 10, eye[1] + look[1] * 10, eye[2] + look[2] * 10],
-        pose.up,
+        // Level the horizon most of the way (limit roll from the bank).
+        [pose.up[0] * 0.35, 0.65 + pose.up[1] * 0.35, pose.up[2] * 0.35],
       );
       camera.fovY = (70 * Math.PI) / 180;
     };

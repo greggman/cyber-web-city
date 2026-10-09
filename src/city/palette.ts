@@ -61,7 +61,10 @@ export function blockPalette(
   };
   switch (d) {
     case District.Market: {
-      if (h(1) < 1 / 3) {
+      // Magenta blocks come in contiguous 3x3-superblock patches so the
+      // signature reads as a quarter of town, not a sprinkle.
+      const patch = hashFloat(seed, Math.floor(i / 3), Math.floor(j / 3), 901);
+      if (patch < 1 / 3) {
         return {
           dominant: MAGENTA,
           secondary: CYAN,

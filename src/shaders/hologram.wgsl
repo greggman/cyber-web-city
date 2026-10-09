@@ -137,7 +137,9 @@ fn fs(i: VOut) -> @location(0) vec4f {
   let wy = (h.pos.y + yHit * h.scale);
   let scan = 0.65 + 0.35 * step(0.5, fract(wy * 0.5 - frame.time * 2.0));
   let flick = 0.85 + 0.15 * sin(frame.time * 31.0 + f32(i.idx)) * sin(frame.time * 7.0);
-  let col = mix(h.color, h.color2, saturate(yHit * 0.5));
+  var col = mix(h.color, h.color2, saturate(yHit * 0.5));
+  // Keep the rose/ice pair readable through haze and bloom.
+  col = max(mix(vec3f(dot(col, vec3f(0.2126, 0.7152, 0.0722))), col, 1.6), vec3f(0.0));
   var c3 = (col * surf * scan + h.color * glow) * flick * 1.6;
   // Atmospheric fade with distance.
   let dist = t * h.scale;

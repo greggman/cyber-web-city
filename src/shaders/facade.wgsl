@@ -369,7 +369,8 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
       // Blinds: dim slatted light (flat bright panels read as pastel tiles).
       inner = mix(inner, lc * 0.16 * stripes * stripes, step(1.0 - cover, fr.y));
     } else if (hb < ws.blinds + ws.curtains) {
-      let cc = mix(vec3f(0.9, 0.3, 0.2), vec3f(0.3, 0.5, 0.9), u2f_rot(hRoom, 25u));
+      // Rust, ochre or faded-red curtains (ART_BIBLE.md 15.6).
+      let cc = mix(vec3f(0.85, 0.32, 0.12), vec3f(0.9, 0.62, 0.22), u2f_rot(hRoom, 25u));
       let folds = 0.75 + 0.25 * sin(fr.x * 40.0);
       let open = 0.15 + 0.3 * u2f_rot(hRoom, 27u);
       inner = mix(inner, lc * cc * 0.6 * folds, step(open, abs(fr.x - 0.5) * 2.0));
@@ -642,12 +643,12 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // one muted pastel each; a quarter get a repainted band of 3-6 floors.
     let ph = hash_u(c.seed ^ 0x6c8e9cf5u);
     if ((ph & 1u) == 0u) {
-      var hue = vec3f(0.85, 0.6, 0.55);
+      var hue = vec3f(0.9, 0.52, 0.45);
       let k = (ph >> 1u) % 4u;
-      if (k == 1u) { hue = vec3f(0.6, 0.8, 0.68); }
-      if (k == 2u) { hue = vec3f(0.88, 0.8, 0.55); }
-      if (k == 3u) { hue = vec3f(0.6, 0.72, 0.86); }
-      concrete = mix(hue, vec3f(dot(hue, vec3f(0.333))), 0.1) * (0.5 + 0.1 * u2f_rot(ph, 8u));
+      if (k == 1u) { hue = vec3f(0.5, 0.82, 0.62); }
+      if (k == 2u) { hue = vec3f(0.92, 0.78, 0.42); }
+      if (k == 3u) { hue = vec3f(0.5, 0.68, 0.9); }
+      concrete = hue * (0.55 + 0.1 * u2f_rot(ph, 8u));
     }
     if (((ph >> 4u) & 3u) == 0u) {
       let fl = c.facade.y / s.floorH;
@@ -703,7 +704,10 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     if ((sh & 31u) == 0u) {
       let sp = fract(c.facade / vec2f(9.0, 7.0));
       let m = aa_box(sp.x, 0.2, 0.8, 0.05) * aa_box(sp.y, 0.35, 0.65, 0.05);
-      let col = select(accent, vec3f(1.0) - accent * 0.5, (sh & 32u) == 0u);
+      // A quarter of the tenements carry the Slum's acid-green signature
+      // on their small signs; the rest use the block colour or warm white.
+      var col = select(accent, vec3f(1.0, 0.72, 0.43), (sh & 32u) == 0u);
+      if ((c.seed & 3u) == 0u) { col = vec3f(0.2, 1.0, 0.1); }
       // Steady, except a rare faulty tube that stutters now and then.
       let faulty = (sh & 448u) == 0u;
       let burst = step(0.92, fract(c.time * 0.13 + f32(sh & 255u) * 0.37));

@@ -56,6 +56,9 @@ fn fog_color(dir: vec3f, worldY: f32, dist: f32) -> vec3f {
   // Warm (sodium-lit) low, cooler rain steel high up.
   let steel = vec3f(0.061, 0.080, 0.102) * 0.9 * frame.cityGlow;
   // Rain steel high up and far away (ART_BIBLE.md 15.5).
-  let k = max(smoothstep(80.0, 400.0, worldY), smoothstep(600.0, 1800.0, dist));
+  // Distance steel only for rays at or above the horizon: looking down
+  // into the canyons the haze stays sodium-lit amber however far.
+  let up = smoothstep(-0.12, 0.05, d.y);
+  let k = max(smoothstep(80.0, 400.0, worldY), smoothstep(600.0, 1800.0, dist) * up);
   return mix(low, steel, 0.8 * k);
 }
