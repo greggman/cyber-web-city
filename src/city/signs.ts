@@ -92,6 +92,7 @@ export function generateSigns(
       : rng.int(1, 3);
     // right x up = normal (right-handed), so text reads left to right.
     const right: [number, number, number] = [slot.nz, 0, -slot.nx];
+    const slotLights: LightDesc[] = [];
     const normal: [number, number, number] = [slot.nx, 0, slot.nz];
     for (let k = 0; k < count; k++) {
       const kind = busy
@@ -158,11 +159,29 @@ export function generateSigns(
         yc,
         slot.z + right[2] * along + normal[2] * (out + 3 + w * 0.2),
       ];
-      lights.push({
+      slotLights.push({
         pos: lp,
         radius: 14 + area * 1.9,
         color: [col[0] * intensity, col[1] * intensity, col[2] * intensity],
       });
+    }
+    // Merge neighbouring signs' lights (sorted by height, groups of three)
+    // so stacked signs don't add up to a pastel wash.
+    slotLights.sort((a, b) => a.pos[1] - b.pos[1]);
+    for (let g = 0; g < slotLights.length; g += 3) {
+      const grp = slotLights.slice(g, g + 3);
+      const k = 1 / grp.length;
+      const pos: [number, number, number] = [0, 0, 0];
+      const color: [number, number, number] = [0, 0, 0];
+      let radius = 0;
+      for (const l of grp) {
+        for (let c = 0; c < 3; c++) {
+          pos[c] += l.pos[c] * k;
+          color[c] += l.color[c] * (grp.length > 1 ? 0.55 : 1);
+        }
+        radius = Math.max(radius, l.radius);
+      }
+      lights.push({pos, radius: radius * 1.15, color});
     }
   }
   // Warm street lamps along the avenues (light the canyon floors).

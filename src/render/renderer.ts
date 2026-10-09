@@ -21,6 +21,7 @@ import {CityRenderer} from './cityRenderer';
 import {SignRenderer} from './signRenderer';
 import {LightClusters, type LightDesc} from './lightClusters';
 import {Post, taaJitter} from './post';
+import {Ssr} from './ssr';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import compositeWgsl from '../shaders/composite.wgsl';
 import tonemapWgsl from '../shaders/tonemap.wgsl';
@@ -53,6 +54,7 @@ export class Renderer {
   readonly city: CityRenderer;
   readonly signs: SignRenderer;
   readonly post: Post;
+  readonly ssr: Ssr;
   lights!: LightClusters;
   readonly frameLayout: GPUBindGroupLayout;
   readonly sceneLayout: GPUBindGroupLayout;
@@ -73,6 +75,8 @@ export class Renderer {
   opaqueDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   transparentDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   computeHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
+  /** Run after opaque + composite (depth available), before transparents. */
+  postOpaqueHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
 
   constructor(private readonly gpu: Gpu) {
     const device = gpu.device;
@@ -81,6 +85,7 @@ export class Renderer {
     this.city = new CityRenderer(device);
     this.signs = new SignRenderer(device);
     this.post = new Post(device);
+    this.ssr = new Ssr(device);
     this.frameLayout = bgl(device, 'frame/layout', [['vfc', 'uniform']]);
     this.sceneLayout = bgl(device, 'scene/layout', [
       ['vfc', 'uniform'],
@@ -135,6 +140,7 @@ export class Renderer {
       this.signs.init(scene.signs, this.sceneLayout),
       this.lights.init(this.frame.buffer),
       this.post.init(this.frameLayout),
+      this.ssr.init(this.frameLayout),
     ]);
     this.compositePipeline = composite;
     this.tonemapPipeline = tonemap;
@@ -251,6 +257,9 @@ export class Renderer {
       this.frameBindGroup,
       this.compositeBindGroup,
     ]);
+
+    this.ssr.run(encoder, this.targets, this.frameBindGroup);
+    for (const hook of this.postOpaqueHooks) hook(encoder);
 
     if (this.transparentDrawers.length) {
       encoder.copyTextureToTexture(

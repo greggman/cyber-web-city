@@ -20,6 +20,7 @@ import {buildModelMesh} from './nurbs/model';
 import {CarRenderer, carLights} from './render/carRenderer';
 import {packLights, LIGHT_FLOATS} from './render/lightClusters';
 import {DYNAMIC_LIGHTS} from './render/renderer';
+import {Rain} from './render/rain';
 
 const loadmsg = document.getElementById('loadmsg')!;
 const errors = document.getElementById('errors')!;
@@ -58,6 +59,13 @@ async function main() {
     car.drawGlass(pass, renderer.sceneBindGroup, renderer.targets),
   );
   const dynamicLights = new Float32Array(DYNAMIC_LIGHTS * LIGHT_FLOATS);
+  const rain = new Rain(gpu.device);
+  await rain.init(renderer.sceneLayout);
+  rain.intensity = Number(params.get('rain') ?? 1);
+  renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
+  renderer.transparentDrawers.push(p =>
+    rain.render(p, renderer.sceneBindGroup),
+  );
   const camera = new Camera();
   const chase = new ChaseCamera();
   const settings: RenderSettings = {
@@ -137,6 +145,11 @@ async function main() {
     const cl = carLights(pose.matrix, time);
     packLights(cl, dynamicLights);
     renderer.lights.writeDynamic(dynamicLights, DYNAMIC_LIGHTS);
+    rain.setFrame(camera.position, camera.forward, [
+      pose.forward[0] * pose.speed,
+      pose.forward[1] * pose.speed,
+      pose.forward[2] * pose.speed,
+    ]);
     renderer.render(camera, time, dt, settings);
     if (showHud) {
       hud.textContent =

@@ -212,7 +212,12 @@ export function carLights(m: Mat4, time: number): LightDesc[] {
       color: [30, 27, 22],
       spot: {dir: fwd, cosCone: Math.cos(0.35)},
     },
-    {pos: P([0, 0.7, 3.6]), radius: 6, color: [6, 0.3, 0.2]},
+    {
+      pos: P([0, 0.7, 3.2]),
+      radius: 12,
+      color: [6, 0.3, 0.2],
+      spot: {dir: D([0, 0, 1]), cosCone: Math.cos(1.0)},
+    },
     {
       pos: P([0, -0.4, 0]),
       radius: 7,

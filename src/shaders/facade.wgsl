@@ -185,7 +185,7 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
   var col = colB;
   if (mode == 0u) {
     // Rising color waves.
-    v = 0.5 + 0.5 * sin(p.y * 0.08 - t * 2.0 + sin(p.x * 0.05) * 2.0);
+    v = pow(0.5 + 0.5 * sin(p.y * 0.08 - t * 2.0 + sin(p.x * 0.05) * 2.0), 6.0);
     col = mix(colA, colB, 0.5 + 0.5 * sin(p.y * 0.01 + t * 0.3));
   } else if (mode == 1u) {
     // Scrolling horizontal bars (ticker).
@@ -352,7 +352,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).albedo = vec3f(0.02);
     (*sf).roughness = 0.3;
     (*sf).reflectivity = 0.3;
-    (*sf).emissive += led * 2.4;
+    (*sf).emissive += led * 1.5;
   } else if (style == ST_STRUCTURE) {
     // Truss lattice: dark metal with diagonal bracing and small lights.
     let q = fract(c.facade / vec2f(8.0, 8.0));
@@ -435,8 +435,8 @@ fn shade_ground(c: Ctx, sf: ptr<function, Surface>) {
   (*sf).reflectivity = mix(0.6, 1.0, puddle);
   if (!road) {
     // Sidewalks and plazas: lit by shopfronts.
-    (*sf).albedo = vec3f(0.08) * (0.8 + 0.4 * n);
-    (*sf).emissive += vec3f(1.0, 0.55, 0.3) * 0.08;
+    (*sf).albedo = vec3f(0.05) * (0.8 + 0.4 * n);
+    (*sf).emissive += vec3f(1.0, 0.55, 0.3) * 0.02;
     return;
   }
   // Lane lines.
@@ -462,6 +462,51 @@ fn shade_ground(c: Ctx, sf: ptr<function, Surface>) {
   }
 }
 
+// Rain ripples: expanding rings from drop impacts on a 0.8 m grid. Returns a
+// normal perturbation in the xz plane.
+fn ripples(p: vec2f, time: f32) -> vec2f {
+  var acc = vec2f(0.0);
+  let cell = floor(p / 0.8);
+  for (var y = -1; y <= 1; y++) {
+    for (var x = -1; x <= 1; x++) {
+      let c = cell + vec2f(f32(x), f32(y));
+      let h = hash21(u_of(c.x), u_of(c.y));
+      let ctr = (c + vec2f(hash21(u_of(c.x) + 7u, u_of(c.y)), h)) * 0.8;
+      let phase = fract(time * 1.3 + h * 7.0);
+      let r = phase * 0.7;
+      let d = p - ctr;
+      let dist = length(d);
+      let ring = sin((dist - r) * 40.0) * smoothstep(0.08, 0.0, abs(dist - r)) * (1.0 - phase);
+      acc += d / max(dist, 1e-3) * ring;
+    }
+  }
+  return acc * 0.25;
+}
+
+// Applies rain wetness to a surface: darker albedo, glossier, streaks on
+// walls, puddles with ripples on flat ground and roofs.
+fn apply_wet(c: Ctx, sf: ptr<function, Surface>, flat: bool) {
+  let wet = frame.wetness;
+  if (wet <= 0.0) { return; }
+  if (flat) {
+    let puddle = smoothstep(0.45, 0.62, vnoise2(c.world.xz * 0.11 + 7.0));
+    let r = ripples(c.world.xz, c.time) * wet;
+    (*sf).normal = normalize((*sf).normal + vec3f(r.x, 0.0, r.y) * (0.6 + puddle));
+    (*sf).albedo *= mix(1.0, 0.45, wet * mix(0.6, 1.0, puddle));
+    (*sf).roughness = mix((*sf).roughness, 0.02, wet * mix(0.55, 1.0, puddle));
+    (*sf).reflectivity = max((*sf).reflectivity, wet * mix(0.55, 1.0, puddle));
+  } else {
+    // Water sheeting down walls in streaks.
+    let streak = vnoise2(vec2f(c.facade.x * 1.7, c.facade.y * 0.04 + c.time * 0.6));
+    let drip = smoothstep(0.55, 0.8, vnoise2(vec2f(c.facade.x * 9.0, c.facade.y * 0.35 + c.time * 3.0)));
+    let w = wet * (0.4 + 0.6 * streak);
+    (*sf).albedo *= mix(1.0, 0.7, w);
+    (*sf).roughness = mix((*sf).roughness, (*sf).roughness * 0.3, w);
+    (*sf).reflectivity = max((*sf).reflectivity, 0.35 * w);
+    (*sf).normal = normalize((*sf).normal + c.t * (drip - 0.5) * 0.08 * wet);
+  }
+}
+
 fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, local: vec3f, capUv: vec2f) -> Shaded {
   var sf: Surface;
   sf.normal = n;
@@ -480,8 +525,10 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
   c.hRel = saturate(local.y / max(s.size.y, 1e-3));
   if (s.style == ST_GROUND) {
     shade_ground(c, &sf);
+    apply_wet(c, &sf, true);
   } else if (n.y > 0.7) {
     shade_roof(c, s, capUv, &sf);
+    apply_wet(c, &sf, true);
   } else if (n.y < -0.7) {
     // Undersides: dark with a grid of small lights.
     let q = fract(capUv / 6.0) - 0.5;
@@ -493,6 +540,7 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     let vd = normalize(world - frame.camPos);
     c.viewT = vec3f(dot(vd, c.t), dot(vd, c.b), -dot(vd, n));
     shade_wall(c, s, &sf);
+    apply_wet(c, &sf, false);
     // Vertical LED strips on box edges.
     if ((s.flags & F_EDGE) != 0u) {
       let accent = unpack_color(s.colorB);

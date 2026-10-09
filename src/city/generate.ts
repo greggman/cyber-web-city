@@ -272,7 +272,7 @@ export function generateCity(seed: number): CityData {
               for (const lot of lots) {
                 const H = rng.range(130, 420) * hs;
                 build(lot, (ctx, l) => {
-                  const k = rng.weighted([3, 2, 1.5, 1]);
+                  const k = rng.weighted([0.8, 2.5, 1.5, 1]);
                   if (k === 0) ledSlab(ctx, l, H);
                   else if (k === 1)
                     setbackTower(
