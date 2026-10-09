@@ -69,7 +69,7 @@ export function superblockInfo(
   }
   const heightScale = 0.55 + 0.9 * hub + 0.35 * n2 - 0.25 * r;
   let district: District;
-  if (hashFloat(seed, i, j, 7) < 0.035 && hub < 0.6) {
+  if (hashFloat(seed, i, j, 7) < 0.012 && hub < 0.6) {
     district = District.Corporate;
   } else if (hub > 0.55) {
     district = District.Core;

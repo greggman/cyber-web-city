@@ -153,7 +153,7 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let dropN = fx.xy * 2.0 - 1.0;
   let fog = fx.z;
   let screenUv = i.pos.xy * frame.invResolution;
-  let refractOff = dropN * 0.012 + n.xy * 0.002;
+  let refractOff = dropN * 0.012;
   var behind = textureSampleLevel(sceneColor, linearSampler, screenUv + refractOff, 0.0).rgb;
   // Condensation scatters light: blur by sampling around.
   if (fog > 0.01) {

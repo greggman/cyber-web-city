@@ -580,6 +580,8 @@ export function makeClearanceTest(
         for (const i of grid.get(`${cx},${cz}`) ?? []) {
           const g = segments.get(i);
           if (g.y >= y1 || g.y + g.sy <= y0) continue;
+          // Ignore small rooftop clutter, antennas and spires.
+          if (Math.max(g.sx, g.sz) < 14) continue;
           const hx = g.sx / 2 + r;
           const hz = g.sz / 2 + r;
           if (Math.abs(x - g.x) < hx && Math.abs(z - g.z) < hz) return false;

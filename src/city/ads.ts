@@ -124,11 +124,17 @@ export function generateAds(
   }
   // Giant ones rising beside landmarks.
   // Giants standing in the avenue intersections near landmarks (open air).
+  const giants: [number, number][] = [];
   for (const [x, , z] of landmarks) {
     const ix = Math.round(x / SUPER) * SUPER;
     const iz = Math.round(z / SUPER) * SUPER;
+    if (giants.length >= 12) break;
+    if (giants.some(([gx, gz]) => Math.hypot(gx - ix, gz - iz) < 1500))
+      continue;
+    giants.push([ix, iz]);
     const scale = rng.range(150, 260);
-    if (!isClear(ix, iz, scale * 0.3, 0, scale * 2.3)) continue;
+    // The open intersection is ~64 m across; the body fits, arms may overlap.
+    if (!isClear(ix, iz, 26, 0, scale * 2.3)) continue;
     holograms.push({
       pos: [ix, 0, iz],
       scale,

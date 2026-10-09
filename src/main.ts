@@ -296,7 +296,7 @@ async function main() {
     if (showHud) {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
-        `segments ${renderer.city.count}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
+        `segments ${renderer.city.count}  holograms ${adData.holograms.length}  screens ${adData.screens.length}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
         `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m` +
         `\nvisible segments ${renderer.city.visibleSegments}` +
         (renderer.timer.enabled
@@ -315,6 +315,7 @@ async function main() {
       genMs,
       time,
       visibleSegments: renderer.city.visibleSegments,
+      holograms: adData.holograms.length,
       gpu: renderer.timer.results,
       gpuFrameMs: renderer.timer.frameMs,
     };
