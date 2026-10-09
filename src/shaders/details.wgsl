@@ -135,7 +135,11 @@ fn fs(i: VOut, @builtin(front_facing) front: bool) -> GOut {
         let cell = q / vec2f(1.8, 3.0);
         let fr = fract(cell);
         let win = step(0.15, fr.x) * step(fr.x, 0.85) * step(0.3, fr.y) * step(fr.y, 0.8);
-        let hh = hash31(u32(floor(cell.x) + 500.0), u32(floor(cell.y) + 500.0), i.inst);
+        // Seeded by where the module is, not its instance slot: slots are
+        // handed out by atomics and change every frame.
+        let qp = bitcast<vec3u>(vec3i(floor(I.pos * 4.0)));
+        let sid = hash3_u(qp.x, qp.y, qp.z);
+        let hh = hash31(u32(floor(cell.x) + 500.0), u32(floor(cell.y) + 500.0), sid);
         let lit = step(hh, 0.45) * f32((I.flags & 1u) != 0u);
         sf.albedo = mix(sf.albedo, vec3f(0.02), win);
         sf.roughness = mix(sf.roughness, 0.1, win);

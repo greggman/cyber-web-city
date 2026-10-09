@@ -10,7 +10,7 @@
     "lint": "gts lint",
     "fix": "gts fix",
     "test:unit": "node build.mjs --tests && node --test out/tests/*.mjs",
-    "test": "npm run build && npm run test:unit && node test/smoke.mjs && node test/route-check.mjs && node test/smoothness.mjs && node test/ui.mjs && node test/music.mjs 90",
+    "test": "npm run build && npm run test:unit && node test/smoke.mjs && node test/route-check.mjs && node test/smoothness.mjs && node test/ui.mjs && node test/paused-stability.mjs && node test/music.mjs 90",
     "shots": "npm run build && node test/shots.mjs"
   },
   "repository": {
