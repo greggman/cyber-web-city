@@ -155,6 +155,12 @@ fn has_details(s: Segment) -> bool {
     s.style == ST_SLUM || s.style == ST_MONOLITH || s.style == ST_PODIUM;
 }
 
+// Big open box roofs sometimes carry a painted helipad (facade.wgsl,
+// rooftops.ts).
+fn helipad(s: Segment) -> bool {
+  return s.shape <= 1u && min(s.size.x, s.size.z) * s.taper > 40.0 && (s.seed & 7u) < 2u && (s.flags & 64u) == 0u;
+}
+
 // Exposed roofs of any building piece get rooftop kitbash.
 fn has_roof(s: Segment) -> bool {
   return (s.flags & F_ROOF) != 0u && s.shape <= 4u && s.style != 8u && s.style != 10u &&
@@ -342,6 +348,8 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       let lv = ((f32(iz) + 0.5) / f32(nz) - 0.5) * 0.9 + (u2f(h >> 8u) - 0.5) * 0.4 / f32(nz);
       // Center built on (penthouse/crown): only around the edge.
       if ((s.flags & 64u) != 0u && max(abs(lu), abs(lv)) < 0.3) { continue; }
+      // Keep helipads (see shade_roof) clear.
+      if (helipad(s) && length(vec2f(lu * s.size.x, lv * s.size.z) * tp) < 13.0) { continue; }
       // Round roofs: keep inside the circle.
       if (s.shape >= 2u && length(vec2f(lu, lv)) > 0.42) { continue; }
       let x = seg_transform(s, vec3f(lu, 1.0, lv), up);

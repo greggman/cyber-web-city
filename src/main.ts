@@ -9,6 +9,7 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
+import {SegFlags, type SegmentList, type Segment} from './city/segments';
 import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
@@ -215,10 +216,14 @@ async function main() {
   if (params.get('quality') === 'low') renderer.details.distScale = 0.5;
   if (params.has('hud')) ui.hud = params.get('hud') === '1';
   ui.paused = params.get('paused') === '1';
-  // Inspection cameras: cam=screen&n=K or cam=holo&n=K frame an ad/hologram.
+  // Inspection cameras: cam=screen|holo|roof&n=K frame an ad, a hologram
+  // or an exposed roof.
   const inspect =
-    camParam === 'screen' || camParam === 'holo' ? camParam : null;
+    camParam === 'screen' || camParam === 'holo' || camParam === 'roof'
+      ? camParam
+      : null;
   const inspectN = Number(params.get('n') ?? 0);
+  let roofList: Segment[] | undefined;
   let time = Number(params.get('t') ?? 0);
   // anim=S offsets animation time only (camera stays put): for flicker tests.
   const animOffset =
@@ -370,6 +375,16 @@ async function main() {
         mid,
       );
       camera.fovY = (60 * Math.PI) / 180;
+    } else if (inspect === 'roof') {
+      roofList ??= exposedRoofs(city.segments);
+      const g = roofList[inspectN % roofList.length];
+      const top: [number, number, number] = [g.x, g.y + g.sy, g.z];
+      const r = Math.max(g.sx, g.sz) * g.taper;
+      camera.camToWorld = lookAtCamera(
+        [top[0] + r * 0.9, top[1] + r * 0.6, top[2] + r * 0.7],
+        top,
+      );
+      camera.fovY = (55 * Math.PI) / 180;
     } else if (inspect === 'screen' && adData.screens.length) {
       const sc = adData.screens[inspectN % adData.screens.length];
       const dist = Math.max(sc.width, sc.height) * 1.3;
@@ -491,3 +506,17 @@ main().catch(e => {
   loadmsg.textContent = `Failed: ${e.message ?? e}`;
   showError(String(e.stack ?? e));
 });
+
+/** Mid-height exposed roofs carrying rooftop massing (inspection camera). */
+function exposedRoofs(segs: SegmentList): Segment[] {
+  const out: Segment[] = [];
+  for (let i = 0; i < segs.count; i++) {
+    const g = segs.get(i);
+    const top = g.y + g.sy;
+    if ((g.flags & SegFlags.RoofExposed) === 0 || top < 40 || top > 250)
+      continue;
+    if (Math.min(g.sx, g.sz) * g.taper < 18 || g.shape > 1) continue;
+    out.push(g);
+  }
+  return out;
+}

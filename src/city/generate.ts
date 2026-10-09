@@ -1,6 +1,7 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
+import {addRooftopMassing} from './rooftops';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 import {
@@ -769,6 +770,7 @@ export function generateCity(seed: number): CityData {
     while (k > 0.5 && !fits(k)) k -= 0.05;
     segments.setSize(i, g.sx * k, g.sz * k);
   }
+  addRooftopMassing(segments, seed);
   for (const sl of slots) {
     const a = warpAngle(sl.x, sl.z);
     [sl.x, sl.z] = warp(sl.x, sl.z);

@@ -124,7 +124,7 @@ fn fs(i: VOut) -> @location(0) vec4f {
         holo_sdf(h.kind, p + vec3f(e, 0.0, 0.0), time) - d,
         holo_sdf(h.kind, p + vec3f(0.0, e, 0.0), time) - d,
         holo_sdf(h.kind, p + vec3f(0.0, 0.0, e), time) - d));
-      surf = 0.25 + pow(1.0 - abs(dot(n, rd)), 2.0) * 1.5;
+      surf = 0.1 + pow(1.0 - abs(dot(n, rd)), 2.0) * 1.5;
       // Wireframe contour lines over the surface.
       let grid = max(step(0.92, fract(p.y * 24.0)), step(0.95, fract(atan2(p.z, p.x) * 6.0)));
       surf += grid * 0.8;
@@ -142,5 +142,7 @@ fn fs(i: VOut) -> @location(0) vec4f {
   // Atmospheric fade with distance.
   let dist = t * h.scale;
   c3 *= exp(-dist * 0.00025);
+  // Up close a projection washes out instead of filling the frame.
+  c3 *= mix(0.3, 1.0, smoothstep(15.0, 90.0, dist));
   return vec4f(c3, 0.0);
 }

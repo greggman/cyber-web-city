@@ -24,6 +24,7 @@ const F_BANDS = 2u;
 const F_BEACON = 4u;
 const F_NOWIN = 8u;
 const F_TOPGLOW = 16u;
+const F_RING = 64u;
 
 // Per-fragment context passed to the style functions.
 struct Ctx {
@@ -502,16 +503,48 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
 fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
   let accent = unpack_color(s.colorB);
   let q = capUv;
-  // Gravel with rooftop units.
+  // Membrane/concrete panels with tar seams and patches, skylights glowing
+  // from the floor below, and painted helipads on big roofs.
+  let det = detail(vec2f(3.0), c.fw);
+  let tile = floor(q / 3.0);
+  let ft = fract(q / 3.0);
+  let ht = hash3_u(s.seed ^ 0x1b873593u, u_of(tile.x), u_of(tile.y));
+  let seam = (1.0 - aa_box(ft.x, 0.03, 0.97, c.fw.x / 3.0) * aa_box(ft.y, 0.03, 0.97, c.fw.y / 3.0)) * det;
+  let n = vnoise2(q * 0.5 + vec2f(f32(s.seed & 255u)));
+  let tar = smoothstep(0.7, 0.8, n) * 0.6;
+  var alb = mix(vec3f(0.16, 0.155, 0.15), vec3f(0.22, 0.2, 0.18), u2f(ht)) * (0.85 + 0.3 * vnoise2(q * 1.7));
+  alb = mix(alb, vec3f(0.05, 0.05, 0.055), max(tar * 0.8, seam * 0.6));
+  (*sf).albedo = alb;
+  (*sf).roughness = mix(0.75, 0.4, tar);
+  (*sf).reflectivity = mix(0.3, 0.5, tar);
   let cell = floor(q / 6.0);
   let h = hash3_u(s.seed, u_of(cell.x), u_of(cell.y));
-  let unit = select(0.0, 1.0, (h & 7u) <= 1u);
-  let n = vnoise2(q * 0.6);
-  (*sf).albedo = mix(vec3f(0.06, 0.06, 0.065), vec3f(0.12), unit) * (0.8 + 0.4 * n);
-  (*sf).roughness = 0.7;
-  (*sf).reflectivity = 0.35;
-  // Parapet edge glow.
   let half = s.size.xz * 0.5 * s.taper;
+  let inner = all(abs(cell * 6.0 + 3.0) < half - 4.0);
+  if ((h & 15u) <= 1u && inner && (s.flags & F_RING) == 0u) {
+    // Skylight: a glazed strip with warm light from below.
+    let fc = fract(q / 6.0);
+    let m = aa_box(fc.x, 0.2, 0.8, c.fw.x / 6.0) * aa_box(fc.y, 0.3, 0.7, c.fw.y / 6.0);
+    let bars = mix(1.0, 0.4, step(0.85, fract(q.x * 1.5)) * det);
+    (*sf).albedo = mix((*sf).albedo, vec3f(0.02), m);
+    (*sf).roughness = mix((*sf).roughness, 0.08, m);
+    (*sf).emissive += vec3f(1.0, 0.7, 0.42) * m * bars * (0.25 + 0.5 * u2f(h >> 8u));
+  }
+  // Helipad.
+  if (s.shape <= 1u && min(half.x, half.y) > 20.0 && (s.seed & 7u) < 2u && (s.flags & F_RING) == 0u) {
+    let r = length(q);
+    let ring = aa_box(r, 9.0, 9.8, c.fw.x);
+    let hx = aa_box(abs(q.x), 2.0, 2.8, c.fw.x) * aa_box(abs(q.y), 0.0, 4.0, c.fw.y);
+    let hb = aa_box(abs(q.x), 0.0, 2.0, c.fw.x) * aa_box(abs(q.y), 0.0, 0.4, c.fw.y);
+    let paint = max(ring, max(hx, hb));
+    let col = select(vec3f(0.75, 0.6, 0.15), vec3f(0.8), (s.seed & 8u) != 0u);
+    (*sf).albedo = mix((*sf).albedo, col, paint * 0.9);
+    // Perimeter lights.
+    let ang = atan2(q.y, q.x);
+    let dots = smoothstep(0.35, 0.0, length(vec2f(r - 11.0, (fract(ang / TAU * 24.0) - 0.5) * r * TAU / 24.0)));
+    (*sf).emissive += vec3f(0.2, 1.0, 0.4) * dots * 3.0;
+  }
+  // Parapet edge glow.
   let edge = min(half.x - abs(q.x), half.y - abs(q.y));
   let isBox = s.shape == 0u || s.shape == 1u;
   if ((s.flags & (F_TOPGLOW | F_EDGE)) != 0u && isBox) {
