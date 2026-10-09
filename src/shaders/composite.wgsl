@@ -15,11 +15,11 @@
 // warm brown, Slum green, Market magenta, Corporate clean amber.
 fn district_tint(d: u32) -> vec3f {
   switch d {
-    case 0u: { return vec3f(0.65, 0.85, 1.35); }
-    case 1u: { return vec3f(1.3, 0.95, 0.65); }
-    case 2u: { return vec3f(0.75, 1.25, 0.8); }
-    case 3u: { return vec3f(1.3, 0.7, 1.25); }
-    case 4u: { return vec3f(1.35, 1.0, 0.55); }
+    case 0u: { return vec3f(0.94, 0.98, 1.06); }
+    case 1u: { return vec3f(1.08, 1.0, 0.9); }
+    case 2u: { return vec3f(1.04, 1.0, 0.9); }
+    case 3u: { return vec3f(1.12, 0.97, 0.9); }
+    case 4u: { return vec3f(1.06, 1.0, 0.94); }
     default: { return vec3f(1.0); }
   }
 }

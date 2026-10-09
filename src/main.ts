@@ -188,7 +188,7 @@ async function main() {
   const chase = new ChaseCamera();
   if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
   const settings: RenderSettings = {
-    fogColor: [0.06, 0.035, 0.055],
+    fogColor: [0.05, 0.035, 0.022], // Smog Amber (ART_BIBLE.md 15.5)
     fogDensity: 0.0009,
     fogHeightFalloff: 0.0022,
     rain: 1,

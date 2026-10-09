@@ -4,10 +4,11 @@
 fn sky_color(dir: vec3f, time: f32) -> vec3f {
   let d = normalize(dir);
   let up = d.y;
-  // Base gradient: hazy orange/magenta near the horizon to near-black zenith.
-  let horizon = vec3f(0.13, 0.06, 0.11);
-  let mid = vec3f(0.05, 0.025, 0.06);
-  let zenith = vec3f(0.006, 0.005, 0.012);
+  // Base gradient (ART_BIBLE.md 15.5): smog amber at the horizon, through
+  // umber, to a soot zenith.
+  let horizon = vec3f(0.10, 0.06, 0.035);
+  let mid = vec3f(0.03, 0.026, 0.024);
+  let zenith = vec3f(0.004, 0.005, 0.007);
   var c = mix(horizon, mid, smoothstep(0.0, 0.18, up));
   c = mix(c, zenith, smoothstep(0.15, 0.7, up));
   // Cloud deck at ~1800 m, lit from below.
@@ -17,7 +18,8 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
     let n = fbm2(p, 6);
     let n2 = fbm2(p * 3.1 + vec2f(5.2, 1.3), 4);
     let cloud = smoothstep(0.35, 0.85, n * 0.75 + n2 * 0.35);
-    let glow = mix(vec3f(0.24, 0.10, 0.12), vec3f(0.07, 0.035, 0.09), smoothstep(0.0, 0.5, up));
+    // Cloud underside: sodium-lit amber low, rain steel overhead.
+    let glow = mix(vec3f(0.20, 0.11, 0.05), vec3f(0.045, 0.048, 0.055), smoothstep(0.0, 0.5, up));
     let fade = smoothstep(0.0, 0.08, up) * exp(-t * 0.00006);
     c = mix(c, glow * (0.35 + 0.65 * n2), cloud * fade * 0.7);
   } else {
@@ -50,5 +52,8 @@ fn fog_color(dir: vec3f, worldY: f32) -> vec3f {
   // darker looking down into the canyons.
   let d = normalize(dir);
   let horizonSky = sky_color(vec3f(d.x, max(d.y, 0.0) + 0.012, d.z), frame.time);
-  return mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
+  let low = mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
+  // Warm (sodium-lit) low, cooler rain steel high up.
+  let steel = vec3f(0.061, 0.080, 0.102) * 0.9 * frame.cityGlow;
+  return mix(low, steel, 0.6 * smoothstep(80.0, 400.0, worldY));
 }

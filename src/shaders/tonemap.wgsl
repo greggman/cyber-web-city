@@ -18,10 +18,15 @@ fn vs(@builtin(vertex_index) vi: u32) -> FsOut { return fullscreen_vertex(vi); }
 fn grade(c_in: vec3f, uv: vec2f) -> vec3f {
   var c = c_in;
   let l = luminance(c);
-  // Split toning: teal-blue shadows, warm-magenta highlights.
-  let shadows = vec3f(0.85, 1.0, 1.12);
-  let highs = vec3f(1.08, 0.98, 0.92);
+  // Split toning (ART_BIBLE.md 15.8): near-neutral steel shadows, warm
+  // highlights.
+  let shadows = vec3f(0.97, 1.0, 1.03);
+  let highs = vec3f(1.04, 1.0, 0.92);
   c *= mix(shadows, highs, smoothstep(0.05, 0.6, l));
+  // Saturation: a little overall, and bright cores roll off toward white
+  // the way film does.
+  let sat = 0.88 * mix(1.0, 0.45, smoothstep(0.75, 1.0, l));
+  c = mix(vec3f(luminance(c)), c, sat);
   // Gentle S-curve on luminance.
   let l2 = luminance(c);
   let s = smoothstep(0.0, 1.0, l2);
@@ -44,7 +49,8 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   var c = vec3f(r, g, b);
   let bloom = textureSampleLevel(bloomTex, linearSampler, uv, 0.0).rgb;
   let streak = textureSampleLevel(streakTex, linearSampler, uv, 0.0).rgb;
-  c = mix(c, bloom, 0.12) + streak * vec3f(0.35, 0.55, 1.0) * 0.25;
+  // Streaks take their source's colour (no fixed cyan tint).
+  c = mix(c, bloom, 0.12) + streak * vec3f(1.0, 0.95, 0.9) * 0.25;
   c *= frame.exposure;
   var o = tonemap_agx(c);
   // Grade in display space.
