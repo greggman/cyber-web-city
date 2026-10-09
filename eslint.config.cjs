@@ -1,6 +1,6 @@
 const gts = require('gts');
 module.exports = [
-  {ignores: ['dist/', 'out/', 'node_modules/']},
+  {ignores: ['dist/', 'out/', 'node_modules/', '.claude/']},
   ...gts,
   {
     // node:test's test() returns a promise the runner tracks itself.

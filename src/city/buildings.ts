@@ -398,7 +398,6 @@ export function twistTower(ctx: BuildCtx, lot: Lot, H: number) {
 
 /** Oriental-Pearl-inspired landmark: columns and glowing spheres. */
 export function pearlTower(ctx: BuildCtx, lot: Lot, H: number) {
-  const r = ctx.rng;
   const cx = (lot.x0 + lot.x1) / 2;
   const cz = (lot.z0 + lot.z1) / 2;
   const base = Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0);
