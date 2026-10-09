@@ -54,13 +54,14 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 |---|---|
 | `seed=N` | World seed |
 | `t=S` | Start time on the flight path |
-| `cam=chase\|pov\|skyline\|map\|screen\|holo` | Camera. `map` is a top-down view; `screen` and `holo` frame ad screen or hologram `n=K`. |
+| `cam=chase\|pov\|skyline\|map\|screen\|holo\|cable\|roof` | Camera. `map` is a top-down view. The inspection cameras `screen`, `holo`, `cable` and `roof` frame ad screen, hologram, street cable or exposed roof `n=K`. |
 | `anim=S` | Animation time `S` with the camera held at `t` (used by `test/flicker.mjs`) |
 | `shot=N` | Fixed chase framing |
 | `paused=1` | Freeze time (deterministic screenshots; also hides the help text) |
 | `hud=1` | Show stats |
 | `debug=1..6` | Debug views: albedo, normals, emissive, lights, ambient, light count per cluster |
-| `quality=low` | Turns SSR off and thins the rain |
+| `quality=low` | Turns SSR off, thins the rain and halves the facade-detail range |
+| `details=0`, `ao=0` | Turn off GPU facade kitbash or SSAO |
 | `taa=0`, `occlusion=0`, `ssr=0`, `rain=0`, `mute=1` | Turn individual features off |
 | `ui=0` | Hide the on-screen controls (also hidden with `paused=1`) |
 
@@ -84,8 +85,19 @@ number of draws no matter how large the city is.
    lights out of about 200k static and 2k dynamic ones.
 4. **Depth prepass, then Hi-Z pyramid build.**
 5. **Opaque pass (depth-equal):**
-   - Buildings use procedural facade shading: interior-mapped rooms, LED
-     facades, edge strips and wet streaks.
+   - Buildings use procedural facade shading:
+     - interior-mapped rooms behind recessed windows;
+     - LED facades, with edge strips on a minority of buildings;
+     - weathering and wet streaks;
+     - shopfronts and roofs (skylights, helipads).
+   - Within about 800 m, a compute pass kitbashes the facades and exposed
+     roofs, after Unity's Megacity: ledges, fins, pipes, AC units, balconies,
+     awnings, cages, modules, HVAC, tanks and dishes. Instances are culled
+     against the frustum and Hi-Z, kept clear of ad screens, and extrude out
+     of the wall as the camera approaches.
+   - Large rooftop massing (penthouses, tanks, masts, shacks, billboards) is
+     ordinary city geometry.
+   - Ambient light uses three bands plus half-resolution SSAO.
    - Neon signs use a Canvas2D glyph atlas.
    - Ad screens sample a raymarched-SDF ad atlas.
    - The NURBS car and the traffic meshes.

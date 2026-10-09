@@ -427,3 +427,17 @@ above, it is noted here.
 then **8/10** (the target), followed by a hologram-placement regression fix.
 Its remaining suggestions: more car surface detail, more chase-framing
 variety, more visible pods and voids, and bolder ad art.
+
+**Megacity-inspired detail pass:** the user asked for more building detail,
+taking inspiration from Unity's Megacity demo. That pass added:
+- GPU kitbash greebles on facades and roofs;
+- rooftop massing;
+- SSAO and three-band ambient light;
+- recessed windows;
+- facade weathering, shopfronts and roof surfaces;
+- a fix for a hash bug that had flattened all window and shop variety;
+- neon edge strips limited to a minority of buildings.
+
+The judge scored building detail against Megacity at about 2.5, then 4/10,
+before the later steps of this pass.
+
