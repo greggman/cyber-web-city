@@ -57,6 +57,7 @@ fn default_bay(style: u32) -> f32 {
     case 2u: { return 1.5; }  // metal panel
     case 4u: { return 3.0; }  // slum
     case 5u: { return 6.0; }  // monolith
+    case 6u: { return 3.0; }  // podium (upper floors)
     case 7u: { return 8.0; }  // structure
     default: { return 2.0; }
   }
@@ -132,4 +133,32 @@ fn win_rect(s: Segment, cls: u32) -> vec4f {
     case 5u: { return vec4f(0.12, 1.0, 0.0, 0.18); }
     default: { return vec4f(0.08, 0.92, 0.15, 0.95); }
   }
+}
+
+// District of the building (stored in the typology byte for now; 255 =
+// unknown). Matches the District enum in layout.ts.
+const DISTRICT_CORE = 0u;
+const DISTRICT_SLUM = 2u;
+const DISTRICT_MARKET = 3u;
+
+// Shop bay width at street level (ART_BIBLE.md 7).
+fn shop_bay(s: Segment) -> f32 {
+  let d = seg_typology(s);
+  if (d == DISTRICT_MARKET || d == DISTRICT_SLUM) { return 5.0; }
+  return 8.0;
+}
+
+// Per-shop choices shared by facade.wgsl (glass, fascia sign, shutter) and
+// details_emit.wgsl (canopy): (canopy depth, canopy mount height, fascia
+// height, closed shutter 0/1).
+// Keyed by the bay index mirrored from the face edges, like bay_class(),
+// so it doesn't depend on which way each renderer walks the face.
+fn shop_params(s: Segment, idx: i32, n: i32) -> vec4f {
+  let m = min(idx, n - 1 - idx);
+  let h = hash_u(s.seed ^ (bitcast<u32>(m) * 0x9e3779b9u));
+  let depth = select(select(3.5, 2.5, (h & 3u) < 2u), 1.5, (h & 3u) == 0u);
+  let mount = 3.2 + 0.8 * f32((h >> 8u) & 255u) / 255.0;
+  let fascia = 0.6 + 0.6 * f32((h >> 16u) & 255u) / 255.0;
+  let closed = select(0.0, 1.0, ((h >> 24u) & 255u) < 38u);
+  return vec4f(depth, mount, fascia, closed);
 }

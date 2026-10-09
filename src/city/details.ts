@@ -33,7 +33,7 @@ export const DETAIL_TYPES = [
   {name: 'cage', cap: 80000},
   {name: 'vent', cap: 50000},
   {name: 'canopy', cap: 20000},
-  {name: 'module', cap: 30000},
+  {name: 'stall', cap: 30000},
   {name: 'hvac', cap: 30000},
   {name: 'tank', cap: 12000},
   {name: 'dish', cap: 8000},
@@ -376,11 +376,22 @@ function canopy(): DetailMesh {
   return b.mesh();
 }
 
-function moduleBox(): DetailMesh {
-  // Bolted-on room module (unit; scaled w/h/depth); windows are drawn by
-  // the shader from local meters.
+function stall(): DetailMesh {
+  // Street market stall (meters): table with crates under it, goods on
+  // top, a striped canopy with a lit strip under its front edge.
   const b = new B();
-  b.box(-0.5, 0.5, 0, 1, 0, 1, Part.Module);
+  for (const x of [-0.95, 0.95])
+    for (const z of [0.35, 1.65])
+      b.box(x - 0.03, x + 0.03, 0, 0.85, z - 0.03, z + 0.03, Part.Dark);
+  b.box(-1, 1, 0.85, 0.92, 0.3, 1.7, Part.Body);
+  b.box(-0.8, -0.2, 0, 0.45, 0.45, 1.0, Part.Body);
+  b.box(0.1, 0.7, 0, 0.35, 0.7, 1.3, Part.Body);
+  b.box(-0.85, -0.25, 0.92, 1.1, 0.5, 1.5, Part.Fabric);
+  b.box(0.2, 0.8, 0.92, 1.05, 0.45, 1.4, Part.Fabric);
+  for (const x of [-0.95, 0.95])
+    b.box(x - 0.02, x + 0.02, 0.92, 2.1, 1.66, 1.7, Part.Dark);
+  b.box(-1.1, 1.1, 2.1, 2.16, 0.2, 1.85, Part.Fabric);
+  b.box(-1.0, 1.0, 2.04, 2.08, 1.6, 1.75, Part.Emissive);
   return b.mesh();
 }
 
@@ -462,7 +473,7 @@ export function buildDetailMeshes(): DetailMesh[] {
     cage(),
     vent(),
     canopy(),
-    moduleBox(),
+    stall(),
     hvac(),
     tank(),
     dish(),

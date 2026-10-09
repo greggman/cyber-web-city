@@ -19,7 +19,7 @@ const T_AWNING = 5u;
 const T_CAGE = 6u;
 const T_VENT = 7u;
 const T_CANOPY = 8u;
-const T_MODULE = 9u;
+const T_STALL = 9u;
 const T_HVAC = 10u;
 const T_TANK = 11u;
 const T_DISH = 12u;
@@ -94,7 +94,7 @@ fn blocked(c: vec3f, r: f32) -> bool {
 // Max distance (m) at which each type is generated (scaled by quality).
 fn type_range(t: u32) -> f32 {
   switch t {
-    case T_MODULE: { return 800.0; }
+    case T_STALL: { return 300.0; }
     case T_HVAC, T_TANK: { return 700.0; }
     case T_DISH, T_VENTSTACK: { return 450.0; }
     case T_LEDGE, T_FIN, T_PIPE: { return 650.0; }
@@ -487,13 +487,21 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
     // ---- Shop canopies on the podium's 8 m shop bays (facade.wgsl
     // shopfront uses the same grid); depth and height vary per shop.
     if (style == ST_PODIUM && s.pos.y < 1.0) {
-      let nS = face_bays(wBase, 8.0);
+      let sb = shop_bay(s);
+      let nS = face_bays(wBase, sb);
+      let market = seg_typology(s) == DISTRICT_MARKET || seg_typology(s) == DISTRICT_SLUM;
       for (var k = i32(li); k < nS; k += 64) {
-        let hb = hash3_u(s.seed, f, bitcast<u32>(k) + 77u);
-        if ((hb & 3u) == 0u) { continue; }
-        let depth = 0.8 + 1.2 * u2f_rot(hb, 8u);
-        let yC = 4.7 + 0.5 * u2f_rot(hb, 12u);
-        emit(T_CANOPY, spot(s, fc, bay_center(k, nS, 8.0), yC), vec3f(7.2, 1.0, depth), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), IF_LIT, u2f_rot(hb, 4u), false);
+        let sp = shop_params(s, k, nS);
+        let X = bay_center(k, nS, sb);
+        // Canopy at the shop's mount height, 1.5 / 2.5 / 3.5 m deep (the
+        // mesh is 1.7 m deep at scale 1); the fascia sign sits above it.
+        emit(T_CANOPY, spot(s, fc, X, sp.y), vec3f(sb * 0.9, 1.0, sp.x / 1.7), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), select(IF_LIT, 0u, sp.w > 0.5), 1.0, false);
+        // Market and slum streets: a stall in front of most open shops.
+        let hs = hash3_u(s.seed ^ 0x51ed27u, bitcast<u32>(min(k, nS - 1 - k)), 3u);
+        if (market && sp.w < 0.5 && u2f(hs) < 0.7) {
+          let off = (u2f_rot(hs, 8u) - 0.5) * (sb - 2.4);
+          emit(T_STALL, spot(s, fc, X + off, 0.0), vec3f(1.0), 0.0, rgba(mix(vec3f(0.35, 0.25, 0.18), vec3f(0.3, 0.3, 0.32), u2f_rot(hs, 12u))), neon_accent(hs >> 3u), IF_LIT, u2f_rot(hs, 16u), true);
+        }
       }
     }
 

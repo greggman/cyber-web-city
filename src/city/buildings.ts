@@ -114,6 +114,8 @@ export function defaultBay(style: Style): number {
       return 3.0;
     case Style.Monolith:
       return 6.0;
+    case Style.Podium:
+      return 3.0;
     case Style.Structure:
       return 8.0;
     default:
@@ -142,6 +144,11 @@ export function snapFace(w: number, bay: number): number {
   const n = Math.round((w - 2 * PIER) / bay);
   if (n < 1) return w;
   return n * bay + 2 * PIER;
+}
+
+/** Stores a typology/district id in the alpha byte of a packed color. */
+export function withTypology(color: number, id: number): number {
+  return ((color & 0xffffff) | ((id & 0xff) << 24)) >>> 0;
 }
 
 /** Stores the bay width (decimetres) in the alpha byte of a packed color. */
@@ -179,7 +186,8 @@ export function seg(ctx: BuildCtx, o: SegOpts) {
     style,
     seed: ctx.rng.nextU32(),
     colorA: withBay(o.colorA ?? tint(ctx.rng), bay),
-    colorB: o.colorB ?? neon(ctx.rng),
+    // The typology byte holds the district for now (shop bays etc.).
+    colorB: withTypology(o.colorB ?? neon(ctx.rng), ctx.district),
     flags: o.flags ?? 0,
     floorH: o.floorH ?? 4,
   });
@@ -231,7 +239,7 @@ function podium(ctx: BuildCtx, lot: Lot, h: number) {
     d,
     h,
     style: Style.Podium,
-    floorH: 6,
+    floorH: 4.5,
     colorA: tint(ctx.rng, 'neutral'),
   });
   addSlots(ctx, cx, cz, w, d, 2, h);

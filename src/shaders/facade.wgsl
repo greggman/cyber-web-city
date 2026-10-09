@@ -492,19 +492,28 @@ fn sign_glyph(p: vec2f, h: u32) -> f32 {
 // Street-level shopfront: an 8 m bay with a lit interior or a rolling
 // shutter, a mullioned glass front and a sign board with glyphs above.
 fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
-  let bayW = 8.0;
+  // Shop bays (8 m Core, 5 m Market/Slum) on the shared grid; each shop's
+  // canopy depth/height, fascia and shutter come from shop_params(), which
+  // details_emit.wgsl also uses for the canopy (ART_BIBLE.md 7).
+  let bayW = shop_bay(g_seg);
   // Heights from the street (podiums may start below ground).
   let y = c.world.y;
-  // Shop bays sit on the shared grid (canopies in details_emit.wgsl match).
   let wb = wall_bay(c, bayW);
   let sx = wb.y;
   let sid = u_of(wb.x);
   let inBay = step(0.0, wb.x);
+  let sp = shop_params(g_seg, i32(wb.x), face_bays(c.face.x, bayW));
+  let mount = sp.y;
   let hs = hash2_u(c.seed, sid);
   let det = detail(vec2f(1.0), c.fw);
-  let glass = aa_box(sx, 0.05, 0.95, c.fw.x / bayW) * aa_box(y, 0.3, 4.6, c.fw.y) * inBay;
-  let shuttered = u2f_rot(hs, 4u) < 0.22;
-  let shopCol = mix(vec3f(1.0, 0.85, 0.65), unpack_color(hash_u(hs) | 0xff000000u), 0.35);
+  let glassTop = mount - 0.15;
+  let glass = aa_box(sx, 0.05, 0.95, c.fw.x / bayW) * aa_box(y, 0.3, glassTop, c.fw.y) * inBay;
+  let shuttered = sp.w > 0.5;
+  // Shop light: warm 50%, cool fluorescent 30%, tinted 20%.
+  let lt = u2f_rot(hs, 20u);
+  var shopCol = vec3f(1.0, 0.78, 0.52);
+  if (lt > 0.5) { shopCol = vec3f(0.8, 0.95, 1.0); }
+  if (lt > 0.8) { shopCol = mix(unpack_color(hash_u(hs) | 0xff000000u), vec3f(1.0), 0.3); }
   var wall = vec3f(0.12, 0.11, 0.1);
   var em = vec3f(0.0);
   if (shuttered) {
@@ -520,30 +529,34 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
   } else {
     // Glass with mullions; the shop inside is an interior-mapped room.
     let mull = (1.0 - aa_box(fract(sx * 3.0), 0.03, 0.97, c.fw.x * 3.0 / bayW)) * det;
-    let fr = vec2f(sx, saturate((y - 0.3) / 4.3));
-    let inner = interior(fr, vec3f(bayW, 4.3, 6.0), c.viewT, hs, shopCol * (1.2 + 1.6 * u2f_rot(hs, 9u)), ST_PODIUM);
+    let fr = vec2f(sx, saturate((y - 0.3) / (glassTop - 0.3)));
+    let inner = interior(fr, vec3f(bayW, glassTop - 0.3, 6.0), c.viewT, hs, shopCol * (1.0 + 1.4 * u2f_rot(hs, 9u)), ST_PODIUM);
     em = mix(inner, vec3f(0.0), mull) * glass;
     (*sf).albedo = mix(vec3f(0.1), mix(vec3f(0.02), vec3f(0.25), mull), glass);
     (*sf).roughness = mix(0.6, 0.05, glass);
     (*sf).reflectivity = mix(0.2, 0.8, glass);
   }
-  // Sign board: dark panel with lit glyphs and a thin neon border.
-  let board = aa_box(y, 5.0, 6.8, c.fw.y) * aa_box(sx, 0.06, 0.94, c.fw.x / bayW) * inBay;
+  // Fascia sign above the canopy: dark board, lit glyphs, thin neon border.
+  let b0 = mount + 0.25;
+  let fh = sp.z;
+  let board = aa_box(y, b0, b0 + fh, c.fw.y) * aa_box(sx, 0.06, 0.94, c.fw.x / bayW) * inBay;
   let signCol = select(accent, vec3f(1.0, 0.95, 0.85), (hs & 3u) == 0u);
-  let bp = vec2f((sx - 0.06) / 0.88 * bayW, y - 5.0); // meters on the board
-  let border = board * (1.0 - aa_box(bp.x, 0.12, bayW * 0.88 - 0.12, c.fw.x) * aa_box(bp.y, 0.12, 1.68, c.fw.y));
-  let nG = 3u + (hs >> 12u) % 3u;
-  let gw = 1.2;
-  let x0 = (bayW * 0.88 - f32(nG) * gw) * 0.5;
+  let bw = bayW * 0.88;
+  let bp = vec2f((sx - 0.06) / 0.88 * bayW, y - b0); // meters on the board
+  let border = board * (1.0 - aa_box(bp.x, 0.08, bw - 0.08, c.fw.x) * aa_box(bp.y, 0.08, fh - 0.08, c.fw.y));
+  let gw = fh * 0.75;
+  let nG = min(2u + (hs >> 12u) % 4u, u32(floor((bw - 0.4) / gw)));
+  let x0 = (bw - f32(nG) * gw) * 0.5;
   let gi = floor((bp.x - x0) / gw);
   var glyph = 0.0;
   if (gi >= 0.0 && gi < f32(nG)) {
-    let gp = vec2f(fract((bp.x - x0) / gw) * 1.25 - 0.12, (bp.y - 0.3) / 1.1);
+    let gp = vec2f(fract((bp.x - x0) / gw) * 1.25 - 0.12, (bp.y - fh * 0.18) / (fh * 0.64));
     glyph = sign_glyph(gp, hash_u(hs + u32(gi) * 977u));
   }
   let lit = mix(0.35, glyph, det); // far away: average brightness
   let flick = select(1.0, 0.6 + 0.4 * step(0.3, fract(c.time * 3.1 + f32(hs & 31u) * 0.1)), (hs & 60u) == 0u);
-  em += signCol * board * (lit * 3.5 + border * 4.0) * flick;
+  // Fascias are the lowest brightness rank of the street's signs.
+  em += signCol * board * (lit * 2.2 + border * 2.8) * flick;
   (*sf).albedo = mix((*sf).albedo, vec3f(0.03), board);
   (*sf).emissive += em;
 }
@@ -676,7 +689,8 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     if (c.world.y < shopH) {
       shopfront(c, tint, accent, sf);
     } else {
-      ws = WinStyle(seg_bay(s), 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
+      // 3 m mullion grid with spandrels (no giant blank panes).
+      ws = WinStyle(seg_bay(s), s.floorH, 0.06, 0.94, 0.3, 0.88, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
       let w = window_facade(c, ws, ST_GLASS, tint, sf);
       (*sf).albedo = mix(vec3f(0.08) * g, vec3f(0.02, 0.03, 0.04), w);
       (*sf).roughness = mix(0.6, 0.05, w);
