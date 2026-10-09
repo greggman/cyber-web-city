@@ -13,6 +13,7 @@ import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
 import {generateCity, makeClearanceTest} from './city/generate';
+import {unwarp} from './city/warp';
 import {generateSigns, brandGlyphs} from './city/signs';
 import {generateAds} from './city/ads';
 import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
@@ -95,6 +96,8 @@ async function main() {
   (window as unknown as {__debug: unknown}).__debug = {
     holograms: adData.holograms,
     pose: (t: number) => flight.pose(t),
+    unwarp,
+    track: (t: number) => flight.trackPoint(t),
     isClear: makeClearanceTest(city.segments),
     duration: flight.duration,
   };

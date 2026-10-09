@@ -21,12 +21,15 @@ import {warp, warp3} from '../city/warp';
 import type {Obstacle} from '../city/generate';
 
 const CRUISE = 38; // m/s
-const TURN_SPEED = 22;
+const LATERAL_ACCEL = 3.4; // m/s^2 (~0.35 g) in turns
+const BRAKE = 2.5; // m/s^2
+const ACCEL = 2.0; // m/s^2
 const TABLE_DT = 0.05;
-
-interface PathPoint {
-  p: Vec3;
-}
+const TURN_RADIUS = 30; // m, arc radius through intersections
+// Orientation smoothing (see simulate()).
+const SIM_DT = 1 / 30;
+const HEADING_LAG = 0.35; // s
+const BANK_LAG = 0.5; // s
 
 export interface CarPose {
   position: Vec3;
@@ -36,39 +39,6 @@ export interface CarPose {
   speed: number;
   /** Car-to-world matrix (model space: +X right, +Y up, nose toward -Z). */
   matrix: Mat4;
-}
-
-/** Centripetal Catmull-Rom on 4 points. */
-function catmull(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number): Vec3 {
-  const alpha = 0.5;
-  const tj = (ti: number, a: Vec3, b: Vec3) =>
-    ti + Math.pow(Math.max(length(sub(b, a)), 1e-4), alpha);
-  const t0 = 0;
-  const t1 = tj(t0, p0, p1);
-  const t2 = tj(t1, p1, p2);
-  const t3 = tj(t2, p2, p3);
-  const u = lerp(t1, t2, t);
-  const A1 = add(
-    scale(p0, (t1 - u) / (t1 - t0)),
-    scale(p1, (u - t0) / (t1 - t0)),
-  );
-  const A2 = add(
-    scale(p1, (t2 - u) / (t2 - t1)),
-    scale(p2, (u - t1) / (t2 - t1)),
-  );
-  const A3 = add(
-    scale(p2, (t3 - u) / (t3 - t2)),
-    scale(p3, (u - t2) / (t3 - t2)),
-  );
-  const B1 = add(
-    scale(A1, (t2 - u) / (t2 - t0)),
-    scale(A2, (u - t0) / (t2 - t0)),
-  );
-  const B2 = add(
-    scale(A2, (t3 - u) / (t3 - t1)),
-    scale(A3, (u - t1) / (t3 - t1)),
-  );
-  return add(scale(B1, (t2 - u) / (t2 - t1)), scale(B2, (u - t1) / (t2 - t1)));
 }
 
 export class FlightPath {
@@ -86,10 +56,17 @@ export class FlightPath {
     let a = 0;
     let b = 0;
     let dir: [number, number] = [0, -1];
-    const pts: PathPoint[] = [];
+    // Legs along the avenue grid; geometry is built afterwards.
+    const legList: {
+      start: [number, number];
+      dir: [number, number];
+      len: number;
+      alt0: number;
+      alt1: number;
+      side: number;
+    }[] = [];
     let alt = 220;
     const legs = 160;
-    const corner = 36;
     for (let leg = 0; leg < legs; leg++) {
       let n = rng.int(1, 5);
       // Keep within bounds.
@@ -122,23 +99,14 @@ export class FlightPath {
       // Gentle climbs and dives only (max ~10 degrees).
       const maxStep = n * SUPER * 0.12;
       target = Math.max(alt - maxStep, Math.min(alt + maxStep, target));
-      // Lateral offset within the lane.
-      const side = rng.range(-8, 8);
-      const perp: Vec3 = [-dir[1], 0, dir[0]];
-      const d3: Vec3 = [dir[0], 0, dir[1]];
-      const legLen = n * SUPER;
-      const steps = Math.max(2, Math.round(legLen / 60));
-      for (let s = 0; s <= steps; s++) {
-        const f = s / steps;
-        const dist = corner + f * (legLen - 2 * corner);
-        const y = lerp(alt, target, f * f * (3 - 2 * f));
-        pts.push({
-          p: add(
-            add([start[0], y, start[2]], scale(d3, dist)),
-            scale(perp, side),
-          ),
-        });
-      }
+      legList.push({
+        start: [a * SUPER, b * SUPER],
+        dir: [dir[0], dir[1]],
+        len: n * SUPER,
+        alt0: alt,
+        alt1: target,
+        side: rng.range(-8, 8),
+      });
       alt = target;
       this.intersections.push(warp(na * SUPER, nb * SUPER));
       a = na;
@@ -148,14 +116,79 @@ export class FlightPath {
       if (r < 0.42) dir = [-dir[1], dir[0]];
       else if (r < 0.84) dir = [dir[1], -dir[0]];
     }
-    // Dense resample of the spline.
-    const P = pts.map(q => q.p);
-    for (let i = 0; i < P.length - 3; i++) {
-      const seglen = length(sub(P[i + 2], P[i + 1]));
-      const n = Math.max(2, Math.ceil(seglen / 1.0));
-      for (let k = 0; k < n; k++) {
-        this.samples.push(catmull(P[i], P[i + 1], P[i + 2], P[i + 3], k / n));
+    // Track geometry: straight runs along the avenue centerlines joined by
+    // exact circular arcs (radius TURN_RADIUS, tangent to both centerlines)
+    // through each intersection. The lateral drift within a lane eases in
+    // and out mid-leg so the arcs stay exact. Sampled every ~1 m.
+    const turns = legList.map((L, i) => {
+      const next = legList[i + 1];
+      return (
+        next !== undefined &&
+        (next.dir[0] !== L.dir[0] || next.dir[1] !== L.dir[1])
+      );
+    });
+    for (let i = 0; i < legList.length; i++) {
+      const L = legList[i];
+      const inR = i > 0 && turns[i - 1] ? TURN_RADIUS : 0;
+      const outR = turns[i] ? TURN_RADIUS : 0;
+      const d: Vec3 = [L.dir[0], 0, L.dir[1]];
+      const perp: Vec3 = [-L.dir[1], 0, L.dir[0]];
+      const s0 = inR;
+      const s1 = L.len - outR;
+      const steps = Math.max(2, Math.ceil(s1 - s0));
+      for (let k = 0; k < steps; k++) {
+        const f = k / steps;
+        const dist = s0 + f * (s1 - s0);
+        const y = lerp(L.alt0, L.alt1, f * f * (3 - 2 * f));
+        const lat = L.side * Math.sin(Math.PI * f) ** 2;
+        this.samples.push(
+          add(
+            add([L.start[0], y, L.start[1]], scale(d, dist)),
+            scale(perp, lat),
+          ),
+        );
       }
+      if (turns[i]) {
+        const nd: Vec3 = [legList[i + 1].dir[0], 0, legList[i + 1].dir[1]];
+        const I: Vec3 = [
+          L.start[0] + d[0] * L.len,
+          L.alt1,
+          L.start[1] + d[2] * L.len,
+        ];
+        const p0 = sub(I, scale(d, TURN_RADIUS));
+        const p1 = add(I, scale(nd, TURN_RADIUS));
+        const c = add(p0, scale(nd, TURN_RADIUS));
+        const e0 = sub(p0, c);
+        const e1 = sub(p1, c);
+        const arcSteps = Math.ceil((Math.PI / 2) * TURN_RADIUS);
+        for (let k = 0; k < arcSteps; k++) {
+          const th = (k / arcSteps) * (Math.PI / 2);
+          this.samples.push(
+            add(c, add(scale(e0, Math.cos(th)), scale(e1, Math.sin(th)))),
+          );
+        }
+      }
+    }
+    // Gaussian-smooth the track (sigma ~8 m): line-to-arc joins get gradual
+    // curvature ramps (like road clothoids) while moving < 2 m sideways.
+    {
+      const src = this.samples;
+      const R = 24;
+      const w = Array.from({length: 2 * R + 1}, (_, k) =>
+        Math.exp(-((k - R) ** 2) / (2 * 8 * 8)),
+      );
+      this.samples = src.map((p, i) => {
+        let x = 0;
+        let z = 0;
+        let ws = 0;
+        for (let k = -R; k <= R; k++) {
+          const q = src[Math.min(src.length - 1, Math.max(0, i + k))];
+          x += q[0] * w[k + R];
+          z += q[2] * w[k + R];
+          ws += w[k + R];
+        }
+        return [x / ws, p[1], z / ws] as Vec3;
+      });
     }
     // Planned in grid space; bend into world space with the city.
     this.samples = this.samples.map(p => warp3(p));
@@ -166,21 +199,35 @@ export class FlightPath {
       );
     }
     this.totalLength = this.cum[this.cum.length - 1];
-    // Integrate the speed profile into a time -> distance table.
+    // Speed profile (like a racing line): the speed at each point is
+    // limited by its curvature (gentle lateral g), then a backward pass
+    // brakes in time for turns and a forward pass limits acceleration.
+    const DS = 2;
+    const m = Math.ceil(this.totalLength / DS) + 1;
+    const vmax = new Float32Array(m);
+    for (let k = 0; k < m; k++) {
+      const c = Math.max(this.curvature(k * DS), 1e-5);
+      vmax[k] = Math.min(CRUISE, Math.sqrt(LATERAL_ACCEL / c));
+    }
+    for (let k = m - 2; k >= 0; k--) {
+      vmax[k] = Math.min(vmax[k], Math.sqrt(vmax[k + 1] ** 2 + 2 * BRAKE * DS));
+    }
+    vmax[0] = Math.min(vmax[0], CRUISE * 0.6);
+    for (let k = 1; k < m; k++) {
+      vmax[k] = Math.min(vmax[k], Math.sqrt(vmax[k - 1] ** 2 + 2 * ACCEL * DS));
+    }
+    // Integrate into a time -> distance table.
     let s = 0;
-    let v = CRUISE * 0.6;
     this.timeToDist.push(0);
     while (s < this.totalLength - 200) {
-      // Look ahead for curvature.
-      let k = 0;
-      for (const ahead of [10, 30, 60])
-        k = Math.max(k, this.curvature(s + ahead));
-      const target = lerp(CRUISE, TURN_SPEED, Math.min(1, k * 25));
-      v += (target - v) * Math.min(1, TABLE_DT * 0.8);
-      s += v * TABLE_DT;
+      const f = s / DS;
+      const k = Math.min(m - 2, Math.floor(f));
+      const v = vmax[k] + (vmax[k + 1] - vmax[k]) * (f - k);
+      s += Math.max(v, 1) * TABLE_DT;
       this.timeToDist.push(s);
     }
     this.duration = (this.timeToDist.length - 1) * TABLE_DT;
+    this.simulate();
   }
 
   private index(s: number): number {
@@ -232,21 +279,66 @@ export class FlightPath {
     return lerp(a, b, f - i);
   }
 
+  // ------------------------------------------------------------------
+  // The car rides the (smoothed) track, but its orientation chases the
+  // track's direction with a little lag, like a body with momentum: heading
+  // and bank are low-pass filtered in time. Precomputed once so any time can
+  // be sampled deterministically, then interpolated.
+  private simFwd: Float32Array = new Float32Array(0);
+  private simBank: Float32Array = new Float32Array(0);
+
+  private simulate() {
+    const n = Math.ceil(this.duration / SIM_DT) + 2;
+    this.simFwd = new Float32Array(n * 3);
+    this.simBank = new Float32Array(n);
+    let fwd = this.tangentAt(0);
+    let bank = 0;
+    const kf = 1 - Math.exp(-SIM_DT / HEADING_LAG);
+    const kb = 1 - Math.exp(-SIM_DT / BANK_LAG);
+    for (let i = 0; i < n; i++) {
+      const t = i * SIM_DT;
+      const s = this.distanceAt(Math.min(t, this.duration));
+      const want = this.tangentAt(s + 2);
+      fwd = normalize(add(fwd, scale(sub(want, fwd), kf)));
+      const speed = this.speedAt(t);
+      const k = this.signedCurvature(s + 3);
+      const bankTarget = Math.max(
+        -0.5,
+        Math.min(0.5, Math.atan((speed * speed * k) / 9.81) * 0.9),
+      );
+      bank += (bankTarget - bank) * kb;
+      this.simFwd.set(fwd, i * 3);
+      this.simBank[i] = bank;
+    }
+  }
+
+  /** The track point the carrot started from at this time (debugging). */
+  trackPoint(time: number): Vec3 {
+    return this.pointAt(this.distanceAt(time));
+  }
+
+  private speedAt(time: number): number {
+    return (this.distanceAt(time + 0.05) - this.distanceAt(time)) / 0.05;
+  }
+
   pose(time: number): CarPose {
+    const t = ((time % this.duration) + this.duration) % this.duration;
+    const f = t / SIM_DT;
+    const i = Math.min(Math.floor(f), this.simBank.length - 2);
+    const u = f - i;
+    const F = (k: number): Vec3 => [
+      this.simFwd[k * 3],
+      this.simFwd[k * 3 + 1],
+      this.simFwd[k * 3 + 2],
+    ];
+    const dir = normalize(add(scale(F(i), 1 - u), scale(F(i + 1), u)));
+    const bank = this.simBank[i] * (1 - u) + this.simBank[i + 1] * u;
     const s = this.distanceAt(time);
-    const s2 = this.distanceAt(time + 0.05);
-    const speed = (s2 - s) / 0.05;
     let pos = this.pointAt(s);
-    // Follow the path's pitch only partially: flying cars stay fairly level.
-    const tan = this.tangentAt(s + 3);
-    const fwd = normalize([tan[0], tan[1] * 0.5, tan[2]]);
-    // Bank into turns: lateral acceleration v^2 * k.
-    const k =
-      (this.signedCurvature(s + 4) + this.signedCurvature(s + 10)) * 0.5;
-    const bank = Math.max(
-      -0.6,
-      Math.min(0.6, Math.atan((speed * speed * k) / 9.81) * 0.8),
-    );
+    const speed = this.speedAt(t);
+    const vel = dir;
+    // Follow the track's pitch only partially: flying cars stay level.
+    const fwd = normalize([vel[0], vel[1] * 0.5, vel[2]]);
     const flatRight = normalize(cross(fwd, [0, 1, 0]));
     let up = normalize(cross(flatRight, fwd));
     up = rotateAround(up, fwd, -bank);

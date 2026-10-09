@@ -23,6 +23,7 @@ npm run shots      # deterministic screenshot set into out/shots/
 node test/car-shots.mjs spinner   # car preview renders into out/car/
 node test/validate-shaders.mjs    # compile every WGSL entry file, list all errors
 node test/route-check.mjs [seed]  # fly the whole route, fail on any building collision
+node test/smoothness.mjs [seed]   # peak yaw rate/accel, lateral g and bank rate along the route
 node test/flicker.mjs             # count sharply blinking pixels (camera frozen)
 node test/music.mjs [secs] [seed] # render the score offline, check levels, write out/music-sample.wav
 ```
