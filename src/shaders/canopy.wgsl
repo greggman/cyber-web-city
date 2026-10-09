@@ -145,5 +145,5 @@ fn fs_combine(i: FsO) -> @location(0) vec4f {
   let d = textureSampleLevel(dropTex, samp, i.uv, 0.0);
   let fog = textureSampleLevel(fogCur, samp, i.uv, 0.0).r * mix(0.3, 1.0, P.pov);
   let n = mix(vec2f(0.5), d.rg, d.a);
-  return vec4f(n, fog * (1.0 - d.a), d.a);
+  return vec4f(n, fog * (1.0 - d.a * 0.4), d.a);
 }
