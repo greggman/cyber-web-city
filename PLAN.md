@@ -416,9 +416,14 @@ above, it is noted here.
 | Ads (render to texture) and holograms | Done. Ads are raymarched SDF scenes in a mipmapped atlas, with GPU-extracted area lights. Holograms are raymarched SDFs. One planned ad, a commercial rasterizing the NURBS car, was not done. |
 | Rain, splashes, canopy droplets, condensation | Done. Splashes are represented by animated ripple normals on wet surfaces rather than splash particles. |
 | SSR, volumetrics, TAA, bloom, streaks, grade | Done. |
-| NURBS API and car via designer and judge agents | Done in five rounds. The car judge scored 4.5, 5.7 and 6.6 in rounds 1–3; later results are in the commit history. |
+| NURBS API and car via designer and judge agents | Done in five rounds. The car judge scored 4.5, 5.7, 6.6, then 7.3 after rounds 4–5 (the 5-round limit). Its remaining notes are renderer polish plus minor modeling. |
 | Traffic | Done. It's analytic (no simulation state), so screenshots are deterministic. The nearest vehicles render as meshes (the hero car tessellated coarsely) and all of them as light streaks. Dedicated traffic models were not made. |
 | Nanite-style meshlet clusters | **Not built.** City geometry is a few hundred thousand instanced primitives whose facade detail lives in shaders, so meshlets would not pay off. The plan's fallback was used instead: discrete LODs, Hi-Z occlusion and size culling. |
 | Impostors and chunk streaming | **Replaced.** The whole city (about 230k segments) generates in under 0.7 s. A far-field ring of simple buildings out to about 14 km, plus horizon-matched fog, replaces impostors and the skyline layer, and no streaming is needed because the flight path loops within the city. |
 | Quality presets, profiling | Done: `quality=low`, GPU timestamp HUD, visible-segment readback. |
 | Audio (stretch goal) | Done: procedural WebAudio ambience. |
+
+**AAA visual judge (screenshots only):** M3 3.5, M4 5, M10 6.5, then 7.5,
+then **8/10** (the target), followed by a hologram-placement regression fix.
+Its remaining suggestions: more car surface detail, more chase-framing
+variety, more visible pods and voids, and bolder ad art.
