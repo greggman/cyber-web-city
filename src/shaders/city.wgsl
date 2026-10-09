@@ -118,6 +118,13 @@ fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv);
   var o: GOut;
   o.color = vec4f(sh.color, 1.0);
+  if (frame.debugView == 7u) {
+    // Style ids as distinct colors (0 glass .. 10 ground), shape in alpha-ish brightness.
+    let pal = array<vec3f, 11>(vec3f(0.2, 0.5, 1.0), vec3f(0.9, 0.6, 0.3), vec3f(0.5, 0.5, 0.5), vec3f(1.0, 0.0, 1.0),
+      vec3f(0.6, 0.3, 0.1), vec3f(0.1, 0.1, 0.1), vec3f(0.0, 1.0, 0.0), vec3f(1.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0),
+      vec3f(0.0, 1.0, 1.0), vec3f(0.3, 0.3, 0.3));
+    o.color = vec4f(pal[min(s.style, 10u)] * (0.4 + 0.15 * f32(s.shape)) * (0.5 + 0.5 * max(n.y, 0.0) + 0.3 * f32((s.flags & 1u) != 0u)), 1.0);
+  }
   o.normal = vec4f(encode_normal(sh.normal), sh.roughness, sh.reflectivity);
   o.velocity = velocity_from(i.clipCur, i.clipPrev);
   return o;

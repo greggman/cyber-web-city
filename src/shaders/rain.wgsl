@@ -29,7 +29,7 @@ fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
   d.pos = p;
   // Light the drop: clustered lights + a little ambient city glow.
   let clip = frame.viewProj * vec4f(p, 1.0);
-  var c = frame.fogColor * 0.12 * frame.cityGlow;
+  var c = frame.fogColor * 0.05 * frame.cityGlow;
   if (clip.w > 0.1) {
     let ndc = clip.xy / clip.w;
     if (all(abs(ndc) < vec2f(1.0))) {

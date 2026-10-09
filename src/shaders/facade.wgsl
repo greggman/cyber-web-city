@@ -42,8 +42,11 @@ fn u_of(x: f32) -> u32 { return bitcast<u32>(i32(floor(x))); }
 
 // Fraction of a box pulse [a, b] within [0, 1] cell coordinates, anti-aliased by width w.
 fn aa_box(x: f32, a: f32, b: f32, w: f32) -> f32 {
+  // Exact box-filter coverage of [a, b] over a pixel footprint of width w:
+  // thin features seen at grazing angles fade to their true (small) area
+  // instead of smearing across the whole face.
   let ww = max(w, 1e-4);
-  return saturate((x - a) / ww + 0.5) * saturate((b - x) / ww + 0.5);
+  return saturate((min(x + ww * 0.5, b) - max(x - ww * 0.5, a)) / ww);
 }
 
 // How much detail survives at this distance (1 = full, 0 = use averages).
@@ -190,7 +193,7 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
   } else if (mode == 1u) {
     // Scrolling horizontal bars (ticker).
     let bar = floor(p.y / 6.0);
-    v = step(0.4, fract(p.x * 0.02 + t * (0.3 + hash11(u32(bar)) * 0.5) * select(-1.0, 1.0, (u32(bar) & 1u) == 0u)));
+    v = step(0.72, fract(p.x * 0.02 + t * (0.3 + hash11(u32(bar)) * 0.5) * select(-1.0, 1.0, (u32(bar) & 1u) == 0u)));
     v *= step(0.25, fract(p.y / 6.0));
     col = select(colA, colB, (u32(bar) % 3u) == 0u);
   } else if (mode == 2u) {
@@ -205,7 +208,11 @@ fn led_pattern(c: Ctx, colA: vec3f, colB: vec3f) -> vec3f {
     let gh = hash3_u(c.seed, u_of(g.x), u_of(g.y + floor(t * 0.5)));
     let sub = floor(cellp * 5.0);
     let bit = (gh >> u32(sub.x + sub.y * 5.0)) & 1u;
-    v = f32(bit) * step(0.1, cellp.x) * step(cellp.x, 0.9) * step(0.1, cellp.y) * step(cellp.y, 0.9);
+    // Each lit sub-block is drawn as a neon outline (with a dim fill) so
+    // the glyphs don't read as flat lit slabs up close.
+    let sb = fract(cellp * 5.0);
+    let ring = 1.0 - step(0.16, sb.x) * step(sb.x, 0.84) * step(0.16, sb.y) * step(sb.y, 0.84);
+    v = f32(bit) * (0.15 + 0.85 * ring) * step(0.1, cellp.x) * step(cellp.x, 0.9) * step(0.1, cellp.y) * step(cellp.y, 0.9);
     col = select(colA, colB, (gh & 1u) == 0u);
   } else if (mode == 4u) {
     // Vertical rain of light.
@@ -256,10 +263,10 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // ribbed dark panels.
     let cellF = fract(vec2f(c.facade.x / ws.cellW, c.facade.y / ws.floorH));
     let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
-    let mull = (1.0 - aa_box(cellF.x, 0.04, 0.96, c.fw.x / ws.cellW)) * det;
+    let mull = (1.0 - aa_box(cellF.x, 0.07, 0.93, c.fw.x / ws.cellW)) * det;
     let rib = step(0.5, fract(c.facade.y * 2.5)) * (1.0 - step(0.14, cellF.y)) * det;
     var frameCol = vec3f(0.05, 0.055, 0.06) * g;
-    frameCol = mix(frameCol, vec3f(0.35, 0.37, 0.4), mull);
+    frameCol = mix(frameCol, vec3f(0.55, 0.57, 0.6), mull);
     frameCol *= 1.0 - rib * 0.4;
     (*sf).albedo = mix(frameCol, glass, w);
     (*sf).roughness = mix(mix(0.35, 0.18, mull), 0.04, w);
@@ -278,12 +285,12 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let detR = detail(vec2f(ws.cellW, s.floorH), c.fw);
     let rail = ledge * step(0.5, fract(c.facade.x * 4.0)) * aa_box(cellR.y, 0.08, 0.22, c.fw.y / s.floorH) * detR;
     let hac = hash3_u(c.seed ^ 0x77u, u_of(cid.x), u_of(cid.y));
-    let ac = select(0.0, 1.0, (hac & 3u) == 0u) * aa_box(cellR.x, 0.84, 0.98, 0.02) * aa_box(cellR.y, 0.3, 0.55, 0.02) * detR;
+    let ac = select(0.0, 1.0, (hac & 3u) == 0u) * aa_box(cellR.x, 0.8, 0.99, 0.02) * aa_box(cellR.y, 0.2, 0.6, 0.02) * detR;
     let pipeX = fract(c.facade.x / (ws.cellW * 3.0));
     let pipe = aa_box(pipeX, 0.0, 0.025, c.fw.x / (ws.cellW * 3.0)) * detR;
     var wall = concrete * (1.0 - 0.6 * ledge);
     wall = mix(wall, vec3f(0.22, 0.22, 0.24), rail * 0.8);
-    wall = mix(wall, vec3f(0.28, 0.28, 0.3), ac);
+    wall = mix(wall, vec3f(0.4, 0.4, 0.42), ac);
     wall = mix(wall, vec3f(0.06, 0.06, 0.07), pipe);
     (*sf).albedo = mix(wall, vec3f(0.02), w);
     (*sf).roughness = mix(mix(0.8, 0.35, max(pipe, rail)), 0.1, w);
@@ -372,11 +379,15 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).reflectivity = 0.5;
     (*sf).emissive += mix(accent, tint, rings) * (rings * 2.5 + lines * 1.5 + 0.25);
   } else if (style == ST_LED) {
-    let led = led_pattern(c, tint, accent);
+    // Fade the animated pattern to its average where it would alias.
+    let ledDet = detail(vec2f(5.0, 5.0), c.fw);
+    let led = mix((tint + accent) * 0.012, led_pattern(c, tint, accent), ledDet);
     (*sf).albedo = vec3f(0.02);
     (*sf).roughness = 0.3;
     (*sf).reflectivity = 0.3;
-    (*sf).emissive += led * 1.5;
+    // LED panels come in strips with dark structural gaps between floors.
+    let strip = aa_box(fract(c.facade.y / 4.0), 0.0, 0.62, c.fw.y / 4.0);
+    (*sf).emissive += led * 0.5 * strip;
   } else if (style == ST_STRUCTURE) {
     // Truss lattice: dark metal with diagonal bracing and small lights.
     let q = fract(c.facade / vec2f(8.0, 8.0));

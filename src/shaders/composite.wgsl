@@ -34,7 +34,7 @@ fn rain_sheets(uv: vec2f, linDepth: f32, bg: vec3f) -> vec3f {
     acc += streak * (0.6 - fl * 0.15);
   }
   let fade = smoothstep(30.0, 120.0, linDepth);
-  return acc * fade * (bg * 0.15 + frame.fogColor * 0.5) * frame.rain;
+  return acc * fade * (bg * 0.25 + frame.fogColor * 0.08) * frame.rain;
 }
 
 @fragment

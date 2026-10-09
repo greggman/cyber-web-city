@@ -42,7 +42,7 @@ fn fog_amount(camPos: vec3f, worldPos: vec3f) -> f32 {
     integral = base * dist;
   }
   // Plus a distance floor so the far edge of the world always fades out.
-  return max(1.0 - exp(-integral), 1.0 - exp(-dist / 9000.0));
+  return max(1.0 - exp(-integral), 1.0 - exp(-dist / 6500.0));
 }
 
 fn fog_color(dir: vec3f, worldY: f32) -> vec3f {

@@ -11,7 +11,7 @@
 import {initGpu, onGpuError} from './gpu/gpu';
 import {Renderer, type RenderSettings} from './render/renderer';
 import {Camera} from './camera/camera';
-import {generateCity} from './city/generate';
+import {generateCity, makeClearanceTest} from './city/generate';
 import {generateSigns, brandGlyphs} from './city/signs';
 import {generateAds} from './city/ads';
 import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
@@ -74,8 +74,13 @@ async function main() {
   // 1024+ traffic (GPU).
   const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
   void DYNAMIC_LIGHTS;
-  const adData = generateAds(seed, city.slots, city.roofs, city.landmarks, r =>
-    brandGlyphs(r, false),
+  const adData = generateAds(
+    seed,
+    city.slots,
+    city.roofs,
+    city.landmarks,
+    r => brandGlyphs(r, false),
+    makeClearanceTest(city.segments),
   );
   const ads = new AdSystem(
     gpu.device,
@@ -150,7 +155,7 @@ async function main() {
   const chase = new ChaseCamera();
   if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
   const settings: RenderSettings = {
-    fogColor: [0.085, 0.045, 0.06],
+    fogColor: [0.06, 0.035, 0.055],
     fogDensity: 0.0009,
     fogHeightFalloff: 0.0022,
     rain: 1,

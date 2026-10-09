@@ -197,7 +197,7 @@ function crown(
   style: Style,
 ) {
   const r = ctx.rng;
-  const kind = r.weighted([0.4, 1, 1.6, 1, 1]);
+  const kind = r.weighted([0.15, 1.2, 1.6, 1, 1]);
   let top = y;
   if (kind === 0) {
     // Pyramid cap.
@@ -281,7 +281,7 @@ export function setbackTower(
   for (let t = 0; t < tiers; t++) {
     const h = ((H - ph) / tiers) * r.range(0.8, 1.2);
     const tierStyle =
-      style === Style.GlassOffice && r.chance(0.15) ? Style.LedFacade : style;
+      style === Style.GlassOffice && r.chance(0.06) ? Style.LedFacade : style;
     seg(ctx, {
       x: cx,
       z: cz,
@@ -296,10 +296,52 @@ export function setbackTower(
       floorH,
     });
     addSlots(ctx, cx, cz, w, d, y, y + h);
+    // Cantilevered glass pod jutting out of the tier (capped toward avenues).
+    if (r.chance(0.3) && h > 30) {
+      const side = r.int(0, 4);
+      const onAvenue = ctx.avenueSides[side];
+      const out = onAvenue ? r.range(3, 6) : r.range(6, 14);
+      const ph = r.range(10, Math.min(28, h * 0.5));
+      const py = y + r.range(0.2, 0.8) * (h - ph);
+      const along = (side < 2 ? d : w) * r.range(0.3, 0.6);
+      const sx = side < 2 ? out * 2 : along;
+      const sz = side < 2 ? along : out * 2;
+      const ox = side === 0 ? -w / 2 : side === 1 ? w / 2 : 0;
+      const oz = side === 2 ? -d / 2 : side === 3 ? d / 2 : 0;
+      seg(ctx, {
+        x: cx + ox,
+        z: cz + oz,
+        y: py,
+        w: sx,
+        d: sz,
+        h: ph,
+        style: Style.GlassOffice,
+        colorA,
+        colorB,
+        flags: SegFlags.EdgeGlow,
+        floorH,
+      });
+    }
     y += h;
     w *= r.range(0.72, 0.9);
     d *= r.range(0.72, 0.9);
-    if (r.chance(0.3)) {
+    if (t < tiers - 1 && r.chance(0.22)) {
+      // Sky lobby void: a narrow lit core between tiers.
+      const vh = r.range(12, 26);
+      seg(ctx, {
+        x: cx,
+        z: cz,
+        y,
+        w: w * 0.35,
+        d: d * 0.35,
+        h: vh,
+        shape: Shape.Cylinder,
+        style: Style.Bridge,
+        colorB,
+        flags: SegFlags.FloorBands,
+      });
+      y += vh;
+    } else if (r.chance(0.3)) {
       // Thin glowing band between tiers.
       seg(ctx, {
         x: cx,
@@ -589,7 +631,12 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
     const h = Math.min(H - y, r.range(15, 60));
     const style = r.chance(0.75)
       ? Style.Slum
-      : r.pick([Style.Residential, Style.MetalPanel, Style.LedFacade]);
+      : r.pick([
+          Style.Residential,
+          Style.MetalPanel,
+          Style.Residential,
+          Style.LedFacade,
+        ]);
     seg(ctx, {
       x,
       z,

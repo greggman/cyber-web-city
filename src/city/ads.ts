@@ -4,7 +4,7 @@ import {Rng} from '../math/random';
 import type {Vec3} from '../math/vec';
 import type {FacadeSlot} from './buildings';
 import {NEON} from './buildings';
-import {District} from './layout';
+import {District, SUPER} from './layout';
 
 export const AD_TILES = 32;
 export const AD_SCENES = 8;
@@ -40,6 +40,13 @@ export function generateAds(
   roofs: [number, number, number, number][],
   landmarks: [number, number, number][],
   brandGlyphs: (rng: Rng) => number[],
+  isClear: (
+    x: number,
+    z: number,
+    r: number,
+    y0: number,
+    y1: number,
+  ) => boolean = () => true,
 ): {screens: Screen[]; holograms: Hologram[]; tiles: AdTile[]} {
   const rng = new Rng(seed, 5150);
   const tiles: AdTile[] = [];
@@ -99,12 +106,16 @@ export function generateAds(
     .filter(r => r[1] > 250 && r[3] > 25)
     .sort((a, b) => b[1] - a[1]);
   for (const r of tall.slice(0, 40)) {
-    if (!rng.chance(0.55)) continue;
+    if (!rng.chance(0.7)) continue;
+    const scale = rng.range(50, 110);
+    // Keep clear of neighbouring towers (the roof itself is below y0).
+    if (!isClear(r[0], r[2], scale * 0.6, r[1] + 1, r[1] + scale * 2.3))
+      continue;
     const c = rng.pick(NEON);
     const c2 = rng.pick(NEON);
     holograms.push({
       pos: [r[0], r[1], r[2]],
-      scale: rng.range(50, 110),
+      scale,
       kind: rng.int(0, 5),
       color: c,
       color2: c2,
@@ -112,11 +123,15 @@ export function generateAds(
     });
   }
   // Giant ones rising beside landmarks.
+  // Giants standing in the avenue intersections near landmarks (open air).
   for (const [x, , z] of landmarks) {
-    if (!rng.chance(0.5)) continue;
+    const ix = Math.round(x / SUPER) * SUPER;
+    const iz = Math.round(z / SUPER) * SUPER;
+    const scale = rng.range(150, 260);
+    if (!isClear(ix, iz, scale * 0.3, 0, scale * 2.3)) continue;
     holograms.push({
-      pos: [x + rng.range(-60, 60), 0, z + rng.range(-60, 60)],
-      scale: rng.range(180, 320),
+      pos: [ix, 0, iz],
+      scale,
       kind: rng.pick([0, 1, 3]),
       color: rng.pick(NEON),
       color2: rng.pick(NEON),

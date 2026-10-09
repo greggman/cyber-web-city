@@ -109,7 +109,7 @@ export function generateCity(seed: number): CityData {
       roofs,
       avenueSides: [false, false, false, false],
     };
-    const size = CITY_HALF_SIZE * 2 + 30000;
+    const size = CITY_HALF_SIZE * 2 + 120000;
     seg(ctx, {
       x: 0,
       z: 0,
@@ -534,4 +534,58 @@ export function generateCity(seed: number): CityData {
     return cx * 1000 + cz;
   });
   return {seed, segments, slots, roofs, obstacles, landmarks};
+}
+
+/**
+ * Builds a test for whether a vertical cylinder (center x,z, radius r,
+ * heights y0..y1) is free of building segments (coarse AABB check).
+ */
+export function makeClearanceTest(
+  segments: SegmentList,
+): (x: number, z: number, r: number, y0: number, y1: number) => boolean {
+  const CELL = 300;
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < segments.count; i++) {
+    const g = segments.get(i);
+    if (g.style === Style.Ground) continue;
+    const hx = (Math.max(g.sx, g.sz) / 2) * Math.max(1, g.taper);
+    for (
+      let cx = Math.floor((g.x - hx) / CELL);
+      cx <= Math.floor((g.x + hx) / CELL);
+      cx++
+    ) {
+      for (
+        let cz = Math.floor((g.z - hx) / CELL);
+        cz <= Math.floor((g.z + hx) / CELL);
+        cz++
+      ) {
+        const k = `${cx},${cz}`;
+        let a = grid.get(k);
+        if (!a) grid.set(k, (a = []));
+        a.push(i);
+      }
+    }
+  }
+  return (x, z, r, y0, y1) => {
+    for (
+      let cx = Math.floor((x - r) / CELL);
+      cx <= Math.floor((x + r) / CELL);
+      cx++
+    ) {
+      for (
+        let cz = Math.floor((z - r) / CELL);
+        cz <= Math.floor((z + r) / CELL);
+        cz++
+      ) {
+        for (const i of grid.get(`${cx},${cz}`) ?? []) {
+          const g = segments.get(i);
+          if (g.y >= y1 || g.y + g.sy <= y0) continue;
+          const hx = g.sx / 2 + r;
+          const hz = g.sz / 2 + r;
+          if (Math.abs(x - g.x) < hx && Math.abs(z - g.z) < hz) return false;
+        }
+      }
+    }
+    return true;
+  };
 }
