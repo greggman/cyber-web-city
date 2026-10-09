@@ -39,6 +39,7 @@ struct Ctx {
   time: f32,
   hRel: f32,         // 0..1 height within segment
   face: vec2f,       // base width of the face (0: round shape), taper scale
+  grads: vec4f,      // dpdx/dpdy of facade (explicit gradients for the atlas)
 };
 
 // The segment being shaded (for the shared bay grid in segment.wgsl).
@@ -212,6 +213,22 @@ fn apply_relief(c: Ctx, sf: ptr<function, Surface>) {
   (*sf).roughness = min(sqrt(r * r + g_slopeVar), 1.0);
 }
 
+// Glass fraction of the current pixel (set by window_facade).
+var<private> g_glass: f32;
+
+// Micro-surface from the material atlas (ART_BIBLE.md 12.1 D): layer at
+// `tileM` meters per tile over `uv` (meters), with explicit gradients.
+// Adds its baked slope to the relief, darkens cavities, offsets roughness.
+fn micro(uv: vec2f, grads: vec4f, layer: u32, tileM: f32, strength: f32, mask: f32, sf: ptr<function, Surface>) {
+  if (mask <= 0.0) { return; }
+  let m = textureSampleGrad(atlasTex, atlasSampler, uv / tileM, layer, grads.xy / tileM, grads.zw / tileM);
+  let n = m.yz * 2.0 - 1.0;
+  let nz = sqrt(max(1.0 - dot(n, n), 0.05));
+  g_slope += -n / nz * strength * mask;
+  (*sf).albedo *= mix(1.0, 0.78 + 0.44 * m.x, mask);
+  (*sf).roughness = clamp((*sf).roughness + (m.w - 0.5) * 0.6 * mask, 0.02, 1.0);
+}
+
 fn recess_for(kind: u32) -> f32 {
   switch kind {
     case ST_GLASS: { return 0.14; }
@@ -372,7 +389,9 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   let avg = litAvg * 0.13 * tint * ws.brightness * floorVar * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
   (*sf).emissive += mix(avg, em * win, det);
   // Reveal pixels are wall material, not glass.
-  return win * det * (1.0 - step(0.001, reveal)) + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  let glassFrac = win * det * (1.0 - step(0.001, reveal)) + (1.0 - det) * (ws.winX1 - ws.winX0) * (ws.winY1 - ws.winY0);
+  g_glass = glassFrac;
+  return glassFrac;
 }
 
 // LED facade animations.
@@ -906,7 +925,7 @@ fn apply_wet(c: Ctx, sf: ptr<function, Surface>, flat: bool) {
   }
 }
 
-fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, local: vec3f, capUv: vec2f, face: vec2f) -> Shaded {
+fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, local: vec3f, capUv: vec2f, face: vec2f, grads: vec4f, capGrads: vec4f) -> Shaded {
   g_seg = s;
   var sf: Surface;
   sf.normal = n;
@@ -924,11 +943,14 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
   c.time = frame.time;
   c.hRel = saturate(local.y / max(s.size.y, 1e-3));
   c.face = face;
+  c.grads = grads;
   if (s.style == ST_GROUND) {
     shade_ground(c, &sf);
     apply_wet(c, &sf, true);
   } else if (n.y > 0.7) {
     shade_roof(c, s, capUv, &sf);
+    micro(capUv, capGrads, 0u, 2.0, 1.0, 1.0, &sf);
+    sf.normal = normalize(sf.normal + vec3f(-g_slope.x, 0.0, -g_slope.y));
     apply_wet(c, &sf, true);
   } else if (n.y < -0.7) {
     // Undersides: dark with a grid of small lights.
@@ -947,6 +969,24 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
       let wth = weathering(c, s);
       sf.albedo *= wth;
       sf.reflectivity *= wth * wth;
+    }
+    // Micro-surface per wall material (not on glass).
+    let wallMask = 1.0 - g_glass;
+    let mosaic = (s.seed % 5u) == 0u;
+    switch s.style {
+      case ST_RESIDENTIAL: {
+        if (mosaic) { micro(c.facade, c.grads, 1u, 1.0, 1.0, wallMask, &sf); }
+        else { micro(c.facade, c.grads, 0u, 2.0, 1.0, wallMask, &sf); }
+      }
+      case ST_SLUM: {
+        if (mosaic) { micro(c.facade, c.grads, 1u, 1.0, 1.0, wallMask, &sf); }
+        else { micro(c.facade, c.grads, 5u, 1.8, 1.0, wallMask, &sf); }
+      }
+      case ST_PODIUM: { micro(c.facade, c.grads, 0u, 2.0, 1.0, wallMask, &sf); }
+      case ST_METAL: { micro(c.facade, c.grads, 2u, 3.0, 1.0, wallMask, &sf); }
+      case ST_MONOLITH: { micro(c.facade, c.grads, 4u, 2.0, 1.0, wallMask, &sf); }
+      case ST_GLASS: { micro(c.facade, c.grads, 2u, 3.0, 0.6, wallMask, &sf); }
+      default: {}
     }
     apply_relief(c, &sf);
     apply_wet(c, &sf, false);

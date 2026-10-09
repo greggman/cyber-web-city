@@ -4,6 +4,7 @@ import {bindGroup, createSampler, createTexture} from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import type {Targets} from './targets';
+import type {MaterialAtlas} from './materialAtlas';
 import ssaoWgsl from '../shaders/ssao.wgsl';
 
 export class Ssao {
@@ -20,9 +21,16 @@ export class Ssao {
   private whiteBg: GPUBindGroup;
   enabled = true;
 
-  constructor(private readonly device: GPUDevice) {
+  constructor(
+    private readonly device: GPUDevice,
+    private readonly atlas: MaterialAtlas,
+  ) {
+    // Group 2 of the scene shaders: AO, plus the material atlas (it rides
+    // along here so the city and kit pipelines need no extra group).
     this.aoLayout = bgl(device, 'ssao/sample/layout', [
       ['f', 'tex-float'],
+      ['f', 'sampler'],
+      ['f', 'tex-float-2d-array'],
       ['f', 'sampler'],
     ]);
     this.inLayout = bgl(device, 'ssao/in/layout', [['f', 'tex-depth']]);
@@ -48,6 +56,8 @@ export class Ssao {
     this.whiteBg = bindGroup(device, 'ssao/whiteAo', this.aoLayout, [
       this.white.createView({label: 'ssao/white/view'}),
       this.sampler,
+      this.atlas.view,
+      this.atlas.sampler,
     ]);
     this.aoBindGroup = this.whiteBg;
   }
@@ -77,6 +87,8 @@ export class Ssao {
     this.aoBindGroup = bindGroup(this.device, 'ssao/ao', this.aoLayout, [
       this.tex.createView({label: 'ssao/half/view'}),
       this.sampler,
+      this.atlas.view,
+      this.atlas.sampler,
     ]);
     this.version = t.version;
   }

@@ -28,6 +28,7 @@ import {DetailRenderer} from './detailRenderer';
 import {Ssao} from './ssao';
 import {Volumetrics} from './volumetrics';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
+import {MaterialAtlas} from './materialAtlas';
 import compositeWgsl from '../shaders/composite.wgsl';
 import tonemapWgsl from '../shaders/tonemap.wgsl';
 
@@ -60,6 +61,7 @@ export class Renderer {
   readonly city: CityRenderer;
   readonly details: DetailRenderer;
   readonly ssao: Ssao;
+  readonly atlas: MaterialAtlas;
   readonly signs: SignRenderer;
   readonly post: Post;
   readonly ssr: Ssr;
@@ -98,7 +100,8 @@ export class Renderer {
     this.targets = new Targets(device);
     this.city = new CityRenderer(device);
     this.details = new DetailRenderer(device);
-    this.ssao = new Ssao(device);
+    this.atlas = new MaterialAtlas(device);
+    this.ssao = new Ssao(device, this.atlas);
     this.signs = new SignRenderer(device);
     this.post = new Post(device);
     this.ssr = new Ssr(device);
@@ -164,6 +167,7 @@ export class Renderer {
         this.ssao.aoLayout,
       ),
       this.ssao.init(this.frameLayout),
+      this.atlas.bake(),
       this.signs.init(scene.signs, this.sceneLayout),
       this.lights.init(this.frame.buffer),
       this.post.init(this.frameLayout),

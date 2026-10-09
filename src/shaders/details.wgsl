@@ -16,6 +16,8 @@ struct Bucket { base: u32, kind: u32, _p0: u32, _p1: u32 };
 // SSAO (half resolution), sampled in screen space.
 @group(2) @binding(0) var aoTex: texture_2d<f32>;
 @group(2) @binding(1) var aoSampler: sampler;
+@group(2) @binding(2) var atlasTex: texture_2d_array<f32>;
+@group(2) @binding(3) var atlasSampler: sampler;
 
 
 struct VIn {
@@ -79,6 +81,10 @@ struct GOut {
 fn fs(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   g_fragCoord = i.pos;
   g_ao = textureSampleLevel(aoTex, aoSampler, i.pos.xy * frame.invResolution, 0.0).r;
+  // Rust and grime from the material atlas (explicit gradients: the part
+  // switch below is non-uniform).
+  let muv = i.local.xy + i.local.zz;
+  let grime = textureSampleGrad(atlasTex, atlasSampler, muv / 2.0, 3u, dpdx(muv) / 2.0, dpdy(muv) / 2.0);
   let I = instances[i.inst];
   var n = normalize(i.normal);
   if (!front) { n = -n; }
@@ -149,6 +155,11 @@ fn fs(i: VOut, @builtin(front_facing) front: bool) -> GOut {
     default: {
       sf.albedo = body * streak;
     }
+  }
+  // Grime and rust on painted/metal parts (not glass or emissive).
+  if (i.part != 2u && i.part != 3u) {
+    sf.albedo *= 0.75 + 0.45 * grime.x;
+    sf.roughness = clamp(sf.roughness + (grime.w - 0.5) * 0.5, 0.05, 1.0);
   }
   // Rain: darker, glossier, especially on top faces.
   let wet = frame.wetness * (0.5 + 0.5 * saturate(n.y));

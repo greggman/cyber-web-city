@@ -12,6 +12,9 @@ struct Bucket { base: u32, lod: u32, _p0: u32, _p1: u32 };
 // SSAO (half resolution), sampled in screen space.
 @group(2) @binding(0) var aoTex: texture_2d<f32>;
 @group(2) @binding(1) var aoSampler: sampler;
+// Material atlas (render/materialAtlas.ts).
+@group(2) @binding(2) var atlasTex: texture_2d_array<f32>;
+@group(2) @binding(3) var atlasSampler: sampler;
 
 
 struct VIn {
@@ -90,9 +93,11 @@ fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   g_ao = textureSampleLevel(aoTex, aoSampler, i.pos.xy * frame.invResolution, 0.0).r;
   // Derivatives must be taken in uniform control flow, before any branching.
   let fw = fwidth(i.facade);
+  let grads = vec4f(dpdx(i.facade), dpdy(i.facade));
+  let capGrads = vec4f(dpdx(i.capUv), dpdy(i.capUv));
   let s = segments[i.seg];
   let n = normalize(i.normal);
-  let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv, i.face);
+  let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv, i.face, grads, capGrads);
   var o: GOut;
   o.color = vec4f(sh.color, 1.0);
   if (frame.debugView == 7u) {
