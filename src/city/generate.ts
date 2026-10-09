@@ -49,12 +49,21 @@ export interface CityData {
   landmarks: [number, number, number][];
 }
 
-function splitLots(rng: Rng, lot: Lot, minSize: number, maxSplits: number): Lot[] {
+function splitLots(
+  rng: Rng,
+  lot: Lot,
+  minSize: number,
+  maxSplits: number,
+): Lot[] {
   const out: Lot[] = [];
   const recurse = (l: Lot, depth: number) => {
     const w = l.x1 - l.x0;
     const d = l.z1 - l.z0;
-    if (depth >= maxSplits || (w < minSize * 2 && d < minSize * 2) || (depth > 0 && rng.chance(0.25))) {
+    if (
+      depth >= maxSplits ||
+      (w < minSize * 2 && d < minSize * 2) ||
+      (depth > 0 && rng.chance(0.25))
+    ) {
       out.push(l);
       return;
     }
@@ -99,7 +108,16 @@ export function generateCity(seed: number): CityData {
       avenueSides: [false, false, false, false],
     };
     const size = CITY_HALF_SIZE * 2 + 6000;
-    seg(ctx, {x: 0, z: 0, y: -4, w: size, d: size, h: 4, style: Style.Ground, colorA: packColor(1, 0.7, 0.4)});
+    seg(ctx, {
+      x: 0,
+      z: 0,
+      y: -4,
+      w: size,
+      d: size,
+      h: 4,
+      style: Style.Ground,
+      colorA: packColor(1, 0.7, 0.4),
+    });
   }
 
   for (let i = -N; i < N; i++) {
@@ -109,7 +127,9 @@ export function generateCity(seed: number): CityData {
       const hs = info.heightScale;
       const sx0 = i * SUPER + half;
       const sz0 = j * SUPER + half;
-      const ctxFor = (avenueSides: [boolean, boolean, boolean, boolean]): BuildCtx => ({
+      const ctxFor = (
+        avenueSides: [boolean, boolean, boolean, boolean],
+      ): BuildCtx => ({
         segs: segments,
         rng,
         district: info.district,
@@ -117,13 +137,22 @@ export function generateCity(seed: number): CityData {
         roofs,
         avenueSides,
       });
-      const superLot: Lot = {x0: sx0, z0: sz0, x1: sx0 + SUPER - AVENUE_W, z1: sz0 + SUPER - AVENUE_W};
+      const superLot: Lot = {
+        x0: sx0,
+        z0: sz0,
+        x1: sx0 + SUPER - AVENUE_W,
+        z1: sz0 + SUPER - AVENUE_W,
+      };
 
       // Whole-superblock buildings.
       if (info.district === District.Corporate) {
         const H = rng.range(650, 1100);
         pyramid(ctxFor([true, true, true, true]), inset(superLot, 6), H);
-        landmarks.push([(superLot.x0 + superLot.x1) / 2, H, (superLot.z0 + superLot.z1) / 2]);
+        landmarks.push([
+          (superLot.x0 + superLot.x1) / 2,
+          H,
+          (superLot.z0 + superLot.z1) / 2,
+        ]);
         continue;
       }
       if (info.district === District.Megablock && rng.chance(0.35)) {
@@ -133,21 +162,32 @@ export function generateCity(seed: number): CityData {
       }
 
       const blockHeights: number[] = [];
+      const blockSegs: [number, number][] = [];
       for (let bi = 0; bi < 2; bi++) {
         for (let bj = 0; bj < 2; bj++) {
           const bx0 = sx0 + bi * (blockSize + STREET_W);
           const bz0 = sz0 + bj * (blockSize + STREET_W);
-          const block: Lot = {x0: bx0, z0: bz0, x1: bx0 + blockSize, z1: bz0 + blockSize};
-          const sideOnAvenue = (l: Lot): [boolean, boolean, boolean, boolean] => [
+          const block: Lot = {
+            x0: bx0,
+            z0: bz0,
+            x1: bx0 + blockSize,
+            z1: bz0 + blockSize,
+          };
+          const sideOnAvenue = (
+            l: Lot,
+          ): [boolean, boolean, boolean, boolean] => [
             Math.abs(l.x0 - sx0) < 1,
             Math.abs(l.x1 - (sx0 + SUPER - AVENUE_W)) < 1,
             Math.abs(l.z0 - sz0) < 1,
             Math.abs(l.z1 - (sz0 + SUPER - AVENUE_W)) < 1,
           ];
-          let maxH = 0;
+          // Bridges must stay below the shortest building in the block so
+          // they always connect to something.
+          let minH = Infinity;
+          const segStart = segments.count;
           const build = (lot: Lot, fn: (ctx: BuildCtx, lot: Lot) => number) => {
             const ctx = ctxFor(sideOnAvenue(lot));
-            maxH = Math.max(maxH, fn(ctx, inset(lot, 2.5)));
+            minH = Math.min(minH, fn(ctx, inset(lot, 2.5)));
           };
           switch (info.district) {
             case District.Core: {
@@ -155,17 +195,42 @@ export function generateCity(seed: number): CityData {
               for (const lot of lots) {
                 const big = Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0) > 70;
                 const landmark = big && rng.chance(0.18 * hs);
-                const H = (landmark ? rng.range(900, 1700) : rng.range(220, 650)) * hs;
+                const H =
+                  (landmark ? rng.range(900, 1700) : rng.range(220, 650)) * hs;
                 build(lot, (ctx, l) => {
-                  const k = rng.weighted([3, 2, landmark ? 2 : 0.4, landmark ? 1 : 0.1, 1, 0.8, 0.6]);
-                  if (k === 0) setbackTower(ctx, l, H, rng.pick([Style.GlassOffice, Style.MetalPanel, Style.Monolith]), rng.chance(0.4) ? SegFlags.EdgeGlow : 0);
+                  const k = rng.weighted([
+                    3,
+                    2,
+                    landmark ? 2 : 0.4,
+                    landmark ? 1 : 0.1,
+                    1,
+                    0.8,
+                    0.6,
+                  ]);
+                  if (k === 0)
+                    setbackTower(
+                      ctx,
+                      l,
+                      H,
+                      rng.pick([
+                        Style.GlassOffice,
+                        Style.MetalPanel,
+                        Style.Monolith,
+                      ]),
+                      rng.chance(0.4) ? SegFlags.EdgeGlow : 0,
+                    );
                   else if (k === 1) cylinderTower(ctx, l, H, Style.GlassOffice);
                   else if (k === 2) twistTower(ctx, l, H);
                   else if (k === 3) pearlTower(ctx, l, H);
                   else if (k === 4) bridgedCluster(ctx, l, H * 0.8);
                   else if (k === 5) gateTower(ctx, l, H * 0.85);
                   else wedgeTower(ctx, l, H, Style.MetalPanel);
-                  if (H > 900) landmarks.push([(l.x0 + l.x1) / 2, H, (l.z0 + l.z1) / 2]);
+                  if (H > 900)
+                    landmarks.push([(l.x0 + l.x1) / 2, H, (l.z0 + l.z1) / 2]);
+                  // Height that bridges can safely attach below.
+                  if (k === 3) return 0; // slender columns: no bridges
+                  if (k === 4) return H * 0.8 * 0.85;
+                  if (k === 5) return H * 0.85;
                   return H;
                 });
               }
@@ -184,7 +249,8 @@ export function generateCity(seed: number): CityData {
               for (const lot of lots) {
                 const H = rng.range(90, 380) * hs;
                 build(lot, (ctx, l) => {
-                  if (rng.chance(0.12)) setbackTower(ctx, l, H, Style.Residential);
+                  if (rng.chance(0.12))
+                    setbackTower(ctx, l, H, Style.Residential);
                   else slumStack(ctx, l, H);
                   return H;
                 });
@@ -198,7 +264,14 @@ export function generateCity(seed: number): CityData {
                 build(lot, (ctx, l) => {
                   const k = rng.weighted([3, 2, 1.5, 1]);
                   if (k === 0) ledSlab(ctx, l, H);
-                  else if (k === 1) setbackTower(ctx, l, H, rng.pick([Style.Residential, Style.MetalPanel]), SegFlags.EdgeGlow);
+                  else if (k === 1)
+                    setbackTower(
+                      ctx,
+                      l,
+                      H,
+                      rng.pick([Style.Residential, Style.MetalPanel]),
+                      SegFlags.EdgeGlow,
+                    );
                   else if (k === 2) cylinderTower(ctx, l, H, Style.Residential);
                   else wedgeTower(ctx, l, H, Style.Residential);
                   return H;
@@ -207,33 +280,68 @@ export function generateCity(seed: number): CityData {
               break;
             }
           }
-          blockHeights.push(maxH);
+          blockHeights.push(minH === Infinity ? 0 : minH);
+          blockSegs.push([segStart, segments.count]);
         }
       }
 
-      // Sky bridges across the narrow inner streets.
+      // Sky bridges across the narrow inner streets, spanning exactly between
+      // building faces that exist at the bridge height on both sides.
       const ctx = ctxFor([false, false, false, false]);
-      const midX = sx0 + blockSize + STREET_W / 2;
-      const midZ = sz0 + blockSize + STREET_W / 2;
-      const nb = info.district === District.Slum ? 6 : info.district === District.Market ? 3 : 1;
+      const nb =
+        info.district === District.Slum
+          ? 10
+          : info.district === District.Market
+            ? 5
+            : 2;
       for (let k = 0; k < nb; k++) {
-        const acrossX = rng.chance(0.5);
+        // Blocks are indexed bi * 2 + bj. Bridge across the z-street (between
+        // bj = 0 and 1) or across the x-street (between bi = 0 and 1).
+        const alongX = rng.chance(0.5);
         const side = rng.int(0, 2);
-        const a = acrossX ? blockHeights[side * 2] : blockHeights[side];
-        const b = acrossX ? blockHeights[side * 2 + 1] : blockHeights[side + 2];
-        const top = Math.min(a, b) - 20;
-        if (top < 40) continue;
-        const y = rng.range(25, top);
-        const along = (acrossX ? sz0 : sx0) + side * (blockSize + STREET_W) + rng.range(15, blockSize - 15);
-        const len = STREET_W + 14;
+        const [ia, ib] = alongX ? [side * 2, side * 2 + 1] : [side, side + 2];
+        const top = Math.min(blockHeights[ia], blockHeights[ib]);
+        if (top < 30) continue;
+        const y = rng.range(12, Math.min(top - 10, 250));
+        const h = rng.range(4, 8);
         const w = rng.range(5, 12);
+        const blockStart = alongX
+          ? sx0 + side * (blockSize + STREET_W)
+          : sz0 + side * (blockSize + STREET_W);
+        const along = blockStart + rng.range(10, blockSize - 10);
+        // Find the face nearest the street in each block at this height.
+        const face = (bidx: number, sign: number): number | null => {
+          let best: number | null = null;
+          const [s0, s1] = blockSegs[bidx];
+          for (let q = s0; q < s1; q++) {
+            const g = segments.get(q);
+            if (g.y > y || g.y + g.sy < y + h || g.style === Style.Bridge)
+              continue;
+            const f = Math.min(1, (y + h - g.y) / g.sy);
+            const tp = 1 + (g.taper - 1) * f;
+            const hx = (g.sx / 2) * tp;
+            const hz = (g.sz / 2) * tp;
+            const c = alongX ? g.x : g.z; // coordinate along the street
+            const half = alongX ? hx : hz;
+            if (Math.abs(along - c) > half - w / 2 - 1) continue;
+            const edge = alongX ? g.z + sign * hz : g.x + sign * hx;
+            if (best === null || (sign > 0 ? edge > best : edge < best))
+              best = edge;
+          }
+          return best;
+        };
+        const ea = face(ia, 1);
+        const eb = face(ib, -1);
+        if (ea === null || eb === null || eb - ea < 4 || eb - ea > 60) continue;
+        const len = eb - ea + 2;
+        const mid = (ea + eb) / 2;
         seg(ctx, {
-          x: acrossX ? along : midX,
-          z: acrossX ? midZ : along,
+          x: alongX ? along : mid,
+          z: alongX ? mid : along,
           y,
-          w: acrossX ? w : len,
-          d: acrossX ? len : w,
-          h: rng.range(4, 8),
+          w: alongX ? w : len,
+          d: alongX ? len : w,
+          h,
           style: Style.Bridge,
           colorB: neon(rng),
           flags: SegFlags.EdgeGlow,
@@ -242,7 +350,11 @@ export function generateCity(seed: number): CityData {
 
       // Occasional bridges over the avenues (very high or quite low so the
       // flight band stays clear; recorded as obstacles anyway).
-      if ((info.district === District.Slum || info.district === District.Core) && rng.chance(0.25) && i < N - 1) {
+      if (
+        (info.district === District.Slum || info.district === District.Core) &&
+        rng.chance(0.25) &&
+        i < N - 1
+      ) {
         const y = rng.chance(0.4) ? rng.range(45, 85) : rng.range(470, 620);
         if (Math.min(...blockHeights) > y + 15) {
           const z = sz0 + rng.range(20, SUPER - AVENUE_W - 20);
@@ -250,8 +362,25 @@ export function generateCity(seed: number): CityData {
           const len = AVENUE_W + 16;
           const w = rng.range(8, 16);
           const h = rng.range(6, 12);
-          seg(ctx, {x, z, y, w: len, d: w, h, style: Style.Bridge, colorB: neon(rng), flags: SegFlags.EdgeGlow});
-          obstacles.push({x0: x - len / 2, x1: x + len / 2, z0: z - w / 2, z1: z + w / 2, y0: y, y1: y + h});
+          seg(ctx, {
+            x,
+            z,
+            y,
+            w: len,
+            d: w,
+            h,
+            style: Style.Bridge,
+            colorB: neon(rng),
+            flags: SegFlags.EdgeGlow,
+          });
+          obstacles.push({
+            x0: x - len / 2,
+            x1: x + len / 2,
+            z0: z - w / 2,
+            z1: z + w / 2,
+            y0: y,
+            y1: y + h,
+          });
         }
       }
     }

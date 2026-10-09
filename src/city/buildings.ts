@@ -106,7 +106,15 @@ export function seg(ctx: BuildCtx, o: SegOpts) {
 }
 
 /** Records the four facades of an axis-aligned box as sign/screen slots. */
-function addSlots(ctx: BuildCtx, cx: number, cz: number, w: number, d: number, y0: number, y1: number) {
+function addSlots(
+  ctx: BuildCtx,
+  cx: number,
+  cz: number,
+  w: number,
+  d: number,
+  y0: number,
+  y1: number,
+) {
   const sides: [number, number, number, number, number, boolean][] = [
     [cx - w / 2, cz, -1, 0, d, ctx.avenueSides[0]],
     [cx + w / 2, cz, 1, 0, d, ctx.avenueSides[1]],
@@ -114,7 +122,17 @@ function addSlots(ctx: BuildCtx, cx: number, cz: number, w: number, d: number, y
     [cx, cz + d / 2, 0, 1, w, ctx.avenueSides[3]],
   ];
   for (const [x, z, nx, nz, width, avenue] of sides) {
-    ctx.slots.push({x, y: y0, z, nx, nz, width, height: y1 - y0, district: ctx.district, avenue});
+    ctx.slots.push({
+      x,
+      y: y0,
+      z,
+      nx,
+      nz,
+      width,
+      height: y1 - y0,
+      district: ctx.district,
+      avenue,
+    });
   }
 }
 
@@ -156,7 +174,15 @@ function spire(ctx: BuildCtx, x: number, z: number, y: number, size: number) {
   return y + h;
 }
 
-function crown(ctx: BuildCtx, x: number, z: number, y: number, w: number, d: number, style: Style) {
+function crown(
+  ctx: BuildCtx,
+  x: number,
+  z: number,
+  y: number,
+  w: number,
+  d: number,
+  style: Style,
+) {
   const r = ctx.rng;
   const kind = r.int(0, 5);
   let top = y;
@@ -181,7 +207,16 @@ function crown(ctx: BuildCtx, x: number, z: number, y: number, w: number, d: num
   } else if (kind === 2) {
     // Stepped mechanical penthouse.
     const h = r.range(8, 20);
-    seg(ctx, {x, z, y, w: w * 0.6, d: d * 0.6, h, style: Style.MetalPanel, flags: SegFlags.RoofBeacon});
+    seg(ctx, {
+      x,
+      z,
+      y,
+      w: w * 0.6,
+      d: d * 0.6,
+      h,
+      style: Style.MetalPanel,
+      flags: SegFlags.RoofBeacon,
+    });
     top = y + h;
   } else if (kind === 3) {
     // Helipad-ish disc.
@@ -200,12 +235,24 @@ function crown(ctx: BuildCtx, x: number, z: number, y: number, w: number, d: num
   }
   ctx.roofs.push([x, top, z, Math.min(w, d)]);
   if (r.chance(0.5)) {
-    spire(ctx, x + r.range(-0.2, 0.2) * w, z + r.range(-0.2, 0.2) * d, top, Math.max(w, d) * 1.5);
+    spire(
+      ctx,
+      x + r.range(-0.2, 0.2) * w,
+      z + r.range(-0.2, 0.2) * d,
+      top,
+      Math.max(w, d) * 1.5,
+    );
   }
 }
 
 /** Classic setback tower: podium + 2-4 shrinking tiers + crown. */
-export function setbackTower(ctx: BuildCtx, lot: Lot, H: number, style: Style, flags = 0) {
+export function setbackTower(
+  ctx: BuildCtx,
+  lot: Lot,
+  H: number,
+  style: Style,
+  flags = 0,
+) {
   const r = ctx.rng;
   const ph = r.range(14, 36);
   podium(ctx, lot, ph);
@@ -220,15 +267,37 @@ export function setbackTower(ctx: BuildCtx, lot: Lot, H: number, style: Style, f
   const floorH = style === Style.Residential ? 3.2 : r.range(3.8, 4.4);
   for (let t = 0; t < tiers; t++) {
     const h = ((H - ph) / tiers) * r.range(0.8, 1.2);
-    const tierStyle = style === Style.GlassOffice && r.chance(0.15) ? Style.LedFacade : style;
-    seg(ctx, {x: cx, z: cz, y, w, d, h, style: tierStyle, colorA, colorB, flags, floorH});
+    const tierStyle =
+      style === Style.GlassOffice && r.chance(0.15) ? Style.LedFacade : style;
+    seg(ctx, {
+      x: cx,
+      z: cz,
+      y,
+      w,
+      d,
+      h,
+      style: tierStyle,
+      colorA,
+      colorB,
+      flags,
+      floorH,
+    });
     if (t === 0) addSlots(ctx, cx, cz, w, d, y, y + h);
     y += h;
     w *= r.range(0.72, 0.9);
     d *= r.range(0.72, 0.9);
     if (r.chance(0.3)) {
       // Thin glowing band between tiers.
-      seg(ctx, {x: cx, z: cz, y, w: w * 1.15, d: d * 1.15, h: 1.5, style: Style.NeonRing, colorB});
+      seg(ctx, {
+        x: cx,
+        z: cz,
+        y,
+        w: w * 1.15,
+        d: d * 1.15,
+        h: 1.5,
+        style: Style.NeonRing,
+        colorB,
+      });
       y += 1.5;
     }
   }
@@ -236,7 +305,12 @@ export function setbackTower(ctx: BuildCtx, lot: Lot, H: number, style: Style, f
 }
 
 /** Round tower with optional taper and glowing rings. */
-export function cylinderTower(ctx: BuildCtx, lot: Lot, H: number, style: Style) {
+export function cylinderTower(
+  ctx: BuildCtx,
+  lot: Lot,
+  H: number,
+  style: Style,
+) {
   const r = ctx.rng;
   const ph = r.range(10, 25);
   podium(ctx, lot, ph);
@@ -266,7 +340,17 @@ export function cylinderTower(ctx: BuildCtx, lot: Lot, H: number, style: Style) 
     for (let k = 1; k <= n; k++) {
       const t = k / (n + 1);
       const dd = diam * (1 + (taper - 1) * t) * 1.06;
-      seg(ctx, {x: cx, z: cz, y: ph + h * t, w: dd, d: dd, h: 2.5, shape: Shape.Cylinder, style: Style.NeonRing, colorB});
+      seg(ctx, {
+        x: cx,
+        z: cz,
+        y: ph + h * t,
+        w: dd,
+        d: dd,
+        h: 2.5,
+        shape: Shape.Cylinder,
+        style: Style.NeonRing,
+        colorB,
+      });
     }
   }
   const top = diam * taper;
@@ -297,7 +381,18 @@ export function twistTower(ctx: BuildCtx, lot: Lot, H: number) {
     floorH: 4.2,
   });
   const top = s * taper;
-  seg(ctx, {x: cx, z: cz, y: H, w: top * 0.7, d: top * 0.7, h: top * 0.5, shape: Shape.Cylinder, taper: 0.6, style: Style.Structure, flags: SegFlags.RoofBeacon | SegFlags.TopGlow});
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: H,
+    w: top * 0.7,
+    d: top * 0.7,
+    h: top * 0.5,
+    shape: Shape.Cylinder,
+    taper: 0.6,
+    style: Style.Structure,
+    flags: SegFlags.RoofBeacon | SegFlags.TopGlow,
+  });
   ctx.roofs.push([cx, H + top * 0.5, cz, top]);
 }
 
@@ -309,7 +404,18 @@ export function pearlTower(ctx: BuildCtx, lot: Lot, H: number) {
   const base = Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0);
   const colorB = packColor(1, 0.15, 0.6);
   // Central column.
-  seg(ctx, {x: cx, z: cz, y: 0, w: base * 0.12, d: base * 0.12, h: H * 0.85, shape: Shape.Cylinder, style: Style.Structure, colorB, flags: SegFlags.FloorBands});
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: 0,
+    w: base * 0.12,
+    d: base * 0.12,
+    h: H * 0.85,
+    shape: Shape.Cylinder,
+    style: Style.Structure,
+    colorB,
+    flags: SegFlags.FloorBands,
+  });
   // Three outer columns up to the first sphere.
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2 + 0.3;
@@ -332,9 +438,31 @@ export function pearlTower(ctx: BuildCtx, lot: Lot, H: number) {
   ];
   for (const [t, s] of spheres) {
     const d = base * s;
-    seg(ctx, {x: cx, z: cz, y: H * t - d / 2, w: d, d, h: d, shape: Shape.Sphere, style: Style.LedFacade, colorB, colorA: packColor(1, 0.4, 0.8)});
+    seg(ctx, {
+      x: cx,
+      z: cz,
+      y: H * t - d / 2,
+      w: d,
+      d,
+      h: d,
+      shape: Shape.Sphere,
+      style: Style.LedFacade,
+      colorB,
+      colorA: packColor(1, 0.4, 0.8),
+    });
   }
-  seg(ctx, {x: cx, z: cz, y: H * 0.85, w: 3, d: 3, h: H * 0.15, shape: Shape.Cylinder, taper: 0.2, style: Style.Structure, flags: SegFlags.RoofBeacon});
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: H * 0.85,
+    w: 3,
+    d: 3,
+    h: H * 0.15,
+    shape: Shape.Cylinder,
+    taper: 0.2,
+    style: Style.Structure,
+    flags: SegFlags.RoofBeacon,
+  });
   ctx.roofs.push([cx, H * 0.6 + base * 0.2, cz, base * 0.4]);
 }
 
@@ -354,7 +482,19 @@ export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
   let dd = d * 0.96;
   for (let t = 0; t < tiers; t++) {
     const h = (H - 30) / tiers;
-    seg(ctx, {x: cx, z: cz, y, w: ww, d: dd, h, style: Style.Residential, colorA, colorB, floorH: 3.0, flags: SegFlags.FloorBands});
+    seg(ctx, {
+      x: cx,
+      z: cz,
+      y,
+      w: ww,
+      d: dd,
+      h,
+      style: Style.Residential,
+      colorA,
+      colorB,
+      floorH: 3.0,
+      flags: SegFlags.FloorBands,
+    });
     if (t === 0) addSlots(ctx, cx, cz, ww, dd, y, y + h);
     y += h;
     ww *= 0.85;
@@ -406,7 +546,17 @@ export function pyramid(ctx: BuildCtx, lot: Lot, H: number) {
       flags: SegFlags.FloorBands,
     });
   }
-  seg(ctx, {x: cx, z: cz, y: H, w: w0 * 0.08, d: w0 * 0.08, h: H * 0.05, taper: 0.1, style: Style.NeonRing, colorB});
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: H,
+    w: w0 * 0.08,
+    d: w0 * 0.08,
+    h: H * 0.05,
+    taper: 0.1,
+    style: Style.NeonRing,
+    colorB,
+  });
   addSlots(ctx, cx, cz, w0, w0, 10, H * 0.25);
   ctx.roofs.push([cx, H, cz, w0 * 0.1]);
 }
@@ -425,8 +575,21 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
   let first = true;
   while (y < H) {
     const h = Math.min(H - y, r.range(15, 60));
-    const style = r.chance(0.75) ? Style.Slum : r.pick([Style.Residential, Style.MetalPanel, Style.LedFacade]);
-    seg(ctx, {x, z, y, w, d, h, style, colorA: tint(r), colorB, floorH: r.range(2.8, 3.3)});
+    const style = r.chance(0.75)
+      ? Style.Slum
+      : r.pick([Style.Residential, Style.MetalPanel, Style.LedFacade]);
+    seg(ctx, {
+      x,
+      z,
+      y,
+      w,
+      d,
+      h,
+      style,
+      colorA: tint(r),
+      colorB,
+      floorH: r.range(2.8, 3.3),
+    });
     if (first) {
       addSlots(ctx, x, z, w, d, 3, Math.min(h, 40));
       first = false;
@@ -444,7 +607,16 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
   }
   ctx.roofs.push([x, y, z, Math.min(w, d)]);
   if (r.chance(0.3)) {
-    seg(ctx, {x, z, y, w: 1.2, d: 1.2, h: r.range(10, 30), style: Style.Structure, flags: SegFlags.RoofBeacon});
+    seg(ctx, {
+      x,
+      z,
+      y,
+      w: 1.2,
+      d: 1.2,
+      h: r.range(10, 30),
+      style: Style.Structure,
+      flags: SegFlags.RoofBeacon,
+    });
   }
 }
 
@@ -545,8 +717,24 @@ export function ledSlab(ctx: BuildCtx, lot: Lot, H: number) {
   const cz = (lot.z0 + lot.z1) / 2;
   const w = (lot.x1 - lot.x0) * 0.9;
   const d = (lot.z1 - lot.z0) * 0.9;
-  const shape = r.chance(0.3) ? Shape.Oct : r.chance(0.2) ? Shape.Hex : Shape.Box;
-  seg(ctx, {x: cx, z: cz, y: ph, w, d, h: H - ph, shape, style: Style.LedFacade, colorB: neon(r), colorA: neon(r), floorH: 3.5});
+  const shape = r.chance(0.3)
+    ? Shape.Oct
+    : r.chance(0.2)
+      ? Shape.Hex
+      : Shape.Box;
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: ph,
+    w,
+    d,
+    h: H - ph,
+    shape,
+    style: Style.LedFacade,
+    colorB: neon(r),
+    colorA: neon(r),
+    floorH: 3.5,
+  });
   addSlots(ctx, cx, cz, w, d, ph, H);
   crown(ctx, cx, cz, H, w * 0.8, d * 0.8, Style.MetalPanel);
 }
@@ -563,7 +751,18 @@ export function wedgeTower(ctx: BuildCtx, lot: Lot, H: number, style: Style) {
   const body = (H - ph) * 0.8;
   const colorA = tint(r);
   const colorB = neon(r);
-  seg(ctx, {x: cx, z: cz, y: ph, w, d, h: body, style, colorA, colorB, flags: SegFlags.EdgeGlow});
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y: ph,
+    w,
+    d,
+    h: body,
+    style,
+    colorA,
+    colorB,
+    flags: SegFlags.EdgeGlow,
+  });
   seg(ctx, {
     x: cx,
     z: cz,

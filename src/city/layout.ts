@@ -33,7 +33,9 @@ function gridNoise(x: number, z: number, seed: number): number {
   const b = h(xi + 1, zi);
   const c = h(xi, zi + 1);
   const d = h(xi + 1, zi + 1);
-  return a + (b - a) * s(fx) + (c - a) * s(fz) + (a - b - c + d) * s(fx) * s(fz);
+  return (
+    a + (b - a) * s(fx) + (c - a) * s(fz) + (a - b - c + d) * s(fx) * s(fz)
+  );
 }
 
 export interface SuperblockInfo {
@@ -42,7 +44,11 @@ export interface SuperblockInfo {
   heightScale: number;
 }
 
-export function superblockInfo(i: number, j: number, seed: number): SuperblockInfo {
+export function superblockInfo(
+  i: number,
+  j: number,
+  seed: number,
+): SuperblockInfo {
   const cx = (i + 0.5) * SUPER;
   const cz = (j + 0.5) * SUPER;
   const r = Math.hypot(cx, cz) / CITY_HALF_SIZE;
@@ -56,7 +62,10 @@ export function superblockInfo(i: number, j: number, seed: number): SuperblockIn
   ];
   let hub = 0;
   for (const [hx, hz] of hubs) {
-    hub = Math.max(hub, Math.exp(-((cx - hx) ** 2 + (cz - hz) ** 2) / (2 * (1100 ** 2))));
+    hub = Math.max(
+      hub,
+      Math.exp(-((cx - hx) ** 2 + (cz - hz) ** 2) / (2 * 1100 ** 2)),
+    );
   }
   const heightScale = 0.55 + 0.9 * hub + 0.35 * n2 - 0.25 * r;
   let district: District;

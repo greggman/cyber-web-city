@@ -40,17 +40,33 @@ export interface CarPose {
 /** Centripetal Catmull-Rom on 4 points. */
 function catmull(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number): Vec3 {
   const alpha = 0.5;
-  const tj = (ti: number, a: Vec3, b: Vec3) => ti + Math.pow(Math.max(length(sub(b, a)), 1e-4), alpha);
+  const tj = (ti: number, a: Vec3, b: Vec3) =>
+    ti + Math.pow(Math.max(length(sub(b, a)), 1e-4), alpha);
   const t0 = 0;
   const t1 = tj(t0, p0, p1);
   const t2 = tj(t1, p1, p2);
   const t3 = tj(t2, p2, p3);
   const u = lerp(t1, t2, t);
-  const A1 = add(scale(p0, (t1 - u) / (t1 - t0)), scale(p1, (u - t0) / (t1 - t0)));
-  const A2 = add(scale(p1, (t2 - u) / (t2 - t1)), scale(p2, (u - t1) / (t2 - t1)));
-  const A3 = add(scale(p2, (t3 - u) / (t3 - t2)), scale(p3, (u - t2) / (t3 - t2)));
-  const B1 = add(scale(A1, (t2 - u) / (t2 - t0)), scale(A2, (u - t0) / (t2 - t0)));
-  const B2 = add(scale(A2, (t3 - u) / (t3 - t1)), scale(A3, (u - t1) / (t3 - t1)));
+  const A1 = add(
+    scale(p0, (t1 - u) / (t1 - t0)),
+    scale(p1, (u - t0) / (t1 - t0)),
+  );
+  const A2 = add(
+    scale(p1, (t2 - u) / (t2 - t1)),
+    scale(p2, (u - t1) / (t2 - t1)),
+  );
+  const A3 = add(
+    scale(p2, (t3 - u) / (t3 - t2)),
+    scale(p3, (u - t2) / (t3 - t2)),
+  );
+  const B1 = add(
+    scale(A1, (t2 - u) / (t2 - t0)),
+    scale(A2, (u - t0) / (t2 - t0)),
+  );
+  const B2 = add(
+    scale(A2, (t3 - u) / (t3 - t1)),
+    scale(A3, (u - t1) / (t3 - t1)),
+  );
   return add(scale(B1, (t2 - u) / (t2 - t1)), scale(B2, (u - t1) / (t2 - t1)));
 }
 
@@ -94,7 +110,10 @@ export class FlightPath {
       for (const o of obstacles) {
         if (o.x1 < minX || o.x0 > maxX || o.z1 < minZ || o.z0 > maxZ) continue;
         if (target > o.y0 - 30 && target < o.y1 + 30) {
-          target = o.y0 > 200 ? Math.min(target, o.y0 - 40) : Math.max(target, o.y1 + 40);
+          target =
+            o.y0 > 200
+              ? Math.min(target, o.y0 - 40)
+              : Math.max(target, o.y1 + 40);
         }
       }
       // Lateral offset within the lane.
@@ -107,7 +126,12 @@ export class FlightPath {
         const f = s / steps;
         const dist = corner + f * (legLen - 2 * corner);
         const y = lerp(alt, target, f * f * (3 - 2 * f));
-        pts.push({p: add(add([start[0], y, start[2]], scale(d3, dist)), scale(perp, side))});
+        pts.push({
+          p: add(
+            add([start[0], y, start[2]], scale(d3, dist)),
+            scale(perp, side),
+          ),
+        });
       }
       alt = target;
       a = na;
@@ -128,7 +152,9 @@ export class FlightPath {
     }
     this.cum = [0];
     for (let i = 1; i < this.samples.length; i++) {
-      this.cum.push(this.cum[i - 1] + length(sub(this.samples[i], this.samples[i - 1])));
+      this.cum.push(
+        this.cum[i - 1] + length(sub(this.samples[i], this.samples[i - 1])),
+      );
     }
     this.totalLength = this.cum[this.cum.length - 1];
     // Integrate the speed profile into a time -> distance table.
@@ -138,7 +164,8 @@ export class FlightPath {
     while (s < this.totalLength - 200) {
       // Look ahead for curvature.
       let k = 0;
-      for (const ahead of [10, 30, 60]) k = Math.max(k, this.curvature(s + ahead));
+      for (const ahead of [10, 30, 60])
+        k = Math.max(k, this.curvature(s + ahead));
       const target = lerp(CRUISE, TURN_SPEED, Math.min(1, k * 25));
       v += (target - v) * Math.min(1, TABLE_DT * 0.8);
       s += v * TABLE_DT;
@@ -203,8 +230,12 @@ export class FlightPath {
     let pos = this.pointAt(s);
     const fwd = this.tangentAt(s + 3);
     // Bank into turns: lateral acceleration v^2 * k.
-    const k = (this.signedCurvature(s + 4) + this.signedCurvature(s + 10)) * 0.5;
-    const bank = Math.max(-0.6, Math.min(0.6, Math.atan((speed * speed * k) / 9.81) * 0.8));
+    const k =
+      (this.signedCurvature(s + 4) + this.signedCurvature(s + 10)) * 0.5;
+    const bank = Math.max(
+      -0.6,
+      Math.min(0.6, Math.atan((speed * speed * k) / 9.81) * 0.8),
+    );
     const flatRight = normalize(cross(fwd, [0, 1, 0]));
     let up = normalize(cross(flatRight, fwd));
     up = rotateAround(up, fwd, -bank);
@@ -229,12 +260,23 @@ export class ChaseCamera {
   distance = 11;
   height = 2.6;
 
-  update(pose: CarPose, time: number, dt: number): {eye: Vec3; target: Vec3; up: Vec3} {
+  update(
+    pose: CarPose,
+    time: number,
+    dt: number,
+  ): {eye: Vec3; target: Vec3; up: Vec3} {
     // Gentle orbit to show the car from changing angles.
     const swing = Math.sin(time * 0.07) * 0.35;
     const back = rotateAround(scale(pose.forward, -1), [0, 1, 0], swing);
-    const desiredEye = add(add(pose.position, scale(back, this.distance)), [0, this.height, 0]);
-    const desiredTarget = add(add(pose.position, scale(pose.forward, 6)), [0, 0.6, 0]);
+    const desiredEye = add(add(pose.position, scale(back, this.distance)), [
+      0,
+      this.height,
+      0,
+    ]);
+    const desiredTarget = add(
+      add(pose.position, scale(pose.forward, 6)),
+      [0, 0.6, 0],
+    );
     if (!this.pos || !this.target || Math.abs(time - this.lastTime) > 1) {
       this.pos = desiredEye;
       this.target = desiredTarget;
@@ -246,7 +288,9 @@ export class ChaseCamera {
     }
     this.lastTime = time;
     // Slight roll with the car's bank.
-    const up = normalize(add([0, 1, 0], scale(sub(pose.up, [0, dot(pose.up, [0, 1, 0]), 0]), 0.4)));
+    const up = normalize(
+      add([0, 1, 0], scale(sub(pose.up, [0, dot(pose.up, [0, 1, 0]), 0]), 0.4)),
+    );
     return {eye: this.pos, target: this.target, up};
   }
 }

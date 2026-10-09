@@ -3,7 +3,7 @@
 // URL params:
 //   seed=N        world seed
 //   t=SECONDS     start time along the flight path
-//   cam=chase|pov camera mode
+//   cam=chase|pov|skyline camera mode (skyline: high establishing shot)
 //   paused=1      freeze time (deterministic screenshots)
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
@@ -53,16 +53,18 @@ async function main() {
     debugView: Number(params.get('debug') ?? 0),
     quality: params.get('quality') === 'low' ? 0 : 1,
   };
-  let cameraMode = params.get('cam') === 'pov' ? 1 : 0;
+  const camParam = params.get('cam');
+  let cameraMode = camParam === 'pov' ? 1 : camParam === 'skyline' ? 2 : 0;
   let paused = params.get('paused') === '1';
   let showHud = params.get('hud') === '1';
   let time = Number(params.get('t') ?? 0);
 
   window.addEventListener('keydown', e => {
-    if (e.key === 'c' || e.key === 'C') cameraMode = 1 - cameraMode;
+    if (e.key === 'c' || e.key === 'C') cameraMode = (cameraMode + 1) % 3;
     else if (e.key === ' ') paused = !paused;
     else if (e.key === 'h' || e.key === 'H') showHud = !showHud;
-    else if (e.key >= '1' && e.key <= '5') time = [20, 95, 170, 260, 340][Number(e.key) - 1];
+    else if (e.key >= '1' && e.key <= '5')
+      time = [20, 95, 170, 260, 340][Number(e.key) - 1];
   });
 
   let last = performance.now();
@@ -84,15 +86,32 @@ async function main() {
     const pose = flight.pose(time);
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = cameraMode;
-    if (cameraMode === 0) {
+    if (cameraMode === 2) {
+      // Establishing shot: slowly orbit high above the car's area.
+      const a = time * 0.02;
+      const p = pose.position;
+      camera.camToWorld = lookAtCamera(
+        [p[0] + Math.cos(a) * 1600, 1150, p[2] + Math.sin(a) * 1600],
+        [p[0], 250, p[2]],
+      );
+      camera.fovY = (50 * Math.PI) / 180;
+    } else if (cameraMode === 0) {
       const c = chase.update(pose, time, Math.max(dt, 1 / 60));
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
       camera.fovY = (55 * Math.PI) / 180;
     } else {
       const eye = pose.position;
       camera.camToWorld = lookAtCamera(
-        [eye[0] + pose.up[0] * 1.2, eye[1] + pose.up[1] * 1.2, eye[2] + pose.up[2] * 1.2],
-        [eye[0] + pose.forward[0] * 50, eye[1] + pose.forward[1] * 50 - 3, eye[2] + pose.forward[2] * 50],
+        [
+          eye[0] + pose.up[0] * 1.2,
+          eye[1] + pose.up[1] * 1.2,
+          eye[2] + pose.up[2] * 1.2,
+        ],
+        [
+          eye[0] + pose.forward[0] * 50,
+          eye[1] + pose.forward[1] * 50 - 3,
+          eye[2] + pose.forward[2] * 50,
+        ],
         pose.up,
       );
       camera.fovY = (70 * Math.PI) / 180;

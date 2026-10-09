@@ -134,7 +134,9 @@ function sphere(name: string, seg: number, rings: number): MeshData {
         Math.sin(phi) * Math.sin(th),
       ];
       const a = th * 0.25;
-      row.push(b.vertex([n[0] * 0.5, 0.5 + n[1] * 0.5, n[2] * 0.5], n, [-a, -a]));
+      row.push(
+        b.vertex([n[0] * 0.5, 0.5 + n[1] * 0.5, n[2] * 0.5], n, [-a, -a]),
+      );
     }
     grid.push(row);
   }
