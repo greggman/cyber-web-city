@@ -24,6 +24,7 @@ import {Post, taaJitter} from './post';
 import {Ssr} from './ssr';
 import {GpuTimer, setActiveTimer, tw} from '../gpu/timer';
 import {HiZ} from './hiz';
+import {Volumetrics} from './volumetrics';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import compositeWgsl from '../shaders/composite.wgsl';
 import tonemapWgsl from '../shaders/tonemap.wgsl';
@@ -60,6 +61,8 @@ export class Renderer {
   readonly ssr: Ssr;
   readonly hiz: HiZ;
   readonly timer: GpuTimer;
+  readonly volume: Volumetrics;
+  private volSampler!: GPUSampler;
   lights!: LightClusters;
   readonly frameLayout: GPUBindGroupLayout;
   readonly sceneLayout: GPUBindGroupLayout;
@@ -95,6 +98,7 @@ export class Renderer {
     this.ssr = new Ssr(device);
     this.hiz = new HiZ(device);
     this.timer = new GpuTimer(device, gpu.hasTimestamps);
+    this.volume = new Volumetrics(device);
     this.frameLayout = bgl(device, 'frame/layout', [['vfc', 'uniform']]);
     this.sceneLayout = bgl(device, 'scene/layout', [
       ['vfc', 'uniform'],
@@ -105,6 +109,8 @@ export class Renderer {
     this.compositeLayout = bgl(device, 'composite/layout', [
       ['f', 'tex-float'],
       ['f', 'tex-depth'],
+      ['f', 'tex-float-3d'],
+      ['f', 'sampler'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
       ['f', 'tex-float'],
@@ -151,6 +157,7 @@ export class Renderer {
       this.post.init(this.frameLayout),
       this.ssr.init(this.frameLayout),
       this.hiz.init(),
+      this.volume.init(this.sceneLayout, 0.18),
     ]);
     this.compositePipeline = composite;
     this.tonemapPipeline = tonemap;
@@ -159,11 +166,19 @@ export class Renderer {
   private rebuildScreenBindGroups() {
     const device = this.gpu.device;
     const v = this.targets.views;
+    this.volSampler ??= device.createSampler({
+      label: 'composite/volumeSampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+      addressModeW: 'clamp-to-edge',
+    });
     this.compositeBindGroup = bindGroup(
       device,
       'composite',
       this.compositeLayout,
-      [v.color, v.depth],
+      [v.color, v.depth, this.volume.view, this.volSampler],
     );
     this.targetsVersion = this.targets.version;
     this.tonemapKey = '';
@@ -219,6 +234,7 @@ export class Renderer {
     for (const hook of this.preLightHooks) hook(encoder);
     this.lights.run(encoder);
     for (const hook of this.computeHooks) hook(encoder);
+    this.volume.run(encoder, this.sceneBindGroup);
 
     const v = this.targets.views;
     const depthPass = encoder.beginRenderPass({

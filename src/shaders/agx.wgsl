@@ -39,6 +39,23 @@ fn linear_to_srgb(c: vec3f) -> vec3f {
   return select(hi, lo, c <= vec3f(0.0031308));
 }
 
+// Hue-preserving variant: tone-map the max channel with the AgX curve and
+// scale the color by it, so saturated neon stays saturated; very bright
+// values roll off toward white smoothly.
+fn tonemap_hue(c: vec3f) -> vec3f {
+  let m = max(max(c.r, c.g), max(c.b, 1e-6));
+  let curve = agx_eotf(agx_punchy(agx(vec3f(m)))).r;
+  var o = c * (curve / m);
+  let over = saturate((m - 4.0) / 40.0);
+  o = mix(o, vec3f(max(max(o.r, o.g), o.b)), over * 0.6);
+  return o;
+}
+
 fn tonemap_agx(c: vec3f) -> vec3f {
-  return linear_to_srgb(saturate3(agx_eotf(agx_punchy(agx(c)))));
+  let a = agx_eotf(agx_punchy(agx(c)));
+  let h = tonemap_hue(c);
+  // Blend: AgX for natural skin/mid tones, hue-preserving for saturated
+  // emissive highlights.
+  let sat = (max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b)) / max(max(max(c.r, c.g), c.b), 1e-4);
+  return linear_to_srgb(saturate3(mix(a, h, 0.35 + 0.45 * sat)));
 }
