@@ -10,7 +10,7 @@ export const SPINNER_DRIVER_EYE: Vec3 = [-0.4, 1.4, 0.3];
 // Key stations along the car.
 const zN = -2.7; // nose
 const zC0 = -1.1; // cowl (windshield base)
-const zC1 = 1.15; // rear of canopy
+const zC1 = 1.75; // rear of canopy
 const zT = 2.62; // tail
 
 const keel = keyed([
@@ -47,9 +47,9 @@ const shoulderY = keyed([
   [-1.0, 1.1],
   [0.4, 1.12],
   [1.3, 1.2],
-  [2.0, 1.32],
-  [2.4, 1.34],
-  [2.7, 1.3],
+  [2.0, 1.31],
+  [2.3, 1.32],
+  [2.7, 1.24],
 ]);
 const ledge = keyed([
   [-2.8, 0.15],
@@ -80,7 +80,8 @@ const bubble = keyed([
   [-0.42, 0.45],
   [0.05, 0.6],
   [0.55, 0.61],
-  [0.93, 0.44],
+  [0.95, 0.52],
+  [1.35, 0.3],
   [zC1, 0],
 ]);
 // Height of the flare's lower lip, as a fraction keel -> shoulder.
@@ -510,22 +511,23 @@ function interior(parts: Part[]) {
     mirror: true,
     tessellation: {segmentsU: 4, segmentsV: 22},
   });
-  // Bulkhead behind the seats.
-  const bz = zC1 - 0.12;
+  // Bulkhead behind the seats and a parcel shelf under the fastback glass.
+  const bz = 1.0;
+  const shelfY = 1.02;
   parts.push({
     name: 'rear-bulkhead',
     surface: orient(
       loft(
         [
           NurbsCurve.fromPoints([
-            [edgeX(bz) - 0.12, FLOOR, bz + 0.08],
-            [0.36, FLOOR, bz + 0.08],
-            [0, FLOOR, bz + 0.08],
+            [edgeX(bz) - 0.08, FLOOR, bz + 0.06],
+            [0.36, FLOOR, bz + 0.06],
+            [0, FLOOR, bz + 0.06],
           ]),
           NurbsCurve.fromPoints([
-            [edgeX(bz) - 0.04, edgeY(bz) + 0.01, bz],
-            [0.4, edgeY(bz) + 0.03, bz],
-            [0, edgeY(bz) + 0.03, bz],
+            [edgeX(bz) - 0.07, shelfY, bz],
+            [0.4, shelfY, bz],
+            [0, shelfY, bz],
           ]),
         ],
         1,
@@ -534,6 +536,32 @@ function interior(parts: Part[]) {
     ),
     material: 'carbon',
     mirror: true,
+  });
+  const shelf = loft(
+    steps(bz, zC1 + 0.04, 6).map(z =>
+      NurbsCurve.fromPoints([
+        [edgeX(z) - 0.065, shelfY, z],
+        [0.5 * edgeX(z), shelfY, z],
+        [0, shelfY, z],
+      ]),
+    ),
+  );
+  parts.push({
+    name: 'parcel-shelf',
+    surface: orient(shelf, [0, 1, 0]),
+    material: 'carbon',
+    mirror: true,
+    tessellation: {segmentsU: 2, segmentsV: 12},
+  });
+  parts.push({
+    name: 'shelf-light',
+    surface: superBox([0, shelfY + 0.004, bz + 0.03], [0.6, 0.006, 0.012], 0.3, {
+      nu: 7,
+      nv: 9,
+    }),
+    material: 'emissive',
+    emissive: [0.3, 2.5, 3],
+    tessellation: {segmentsU: 6, segmentsV: 8},
   });
   // Door armrests with a pull handle.
   parts.push({
@@ -554,20 +582,6 @@ function interior(parts: Part[]) {
     color: LEATHER,
     mirror: true,
     tessellation: {segmentsU: 14, segmentsV: 16},
-  });
-  parts.push({
-    name: 'door-pull',
-    surface: pipe(
-      [
-        [edgeX(-0.35) - 0.07, 0.92, -0.35],
-        [edgeX(-0.2) - 0.11, 0.93, -0.2],
-        [edgeX(0.0) - 0.07, 0.92, 0.0],
-      ],
-      0.012,
-    ),
-    material: 'chrome',
-    mirror: true,
-    tessellation: {segmentsU: 8, segmentsV: 8},
   });
 
   // Dashboard: main slab plus a hooded binnacle in front of the driver.
@@ -635,12 +649,47 @@ function interior(parts: Part[]) {
   screen([-0.4, 1.0, -0.68], 0.3, 0.11, 1, [1, 1, 1], 'gauges');
   screen([0.02, 0.99, -0.72], 0.26, 0.15, 0, [1, 1, 1], 'nav');
   screen([0.44, 0.98, -0.74], 0.22, 0.12, 2, [1, 1, 1], 'comms');
-  screen([0.0, 0.8, -0.6], 0.18, 0.1, 1, [0.6, 0.8, 1], 'console-screen');
+  // Dash face: a thin cyan accent line, air vents and a row of switches.
+  const dashFaceZ = -0.92 + 0.26;
+  const db = (
+    name: string,
+    c: Vec3,
+    h: Vec3,
+    m: Partial<Part> & Pick<Part, 'material'>,
+    mirror = false,
+  ) =>
+    parts.push({
+      name,
+      surface: superBox(c, h, 0.3, {nu: 7, nv: 9}),
+      mirror,
+      tessellation: {segmentsU: 6, segmentsV: 8},
+      ...m,
+    });
+  db('dash-accent', [0, 0.79, dashFaceZ + 0.004], [0.74, 0.004, 0.004], {
+    material: 'emissive',
+    emissive: [0.3, 1.6, 2.4],
+  });
+  db('dash-vent', [0.66, 0.88, dashFaceZ + 0.002], [0.1, 0.028, 0.008], {
+    material: 'metal',
+    color: [0.02, 0.02, 0.022],
+  }, true);
+  for (let i = 0; i < 5; i++) {
+    db('switch', [0.12 + i * 0.05, 0.86, dashFaceZ + 0.006], [0.012, 0.008, 0.006], {
+      material: 'emissive',
+      emissive: i % 2 ? [3, 1.2, 0.2] : [0.3, 2, 2.5],
+    });
+  }
+  for (let i = 0; i < 3; i++) {
+    db('console-button', [-0.05 + i * 0.05, 0.805, -0.35], [0.014, 0.006, 0.014], {
+      material: 'emissive',
+      emissive: i === 1 ? [3, 0.4, 0.2] : [0.4, 2, 2.5],
+    });
+  }
 
   // Center console between the seats.
   parts.push({
     name: 'console',
-    surface: superBox([0, 0.66, -0.05], [0.12, 0.14, 0.55], 0.3, {
+    surface: superBox([0, 0.66, -0.1], [0.55, 0.14, 0.12], 0.3, {
       x: [0, 0, 1],
       y: [0, 1, 0],
       z: [-1, 0, 0],
@@ -710,7 +759,7 @@ function interior(parts: Part[]) {
   });
   parts.push({
     name: 'yoke-hub',
-    surface: superBox([-0.4, yy, yz], [0.07, 0.035, 0.03], 0.3, {
+    surface: superBox([-0.4, yy, yz], [0.045, 0.028, 0.025], 0.3, {
       nu: 9,
       nv: 13,
     }),
@@ -804,8 +853,8 @@ export function buildSpinner(): Model {
   const hullZ = [
     ...steps(zN, -2.4, 4),
     ...steps(-2.2, zC0, 4),
-    ...steps(-0.6, zC1, 5),
-    ...steps(1.6, zT, 6),
+    ...steps(-0.6, 1.2, 4),
+    ...steps(1.5, zT, 6),
   ];
   const hullTessV = 46;
   const upper = loft(hullZ.map(upperSection));
@@ -853,12 +902,14 @@ export function buildSpinner(): Model {
     color: PAINT,
     tessellation: panelTess,
   });
-  const canZ = steps(zC0, zC1, 14);
+  const canZ = steps(zC0, zC1, 19);
   const canopy = loft(canZ.map(z => topSection(z, bubble(z))));
   parts.push({
     name: 'canopy',
     surface: orient(canopy, [0, 1, 0]),
     material: 'glass',
+    // Slightly bright tint: a faint sheen so the bubble reads in flat light.
+    color: [16, 18, 21],
     doubleSided: true,
     tessellation: {segmentsU: 30, segmentsV: 32},
   });
@@ -1032,7 +1083,7 @@ export function buildSpinner(): Model {
   });
 
   // Roll hoop with the roof beacon.
-  const hoopZ = canZ[11];
+  const hoopZ = canZ[13];
   const hoopC = topSection(hoopZ, bubble(hoopZ));
   const hoopPts = offsetSection(hoopC, 0.03, 16, [0, 1.0, hoopZ]);
   parts.push({
@@ -1042,7 +1093,7 @@ export function buildSpinner(): Model {
     color: TRIM,
     tessellation: {segmentsU: 10, segmentsV: 48},
   });
-  const archZ = canZ[4];
+  const archZ = canZ[5];
   parts.push({
     name: 'canopy-arch',
     surface: pipe(
