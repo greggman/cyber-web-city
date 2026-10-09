@@ -28,7 +28,7 @@ jobs:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
       - run: npm run lint
       - run: npm run check
-      - run: npm run build
+      - run: npm run build:prod
       - run: npm run test:unit
       - uses: actions/upload-pages-artifact@v3
         with:

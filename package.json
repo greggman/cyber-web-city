@@ -4,6 +4,7 @@
   "description": "Blade Runner inspired flying car through a procedural cyberpunk megacity in raw WebGPU",
   "scripts": {
     "build": "node build.mjs",
+    "build:prod": "node build.mjs --production",
     "dev": "node build.mjs --watch --serve",
     "serve": "node server.mjs",
     "check": "tsc --noEmit -p .",
