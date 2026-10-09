@@ -253,29 +253,72 @@ export class FlightPath {
 }
 
 /** Smoothly follows the car from behind and above. */
+/** A chase-camera framing: offset in the car's horizontal frame. */
+interface Shot {
+  back: number; // meters behind (negative = in front)
+  side: number; // meters to the right
+  up: number;
+  lookAhead: number; // look-at point ahead of the car
+  fov: number; // degrees
+}
+
+// Cinematic framings cycled during the flight.
+const SHOTS: Shot[] = [
+  {back: 11, side: 0, up: 2.6, lookAhead: 6, fov: 55}, // classic chase
+  {back: 7, side: -2.5, up: -0.6, lookAhead: 10, fov: 62}, // low, close, looking up
+  {back: 22, side: 6, up: 9, lookAhead: 0, fov: 45}, // high wide
+  {back: 2, side: 9, up: 1.2, lookAhead: 2, fov: 50}, // side tracking
+  {back: -12, side: 4, up: 2.0, lookAhead: -2, fov: 48}, // front three-quarter, looking back
+];
+const SHOT_LEN = 22;
+const SHOT_BLEND = 4;
+
+/** Blended framing for a time (deterministic, so screenshots repeat). */
+export function shotAt(time: number, fixed?: number): Shot {
+  if (fixed !== undefined) return SHOTS[fixed % SHOTS.length];
+  const k = Math.floor(time / SHOT_LEN);
+  const f = time / SHOT_LEN - k;
+  const a = SHOTS[k % SHOTS.length];
+  const b = SHOTS[(k + 1) % SHOTS.length];
+  const t = Math.max(0, (f * SHOT_LEN - (SHOT_LEN - SHOT_BLEND)) / SHOT_BLEND);
+  const e = t * t * (3 - 2 * t);
+  const mix = (x: number, y: number) => x + (y - x) * e;
+  return {
+    back: mix(a.back, b.back),
+    side: mix(a.side, b.side),
+    up: mix(a.up, b.up),
+    lookAhead: mix(a.lookAhead, b.lookAhead),
+    fov: mix(a.fov, b.fov),
+  };
+}
+
+/** Smoothly follows the car with cinematic framings. */
 export class ChaseCamera {
   private pos: Vec3 | null = null;
   private target: Vec3 | null = null;
   private lastTime = -1;
-  distance = 11;
-  height = 2.6;
+  /** Force one framing (keys 1-5); undefined cycles automatically. */
+  fixedShot: number | undefined = undefined;
+  fov = 55;
 
   update(
     pose: CarPose,
     time: number,
     dt: number,
   ): {eye: Vec3; target: Vec3; up: Vec3} {
-    // Gentle orbit to show the car from changing angles.
-    const swing = Math.sin(time * 0.07) * 0.35;
-    const back = rotateAround(scale(pose.forward, -1), [0, 1, 0], swing);
-    const desiredEye = add(add(pose.position, scale(back, this.distance)), [
-      0,
-      this.height,
-      0,
-    ]);
+    const shot = shotAt(time, this.fixedShot);
+    this.fov = shot.fov;
+    const fwd = normalize([pose.forward[0], 0, pose.forward[2]]);
+    const right: Vec3 = [-fwd[2], 0, fwd[0]];
+    const sway = Math.sin(time * 0.07) * 0.08;
+    const back = rotateAround(scale(fwd, -1), [0, 1, 0], sway);
+    const desiredEye = add(
+      add(add(pose.position, scale(back, shot.back)), scale(right, shot.side)),
+      [0, shot.up, 0],
+    );
     const desiredTarget = add(
-      add(pose.position, scale(pose.forward, 6)),
-      [0, 0.6, 0],
+      add(pose.position, scale(pose.forward, shot.lookAhead)),
+      [0, 0.5, 0],
     );
     if (!this.pos || !this.target || Math.abs(time - this.lastTime) > 1) {
       this.pos = desiredEye;

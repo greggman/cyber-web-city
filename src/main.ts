@@ -24,6 +24,7 @@ import {packLights, LIGHT_FLOATS} from './render/lightClusters';
 import {DYNAMIC_LIGHTS} from './render/renderer';
 import {Rain} from './render/rain';
 import {Canopy} from './render/canopy';
+import {Ambience} from './audio/ambience';
 import {generateTraffic} from './city/traffic';
 import {Traffic} from './render/traffic';
 
@@ -147,6 +148,7 @@ async function main() {
   );
   const camera = new Camera();
   const chase = new ChaseCamera();
+  if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
   const settings: RenderSettings = {
     fogColor: [0.085, 0.045, 0.06],
     fogDensity: 0.0009,
@@ -173,7 +175,18 @@ async function main() {
   let showHud = params.get('hud') === '1';
   let time = Number(params.get('t') ?? 0);
 
+  const audio = new Ambience();
+  const startAudio = () => {
+    if (params.get('mute') !== '1') audio.start();
+  };
+  window.addEventListener('pointerdown', startAudio);
   window.addEventListener('keydown', e => {
+    if (e.key === 'm' || e.key === 'M') {
+      audio.start();
+      audio.toggleMute();
+      return;
+    }
+    startAudio();
     if (e.key === 'c' || e.key === 'C') cameraMode = (cameraMode + 1) % 3;
     else if (e.key === ' ') paused = !paused;
     else if (e.key === 'h' || e.key === 'H') showHud = !showHud;
@@ -239,7 +252,7 @@ async function main() {
     } else if (cameraMode === 0) {
       const c = chase.update(pose, time, Math.max(dt, 1 / 60));
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
-      camera.fovY = (55 * Math.PI) / 180;
+      camera.fovY = (chase.fov * Math.PI) / 180;
     } else {
       // Cockpit: the driver's eye, looking slightly down over the dash.
       const m = pose.matrix;
@@ -268,6 +281,7 @@ async function main() {
       speed: pose.speed,
       pov: cameraMode === 1,
     });
+    audio.update(time, pose.speed);
     rain.setFrame(camera.position, camera.forward, [
       pose.forward[0] * pose.speed,
       pose.forward[1] * pose.speed,
