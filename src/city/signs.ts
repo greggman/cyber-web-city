@@ -204,6 +204,64 @@ export function generateSigns(
       lights.push({pos, radius: radius * 1.15, color});
     }
   }
+  // Street-level projecting signs (ART_BIBLE.md 7): small blades above
+  // the shop canopies, 3 sizes, staggered so neighbours never share a
+  // height. 3-5 per 30 m in Market, x0.7 in Slum, half in Core; one shared
+  // light per facade so their glow rakes across the wet walls.
+  const srng = new Rng(seed, 4343);
+  const streetRate = [0.5, 0.35, 0.7, 1, 0.2];
+  const sizes = [1.2, 2.0, 3.0];
+  for (const slot of slots) {
+    if (slot.y > 6 || slot.width < 6) continue;
+    const n = Math.round(
+      (slot.width / 30) * srng.range(3, 5) * streetRate[slot.district],
+    );
+    if (n <= 0) continue;
+    const right: [number, number, number] = [slot.nz, 0, -slot.nx];
+    const normal: [number, number, number] = [slot.nx, 0, slot.nz];
+    let lastLevel = -1;
+    let first: [number, number, number] | null = null;
+    for (let k = 0; k < n; k++) {
+      let level = srng.int(0, 3);
+      if (level === lastLevel) level = (level + 1) % 3;
+      lastLevel = level;
+      const h = sizes[srng.int(0, 3)];
+      const w = srng.range(0.8, 1.4);
+      const along =
+        ((k + 0.5) / n - 0.5) * (slot.width - 3) + srng.range(-0.8, 0.8);
+      const yc = 5.2 + level * 1.4 + h / 2;
+      const out = w / 2 + 0.3;
+      const col = slotPalette(srng, slot);
+      const col2 = slotPalette(srng, slot);
+      first ??= col;
+      signs.push({
+        pos: [
+          slot.x + right[0] * along + normal[0] * out,
+          yc,
+          slot.z + right[2] * along + normal[2] * out,
+        ],
+        kind: SignKind.Blade,
+        right: normal,
+        normal: [-right[0], 0, -right[2]],
+        width: w,
+        height: h,
+        colorA: packColor(col[0], col[1], col[2]),
+        colorB: packColor(col2[0], col2[1], col2[2]),
+        glyphs: brandGlyphs(srng, true),
+        lightbox: srng.chance(0.4),
+        thickness: 0.4,
+      });
+    }
+    if (first) {
+      const i = 2.2 * Math.min(2, n / 3);
+      lights.push({
+        pos: [slot.x + normal[0] * 3, 7, slot.z + normal[2] * 3],
+        radius: 10 + slot.width * 0.3,
+        color: [first[0] * i, first[1] * i, first[2] * i],
+      });
+    }
+  }
+
   // Warm street lamps along the avenues (light the canyon floors).
   const N = CITY_RADIUS_SUPERS;
   for (let a = -N; a <= N; a++) {

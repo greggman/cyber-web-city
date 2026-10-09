@@ -374,7 +374,7 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     if (reveal == 0.0) {
       // Unlit rooms aren't black holes: the city glow and the street below
       // faintly light the ceiling and furniture.
-      let dimRoom = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, vec3f(0.05, 0.04, 0.06) * frame.cityGlow, kind);
+      let dimRoom = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, vec3f(0.05, 0.04, 0.06) * frame.cityGlow * select(1.0, 0.35, kind == ST_GLASS), kind);
       em = mix(dimRoom, inner * pane, lit);
     }
     // Unlit windows: occasional TV flicker.
