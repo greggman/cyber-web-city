@@ -34,6 +34,10 @@ export const DETAIL_TYPES = [
   {name: 'vent', cap: 50000},
   {name: 'canopy', cap: 20000},
   {name: 'module', cap: 30000},
+  {name: 'hvac', cap: 30000},
+  {name: 'tank', cap: 12000},
+  {name: 'dish', cap: 8000},
+  {name: 'ventstack', cap: 20000},
 ] as const;
 
 export interface DetailMesh {
@@ -190,6 +194,56 @@ class B {
     for (let k = 0; k < sides; k++) this.i.push(c, ring[k], ring[k + 1]);
   }
 
+  /** Cylinder along z (roof items are modeled z-up). */
+  cylZ(
+    cx: number,
+    cy: number,
+    r: number,
+    z0: number,
+    z1: number,
+    sides: number,
+    part: Part,
+  ) {
+    for (let k = 0; k < sides; k++) {
+      const a0 = (k / sides) * Math.PI * 2;
+      const a1 = ((k + 1) / sides) * Math.PI * 2;
+      const p = (a: number, z: number) => [
+        cx + Math.cos(a) * r,
+        cy + Math.sin(a) * r,
+        z,
+      ];
+      const n0 = [Math.cos(a0), Math.sin(a0), 0];
+      const n1 = [Math.cos(a1), Math.sin(a1), 0];
+      const i0 = this.vert(p(a0, z0), n0, [k / sides, z0], part);
+      const i1 = this.vert(p(a1, z0), n1, [(k + 1) / sides, z0], part);
+      const i2 = this.vert(p(a1, z1), n1, [(k + 1) / sides, z1], part);
+      const i3 = this.vert(p(a0, z1), n0, [k / sides, z1], part);
+      this.i.push(i0, i1, i2, i0, i2, i3);
+    }
+  }
+
+  /** Disc with an arbitrary facing (unit normal n, in-plane axes u, v). */
+  disc(
+    c: number[],
+    n: number[],
+    u: number[],
+    v: number[],
+    r: number,
+    sides: number,
+    part: Part,
+  ) {
+    const ic = this.vert(c, n, [0.5, 0.5], part);
+    const ring: number[] = [];
+    for (let k = 0; k <= sides; k++) {
+      const a = (k / sides) * Math.PI * 2;
+      const p = [0, 1, 2].map(
+        i => c[i] + (u[i] * Math.cos(a) + v[i] * Math.sin(a)) * r,
+      );
+      ring.push(this.vert(p, n, [0, 0], part));
+    }
+    for (let k = 0; k < sides; k++) this.i.push(ic, ring[k], ring[k + 1]);
+  }
+
   mesh(): DetailMesh {
     return {vertices: this.v, indices: this.i};
   }
@@ -330,6 +384,71 @@ function moduleBox(): DetailMesh {
   return b.mesh();
 }
 
+// ---- Roof items (z up; x/y footprint).
+function hvac(): DetailMesh {
+  // Unit footprint/height (scaled); two big fans on top.
+  const b = new B();
+  b.box(-0.5, 0.5, -0.5, 0.5, 0, 0.92, Part.Body);
+  b.box(-0.47, 0.47, -0.47, 0.47, 0.92, 1, Part.Dark);
+  for (const x of [-0.24, 0.24]) {
+    b.discZ(x, 0, 1.002, 0.2, 16, Part.Dark);
+    b.discZ(x, 0, 1.004, 0.05, 8, Part.Body);
+    b.box(x - 0.2, x + 0.2, -0.012, 0.012, 1.0, 1.006, Part.Body);
+  }
+  b.box(-0.5, -0.46, -0.3, 0.3, 0.2, 0.8, Part.Dark); // side grille
+  b.box(0.42, 0.47, 0.3, 0.38, 0.5, 0.58, Part.Emissive); // status light
+  return b.mesh();
+}
+
+function tank(): DetailMesh {
+  // Water tank on legs (unit ~1 m scale, scaled uniformly).
+  const b = new B();
+  for (const [x, y] of [
+    [-0.35, -0.35],
+    [0.35, -0.35],
+    [-0.35, 0.35],
+    [0.35, 0.35],
+  ]) {
+    b.box(x - 0.04, x + 0.04, y - 0.04, y + 0.04, 0, 0.4, Part.Dark);
+  }
+  b.box(-0.42, 0.42, -0.42, 0.42, 0.36, 0.42, Part.Dark);
+  b.cylZ(0, 0, 0.45, 0.42, 1.15, 16, Part.Body);
+  for (let k = 0; k < 3; k++)
+    b.cylZ(0, 0, 0.465, 0.55 + k * 0.2, 0.57 + k * 0.2, 16, Part.Dark);
+  b.cylZ(0, 0, 0.3, 1.15, 1.25, 12, Part.Body);
+  b.discZ(0, 0, 1.25, 0.3, 12, Part.Body);
+  return b.mesh();
+}
+
+function dish(): DetailMesh {
+  const b = new B();
+  b.cylZ(0, 0, 0.05, 0, 0.75, 6, Part.Dark);
+  const n = [0, -Math.SQRT1_2, Math.SQRT1_2];
+  const c = [0, -0.08, 0.95];
+  b.disc(c, n, [1, 0, 0], [0, Math.SQRT1_2, Math.SQRT1_2], 0.45, 20, Part.Body);
+  b.disc(
+    c,
+    [0, -n[1], -n[2]],
+    [1, 0, 0],
+    [0, -Math.SQRT1_2, -Math.SQRT1_2],
+    0.45,
+    20,
+    Part.Dark,
+  );
+  b.box(-0.02, 0.02, -0.4, -0.08, 0.95, 1.05, Part.Dark); // feed arm
+  return b.mesh();
+}
+
+function ventStack(): DetailMesh {
+  // Exhaust stack with a mushroom cap.
+  const b = new B();
+  b.cylZ(0, 0, 0.22, 0, 1, 10, Part.Body);
+  b.cylZ(0, 0, 0.4, 1.06, 1.14, 12, Part.Dark);
+  b.discZ(0, 0, 1.14, 0.4, 12, Part.Dark);
+  b.cylZ(0, 0, 0.26, 0.3, 0.36, 10, Part.Dark);
+  return b.mesh();
+}
+
 export function buildDetailMeshes(): DetailMesh[] {
   const ledgeMesh = ledge();
   const finMesh = fin();
@@ -344,5 +463,9 @@ export function buildDetailMeshes(): DetailMesh[] {
     vent(),
     canopy(),
     moduleBox(),
+    hvac(),
+    tank(),
+    dish(),
+    ventStack(),
   ];
 }

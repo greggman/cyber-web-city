@@ -26,6 +26,8 @@ export const enum SegFlags {
   RoofBeacon = 4, // blinking red aircraft lights on the roof
   NoWindows = 8,
   TopGlow = 16, // glowing crown/top edge
+  RoofExposed = 32, // roof (mostly) open: rooftop kitbash goes here
+  RoofRing = 64, // the roof's center is built on: kitbash only around the edge
 }
 
 export interface Segment {
@@ -104,6 +106,10 @@ export class SegmentList {
     this.f32[o] = x;
     this.f32[o + 2] = z;
     this.f32[o + 3] = rotY;
+  }
+
+  setFlags(i: number, flags: number) {
+    this.u32[i * 16 + 14] = flags;
   }
 
   setSize(i: number, sx: number, sz: number) {

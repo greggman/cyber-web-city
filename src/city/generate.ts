@@ -542,6 +542,73 @@ export function generateCity(seed: number): CityData {
     }
   }
 
+  // Mark exposed roofs (no other segment sits on top) for rooftop kitbash.
+  {
+    const CELL = 100;
+    const grid = new Map<number, number[]>();
+    const key = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096);
+    for (let i = 0; i < segments.count; i++) {
+      const g = segments.get(i);
+      if (g.style === Style.Ground) continue;
+      const r = Math.max(g.sx, g.sz) * 0.75 * Math.max(1, g.taper);
+      for (
+        let cx = Math.floor((g.x - r) / CELL);
+        cx <= Math.floor((g.x + r) / CELL);
+        cx++
+      ) {
+        for (
+          let cz = Math.floor((g.z - r) / CELL);
+          cz <= Math.floor((g.z + r) / CELL);
+          cz++
+        ) {
+          const k = key(cx, cz);
+          let a = grid.get(k);
+          if (!a) grid.set(k, (a = []));
+          a.push(i);
+        }
+      }
+    }
+    for (let i = 0; i < segments.count; i++) {
+      const g = segments.get(i);
+      if (
+        g.style === Style.Ground ||
+        g.shape > 4 ||
+        g.sx * g.sz * g.taper * g.taper < 150
+      )
+        continue;
+      const top = g.y + g.sy;
+      const others =
+        grid.get(key(Math.floor(g.x / CELL), Math.floor(g.z / CELL))) ?? [];
+      const coveredAt = (px: number, pz: number) => {
+        for (const j of others) {
+          if (j === i) continue;
+          const o = segments.get(j);
+          if (o.y > top + 0.5 || o.y + o.sy < top + 0.5) continue;
+          if (
+            Math.abs(o.x - px) < o.sx * 0.5 &&
+            Math.abs(o.z - pz) < o.sz * 0.5
+          )
+            return true;
+        }
+        return false;
+      };
+      const q = 0.33 * g.taper;
+      let quads = 0;
+      for (const [sx, sz] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ]) {
+        if (!coveredAt(g.x + sx * q * g.sx, g.z + sz * q * g.sz)) quads++;
+      }
+      if (quads >= 3) {
+        const ring = coveredAt(g.x, g.z) ? SegFlags.RoofRing : 0;
+        segments.setFlags(i, g.flags | SegFlags.RoofExposed | ring);
+      }
+    }
+  }
+
   // Bend the grid-space city into world space (see warp.ts). Obstacles stay
   // in grid space: the flight path is planned there and warped afterwards.
   // Avenue corridors (flight path and traffic) must stay clear: after

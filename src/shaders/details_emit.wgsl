@@ -20,6 +20,11 @@ const T_CAGE = 6u;
 const T_VENT = 7u;
 const T_CANOPY = 8u;
 const T_MODULE = 9u;
+const T_HVAC = 10u;
+const T_TANK = 11u;
+const T_DISH = 12u;
+const T_VENTSTACK = 13u;
+const NT = 14u;
 
 // Styles (src/city/segments.ts).
 const ST_GLASS = 0u;
@@ -29,6 +34,8 @@ const ST_SLUM = 4u;
 const ST_MONOLITH = 5u;
 const ST_PODIUM = 6u;
 const F_NOWIN = 8u;
+const F_ROOF = 32u;
+const ST_LED = 3u;
 
 // Instance flags.
 const IF_LIT = 1u; // emissive parts on
@@ -59,15 +66,17 @@ struct DispatchArgs { x: atomic<u32>, y: u32, z: u32 };
 @group(0) @binding(1) var<storage, read> segments: array<Segment>;
 @group(0) @binding(2) var<storage, read_write> near: array<u32>;
 @group(0) @binding(3) var<storage, read_write> dispatch: DispatchArgs;
-@group(0) @binding(4) var<storage, read_write> draws: array<DrawArgs, 10>;
+@group(0) @binding(4) var<storage, read_write> draws: array<DrawArgs, 14>;
 @group(0) @binding(5) var<storage, read_write> instances: array<Inst>;
-@group(0) @binding(6) var<storage, read> types: array<TypeInfo, 10>;
+@group(0) @binding(6) var<storage, read> types: array<TypeInfo, 14>;
 @group(0) @binding(7) var hiz: texture_2d<f32>;
 
 // Max distance (m) at which each type is generated (scaled by quality).
 fn type_range(t: u32) -> f32 {
   switch t {
     case T_MODULE: { return 800.0; }
+    case T_HVAC, T_TANK: { return 700.0; }
+    case T_DISH, T_VENTSTACK: { return 450.0; }
     case T_LEDGE, T_FIN, T_PIPE: { return 650.0; }
     case T_CANOPY, T_BALCONY, T_CAGE, T_AWNING: { return 360.0; }
     default: { return 240.0; }
@@ -126,12 +135,18 @@ fn has_details(s: Segment) -> bool {
     s.style == ST_SLUM || s.style == ST_MONOLITH || s.style == ST_PODIUM;
 }
 
+// Exposed roofs of any building piece get rooftop kitbash.
+fn has_roof(s: Segment) -> bool {
+  return (s.flags & F_ROOF) != 0u && s.shape <= 4u && s.style != 8u && s.style != 10u &&
+    s.size.x * s.size.z * s.taper * s.taper > 150.0;
+}
+
 @compute @workgroup_size(64)
 fn cs_select(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= P.segCount) { return; }
   let s = segments[i];
-  if (!has_details(s)) { return; }
+  if (!has_details(s) && !has_roof(s)) { return; }
   let grow = max(1.0, s.taper);
   let ext = vec3f(0.5 * length(s.size.xz) * grow + 2.0, s.size.y * 0.5, 0.5 * length(s.size.xz) * grow + 2.0);
   let c = s.pos + vec3f(0.0, s.size.y * 0.5, 0.0);
@@ -287,6 +302,50 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
   let concrete = mix(vec3f(0.2, 0.19, 0.18), vec3f(0.27, 0.24, 0.2), u2f(bodyHash));
   let darkMetal = vec3f(0.07, 0.075, 0.085);
   let cellRange = 360.0 * P.distScale;
+
+  // ---- Rooftop kitbash on exposed roofs: HVAC units, water tanks, dishes,
+  // vent stacks on a jittered grid.
+  if (has_roof(s)) {
+    let tp = s.taper;
+    let nx = max(i32(s.size.x * tp / 8.0), 1);
+    let nz = max(i32(s.size.z * tp / 8.0), 1);
+    let up = vec3f(0.0, 1.0, 0.0);
+    for (var k = i32(li); k < nx * nz; k += 64) {
+      let ix = k % nx;
+      let iz = k / nx;
+      let h = hash3_u(s.seed ^ 0x6a09e667u, bitcast<u32>(ix), bitcast<u32>(iz));
+      let pick = u2f(h);
+      if (pick > 0.62) { continue; }
+      let lu = ((f32(ix) + 0.5) / f32(nx) - 0.5) * 0.9 + (u2f(h >> 4u) - 0.5) * 0.4 / f32(nx);
+      let lv = ((f32(iz) + 0.5) / f32(nz) - 0.5) * 0.9 + (u2f(h >> 8u) - 0.5) * 0.4 / f32(nz);
+      // Center built on (penthouse/crown): only around the edge.
+      if ((s.flags & 64u) != 0u && max(abs(lu), abs(lv)) < 0.3) { continue; }
+      // Round roofs: keep inside the circle.
+      if (s.shape >= 2u && length(vec2f(lu, lv)) > 0.42) { continue; }
+      let x = seg_transform(s, vec3f(lu, 1.0, lv), up);
+      let ang = s.rotY + s.twist + f32((h >> 12u) % 4u) * PI * 0.5;
+      var sp: Spot;
+      sp.pos = x.world;
+      sp.n = up;
+      sp.t = vec3f(cos(ang), 0.0, sin(ang));
+      let rank = u2f(h >> 16u);
+      if (pick < 0.3) {
+        let sx = 3.0 + 3.5 * u2f(h >> 20u);
+        emit(T_HVAC, sp, vec3f(sx, sx * (0.5 + 0.4 * u2f(h >> 24u)), 1.2 + 1.2 * u2f(h >> 26u)), 0.0,
+             rgba(vec3f(0.36, 0.37, 0.38)), neon_accent(h >> 5u), IF_LIT, rank, false);
+      } else if (pick < 0.42) {
+        let sc = 2.4 + 2.2 * u2f(h >> 20u);
+        emit(T_TANK, sp, vec3f(sc), 0.0, rgba(mix(vec3f(0.3, 0.22, 0.16), vec3f(0.32, 0.33, 0.34), u2f(h >> 24u))), 0u, 0u, rank, true);
+      } else if (pick < 0.48) {
+        let sc = 1.5 + 2.0 * u2f(h >> 20u);
+        emit(T_DISH, sp, vec3f(sc), 0.0, rgba(vec3f(0.55, 0.55, 0.53)), 0u, 0u, rank, true);
+      } else {
+        let sc = 1.0 + 2.2 * u2f(h >> 20u);
+        emit(T_VENTSTACK, sp, vec3f(sc), 0.0, rgba(vec3f(0.3, 0.3, 0.31)), 0u, 0u, rank, true);
+      }
+    }
+  }
+  if (!has_details(s)) { return; }
 
   for (var f = 0u; f < nf; f++) {
     let fc = face_of(s, f, nf);
