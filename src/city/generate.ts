@@ -234,7 +234,12 @@ export function generateCity(seed: number): CityData {
             // buildings keep their LED edges/bands; the rest are lit by
             // windows and signs.
             const share = NEON_SHARE[info.district] ?? 0.15;
-            const h = hashFloat(seed, Math.round(lot.x0), Math.round(lot.z0), 41);
+            const h = hashFloat(
+              seed,
+              Math.round(lot.x0),
+              Math.round(lot.z0),
+              41,
+            );
             if (h >= share) {
               const glow =
                 SegFlags.EdgeGlow | SegFlags.FloorBands | SegFlags.TopGlow;
