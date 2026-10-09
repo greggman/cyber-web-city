@@ -22,6 +22,8 @@ npm test           # build, unit tests, puppeteer smoke test (fails on any WebGP
 npm run shots      # deterministic screenshot set into out/shots/
 node test/car-shots.mjs spinner   # car preview renders into out/car/
 node test/validate-shaders.mjs    # compile every WGSL entry file, list all errors
+node test/route-check.mjs [seed]  # fly the whole route, fail on any building collision
+node test/flicker.mjs             # count sharply blinking pixels (camera frozen)
 ```
 
 The site deploys to GitHub Pages on every push to `main`
@@ -44,7 +46,8 @@ The site deploys to GitHub Pages on every push to `main`
 |---|---|
 | `seed=N` | World seed |
 | `t=S` | Start time on the flight path |
-| `cam=chase\|pov\|skyline\|screen\|holo` | Camera. `screen` and `holo` frame ad screen or hologram `n=K`. |
+| `cam=chase\|pov\|skyline\|map\|screen\|holo` | Camera. `map` is a top-down view; `screen` and `holo` frame ad screen or hologram `n=K`. |
+| `anim=S` | Animation time `S` with the camera held at `t` (used by `test/flicker.mjs`) |
 | `shot=N` | Fixed chase framing |
 | `paused=1` | Freeze time (deterministic screenshots; also hides the help text) |
 | `hud=1` | Show stats |
@@ -102,7 +105,7 @@ them.
 |---|---|
 | `src/gpu/` | Device setup, labeled-resource helpers, layout helper, GPU timer |
 | `src/math/` | Vectors and matrices (reversed-Z infinite projection), seeded random numbers |
-| `src/city/` | Layout and districts, building archetypes, signs, ads and holograms, traffic lanes |
+| `src/city/` | Layout and districts, street warp (`warp.ts`), building archetypes, signs, ads and holograms, traffic lanes |
 | `src/nurbs/` | NURBS curves and surfaces, tessellation, models and materials |
 | `src/car/` | The spinner, written against the NURBS API by the designer agent |
 | `src/camera/` | Autopilot flight path, chase framings |
