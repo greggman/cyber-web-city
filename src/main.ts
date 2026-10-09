@@ -376,6 +376,8 @@ async function main() {
         break;
       case 'camera':
         chase.fixedShot = ui.shot;
+        // A camera change ends a user orbit right away.
+        orbit.release();
         break;
     }
   };
@@ -415,6 +417,8 @@ async function main() {
       startAudio();
     }
     if (e.key === 'c' || e.key === 'C') {
+      // Exactly what the camera button does.
+      controls.closeAll();
       controls.cycleCamera();
     } else if (e.key === ' ') {
       ui.paused = !ui.paused;

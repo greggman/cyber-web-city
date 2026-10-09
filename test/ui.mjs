@@ -100,6 +100,20 @@ await withPage('index.html?t=40&mute=1', async page => {
   const p1 = await page.evaluate(() => window.__debug.cameraPos());
   await page.screenshot({path: 'out/ui/orbit.png'});
   check(on, 'drag takes control (orbit active)');
+  // C (like the camera button) switches camera even while orbiting.
+  const cam0 = await page.evaluate(() => window.__ui.camera);
+  await page.keyboard.press('c');
+  await sleep(200);
+  const cam1 = await page.evaluate(() => window.__ui.camera);
+  const still = await page.evaluate(() => window.__debug.orbitActive());
+  check(cam1 !== cam0 && !still, `C switches camera at once while orbiting (${cam0} -> ${cam1}, orbit ${still})`);
+  // Back to orbit for the 6 s hand-back check below.
+  await page.keyboard.press('c');
+  await page.keyboard.press('c');
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  await page.mouse.move(700, 350);
+  await page.mouse.up();
   await sleep(7000);
   const off = await page.evaluate(() => window.__debug.orbitActive());
   check(!off, 'auto camera resumes 6 s after the last input');

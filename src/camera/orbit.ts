@@ -67,6 +67,12 @@ export class OrbitControl {
     );
   }
 
+  /** Hands control back to the auto camera now (e.g. a camera change). */
+  release() {
+    this.lastInput = -Infinity;
+    this.pointers.clear();
+  }
+
   private touch() {
     this.lastInput = performance.now();
   }
