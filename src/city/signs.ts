@@ -85,11 +85,11 @@ export function generateSigns(
     if (!rng.chance(p)) continue;
     const busy =
       slot.district === District.Slum || slot.district === District.Market;
-    const count = busy
-      ? slot.avenue
-        ? rng.int(3, 11)
-        : rng.int(0, 2)
-      : rng.int(1, 3);
+    if (slot.y > 480) continue;
+    const count = Math.min(
+      busy ? (slot.avenue ? rng.int(2, 8) : rng.int(0, 2)) : rng.int(1, 3),
+      Math.ceil(slot.height / 18),
+    );
     // right x up = normal (right-handed), so text reads left to right.
     const right: [number, number, number] = [slot.nz, 0, -slot.nx];
     const slotLights: LightDesc[] = [];
