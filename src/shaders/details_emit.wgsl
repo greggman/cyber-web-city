@@ -298,21 +298,9 @@ fn neon_accent(h: u32) -> u32 {
   return rgba(c);
 }
 
-// Window grid per style (must match facade.wgsl).
-struct Grid { cellW: f32, x0: f32, x1: f32, y0: f32, y1: f32 };
-
-fn grid_for(s: Segment, row: i32) -> Grid {
-  switch s.style {
-    case ST_GLASS: { return Grid(1.6, 0.06, 0.94, 0.14, 0.98); }
-    case ST_RESIDENTIAL: { return Grid(3.4, 0.18, 0.82, 0.25, 0.85); }
-    case ST_METAL: { return Grid(1.5, 0.07, 0.93, 0.3, 0.72); }
-    case ST_SLUM: {
-      let fid = bitcast<u32>(row);
-      let cw = 2.2 + 2.5 * hash21(s.seed, fid);
-      return Grid(cw, 0.15 + 0.1 * hash21(s.seed + 1u, fid), 0.8, 0.25, 0.8);
-    }
-    default: { return Grid(2.0, 0.08, 0.92, 0.15, 0.95); }
-  }
+// Taper scale at world height y.
+fn tp_at(s: Segment, y: f32) -> f32 {
+  return mix(1.0, s.taper, clamp((y - s.pos.y) / s.size.y, 0.0, 1.0));
 }
 
 @compute @workgroup_size(64)
@@ -393,8 +381,9 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
     var ledgeD = 0.32;
     // Every `bandEvery` floors a deep band / maintenance catwalk.
     var bandEvery = 0;
-    if (style == ST_GLASS) { ledgeH = 0.2; ledgeD = 0.25; bandEvery = 6; }
-    if (style == ST_METAL) { every = 2; ledgeH = 0.3; ledgeD = 0.35; bandEvery = 8; }
+    // Mechanical floor every 15 floors on curtain walls (ART_BIBLE C1).
+    if (style == ST_GLASS) { ledgeH = 0.2; ledgeD = 0.25; bandEvery = 15; }
+    if (style == ST_METAL) { every = 2; ledgeH = 0.3; ledgeD = 0.35; }
     if (style == ST_MONOLITH) { every = 3; ledgeH = 0.5; ledgeD = 0.45; }
     if (style == ST_PODIUM) { every = 1; ledgeH = 0.25; ledgeD = 0.3; }
     if (every > 0) {
@@ -408,7 +397,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         var d = ledgeD;
         var th = ledgeH;
         var col = concrete * 1.15;
-        if (style == ST_SLUM) { d = 0.15 + 0.35 * u2f(rh); }
+        if (style == ST_SLUM) { d = 0.15 + 0.35 * u2f_rot(bodyHash, 5u); }
         if (bandEvery > 0 && row % bandEvery == 0) {
           d = 0.9;
           th = 0.55;
@@ -420,121 +409,97 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       }
     }
 
-    // ---- Column items, emitted in chunks of a few floors so they follow
-    // tapers and twists: fins, ribs, piers, drain pipes.
-    var spacing = 0.0;
-    var colType = T_FIN;
-    var colScl = vec3f(0.22, 1.0, 0.5);
-    var colColor = rgba(darkMetal);
-    var colOffset = 0.0;
-    var y0 = s.pos.y;
-    if (style == ST_GLASS) { spacing = 3.2; }
-    if (style == ST_METAL) { spacing = 3.0; colScl = vec3f(0.2, 1.0, 0.4); colColor = rgba(vec3f(0.12, 0.12, 0.13)); }
-    if (style == ST_MONOLITH) { spacing = 6.0; colOffset = 0.36; colScl = vec3f(0.9, 1.0, 1.1); colColor = rgba(vec3f(0.05, 0.045, 0.04)); }
-    if (style == ST_PODIUM) { spacing = 4.0; y0 = max(s.pos.y, 7.5); }
-    if (style == ST_RESIDENTIAL || style == ST_SLUM) {
-      spacing = select(3.4 * 4.0, 2.6 * 3.0, style == ST_SLUM);
-      colType = T_PIPE;
-      colScl = vec3f(0.24, 1.0, 0.24);
-    }
-    if (spacing > 0.0) {
+    // Everything below snaps to the shared bay grid (segment.wgsl), the
+    // same grid facade.wgsl draws its windows on (ART_BIBLE.md 3 and 6).
+    // Faceted/round shapes only get ledges.
+    if (s.shape > 1u) { continue; }
+    let bay = seg_bay(s);
+    let nB = face_bays(wBase, bay);
+    if (nB <= 0) { continue; }
+    let halfB = f32(nB) * bay * 0.5;
+    let pierW = wBase * 0.5 - halfB;
+
+    // ---- Vertical runs, chunked so they follow tapers and twists:
+    // mullion fins and structural piers on bay lines, risers in service
+    // bays, downpipes in the corner piers.
+    {
       let chunk = fh * 6.0;
-      let nChunks = i32(ceil((s.pos.y + s.size.y - y0) / chunk));
-      let nCols = i32(floor(wBase / spacing));
-      let total = nCols * nChunks;
+      var yBase = s.pos.y;
+      if (style == ST_PODIUM) { yBase = max(s.pos.y, 7.5); }
+      let nChunks = i32(ceil((s.pos.y + s.size.y - yBase) / chunk));
+      let nLines = nB + 1;
+      let perChunk = nLines + nB * 3 + 2;
+      let total = perChunk * max(nChunks, 0);
       for (var k = i32(li); k < total; k += 64) {
-        let col = k % nCols;
-        let ch = k / nCols;
-        let X = (f32(col) - f32(nCols - 1) * 0.5) * spacing + colOffset;
-        let ch0 = y0 + f32(ch) * chunk;
+        let ch = k / perChunk;
+        let slot = k % perChunk;
+        let ch0 = yBase + f32(ch) * chunk;
         let ch1 = min(ch0 + chunk, s.pos.y + s.size.y);
         if (ch1 - ch0 < 0.5) { continue; }
-        let ch_h = hash3_u(s.seed ^ 0x9e37u, f, bitcast<u32>(col));
-        // Pipes only on a few columns.
-        if (colType == T_PIPE && (ch_h & 3u) != 0u) { continue; }
-        let wTop = face_width(s, fc, ch1);
-        if (abs(X) > wTop * 0.5 - 0.3) { continue; }
-        let a = spot(s, fc, X, ch0);
-        let b = spot(s, fc, X, ch1);
-        var sp = a;
-        sp.t = a.t;
-        var flags = 0u;
-        if (style == ST_GLASS && (ch_h >> 8u) % 5u == 0u) { flags = IF_LIT; }
-        var cs = colScl;
-        // Every 4th mullion on curtain walls is a heavy structural pier.
-        if ((style == ST_GLASS || style == ST_PODIUM) && col % 4 == 0) { cs = vec3f(0.8, 1.0, 1.0); }
-        emit(colType, sp, vec3f(cs.x, distance(a.pos, b.pos), cs.z), 0.5, colColor, rgba(unpack_color(s.colorB)), flags, u2f_rot(ch_h, 12u), false);
-      }
-    }
-
-    // ---- Bolted-on room modules (Kowloon / Chongqing extensions): the
-    // mid-scale relief that still reads hundreds of meters away.
-    {
-      var pMod = 0.0;
-      if (style == ST_SLUM) { pMod = 0.3; }
-      if (style == ST_RESIDENTIAL) { pMod = 0.12; }
-      if (style == ST_METAL) { pMod = 0.07; }
-      if (style == ST_GLASS || style == ST_PODIUM) { pMod = 0.03; }
-      if (pMod > 0.0) {
-        let slotH = fh * 3.0;
-        let ny = i32(floor(s.size.y / slotH));
-        let nx = max(i32(floor(wBase / 11.0)), 1);
-        for (var k = i32(li); k < nx * ny; k += 64) {
-          let ix = k % nx;
-          let iy = k / nx;
-          let mh = hash3_u(s.seed ^ 0x2f6b1e9du, f * 131u + bitcast<u32>(ix), bitcast<u32>(iy));
-          if (u2f(mh) > pMod) { continue; }
-          let floors = 1.0 + f32((mh >> 8u) % 3u);
-          let y = s.pos.y + f32(iy) * slotH;
-          let hgt = floors * fh - 0.3;
-          if (y + hgt > s.pos.y + s.size.y - 1.0 || y < 3.0) { continue; }
-          let wTop = face_width(s, fc, y + hgt);
-          let wm = 4.0 + 6.0 * u2f_rot(mh, 12u);
-          let X = (f32(ix) - f32(nx - 1) * 0.5) * (wBase / f32(nx)) + (u2f_rot(mh, 16u) - 0.5) * 3.0;
-          if (abs(X) + wm * 0.5 > wTop * 0.5 - 0.5) { continue; }
-          let depth = 2.0 + 3.5 * u2f_rot(mh, 20u);
-          let tone = u2f_rot(mh, 24u);
-          let col = mix(concrete * mix(0.8, 1.3, tone), darkMetal * 2.2, step(0.65, tone));
-          emit(T_MODULE, spot(s, fc, X, y), vec3f(wm, hgt, depth), 0.5, rgba(col), rgba(vec3f(1.0, 0.72, 0.45)), select(0u, IF_LIT, (mh & 3u) != 0u), u2f_rot(mh, 4u), false);
+        var X = 0.0;
+        var t = T_FIN;
+        var scl = vec3f(0.0);
+        var col = rgba(darkMetal);
+        if (slot < nLines) {
+          // Line between bays slot-1 and slot.
+          X = (f32(slot) - f32(nB) * 0.5) * bay;
+          if (style == ST_GLASS || style == ST_PODIUM) {
+            // Mullion fin every 3 modules, structural pier every 6.
+            if (slot % 3 != 0) { continue; }
+            scl = select(vec3f(0.14, 1.0, 0.2), vec3f(0.8, 1.0, 0.6), slot % 6 == 0);
+            col = rgba(darkMetal * 1.3);
+          } else if (style == ST_MONOLITH) {
+            scl = vec3f(0.9, 1.0, 0.9);
+            col = rgba(vec3f(0.05, 0.045, 0.04));
+          } else if (style == ST_METAL) {
+            if (slot % 4 != 0) { continue; }
+            scl = vec3f(0.2, 1.0, 0.35);
+            col = rgba(vec3f(0.12, 0.12, 0.13));
+          } else {
+            continue;
+          }
+        } else if (slot < nLines + nB * 3) {
+          let q = slot - nLines;
+          let i = q / 3;
+          let p = q % 3;
+          if (bay_class(s, i, nB) != BAY_S) { continue; }
+          if (style == ST_SLUM && p == 2) { continue; }
+          X = bay_center(i, nB, bay) + (f32(p) - 1.0) * 0.45;
+          t = T_PIPE;
+          let pr = 0.2 + 0.06 * f32(p);
+          scl = vec3f(pr, 1.0, pr);
+          col = rgba(darkMetal * 1.4);
+        } else {
+          if (style != ST_RESIDENTIAL && style != ST_SLUM) { continue; }
+          if (pierW < 0.45) { continue; }
+          let side = select(-1.0, 1.0, slot == perChunk - 1);
+          X = side * (halfB + pierW * 0.5);
+          t = T_PIPE;
+          scl = vec3f(0.2, 1.0, 0.2);
+          col = rgba(darkMetal * 1.4);
         }
+        let a = spot(s, fc, X * tp_at(s, ch0), ch0);
+        let b = spot(s, fc, X * tp_at(s, ch1), ch1);
+        emit(t, a, vec3f(scl.x, distance(a.pos, b.pos), scl.z), 0.5, col, rgba(unpack_color(s.colorB)), 0u, 1.0, false);
       }
     }
 
-    // ---- External service shafts / elevator cores: big boxes up the face.
-    {
-      let fhh = hash3_u(s.seed ^ 0x7f4a7c15u, f, 3u);
-      let nShaft = i32(fhh % 3u);
-      let chunk = fh * 6.0;
-      let nChunks = i32(ceil(s.size.y / chunk));
-      for (var k = i32(li); k < nShaft * nChunks; k += 64) {
-        let si2 = k / nChunks;
-        let ch = k % nChunks;
-        let sh = hash3_u(fhh, bitcast<u32>(si2), 11u);
-        let X = (u2f(sh) - 0.5) * (wBase - 6.0);
-        let ch0 = s.pos.y + f32(ch) * chunk;
-        let ch1 = min(ch0 + chunk, s.pos.y + s.size.y);
-        if (abs(X) > face_width(s, fc, ch1) * 0.5 - 2.0) { continue; }
-        let a = spot(s, fc, X, ch0);
-        let b = spot(s, fc, X, ch1);
-        let wsh = 1.6 + 1.6 * u2f_rot(sh, 8u);
-        emit(T_FIN, a, vec3f(wsh, distance(a.pos, b.pos), 0.9 + 0.8 * u2f_rot(sh, 16u)), 0.5,
-             rgba(mix(darkMetal * 1.5, concrete, u2f_rot(sh, 4u))), rgba(unpack_color(s.colorB)),
-             select(0u, IF_LIT, (sh & 7u) < 3u), u2f_rot(sh, 20u), false);
-      }
-    }
-
-    // ---- Shop canopies along the podium's ground floor.
+    // ---- Shop canopies on the podium's 8 m shop bays (facade.wgsl
+    // shopfront uses the same grid); depth and height vary per shop.
     if (style == ST_PODIUM && s.pos.y < 1.0) {
-      let nBays = i32(floor(wBase / 8.0));
-      for (var k = i32(li); k < nBays; k += 64) {
-        let X = (f32(k) - f32(nBays - 1) * 0.5) * 8.0;
+      let nS = face_bays(wBase, 8.0);
+      for (var k = i32(li); k < nS; k += 64) {
         let hb = hash3_u(s.seed, f, bitcast<u32>(k) + 77u);
         if ((hb & 3u) == 0u) { continue; }
-        emit(T_CANOPY, spot(s, fc, X, 4.9), vec3f(7.2, 1.0, 1.0), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), IF_LIT, u2f_rot(hb, 4u), false);
+        let depth = 0.8 + 1.2 * u2f_rot(hb, 8u);
+        let yC = 4.7 + 0.5 * u2f_rot(hb, 12u);
+        emit(T_CANOPY, spot(s, fc, bay_center(k, nS, 8.0), yC), vec3f(7.2, 1.0, depth), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), IF_LIT, u2f_rot(hb, 4u), false);
       }
     }
 
-    // ---- Cell items near the camera: balconies, AC units, cages, awnings, vents.
+    // ---- Cell items near the camera, by bay class. The column decides the
+    // item type and side, the unit (floor) only decides presence; positions
+    // are exact functions of the window opening.
     if (style == ST_RESIDENTIAL || style == ST_SLUM || style == ST_METAL) {
       if (horiz > cellRange) { continue; }
       let band = sqrt(max(cellRange * cellRange - horiz * horiz, 0.0));
@@ -543,49 +508,62 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
       let ra = max(i32(floor(ya / fh)), j0);
       let rb = min(i32(ceil(yb / fh)), j1);
       if (rb <= ra) { continue; }
-      let nr = rb - ra;
-      let maxCols = i32(wBase / 2.2) + 1;
-      let total = nr * maxCols;
+      let total = (rb - ra) * nB;
       for (var k = i32(li); k < total; k += 64) {
-        let row = ra + k / maxCols;
-        let ci = k % maxCols;
-        let g = grid_for(s, row);
+        let row = ra + k / nB;
+        let i = k % nB;
+        let cls = bay_class(s, i, nB);
+        if (cls == BAY_S || cls == BAY_C) { continue; }
         let y = f32(row) * fh;
-        let w = face_width(s, fc, y + fh * 0.5);
-        let nCols = i32(floor(w / g.cellW));
-        if (ci >= nCols) { continue; }
-        let left = (f32(ci) - f32(nCols) * 0.5) * g.cellW;
-        let cx = left + g.cellW * 0.5;
-        let h = hash3_u(s.seed, f * 977u + bitcast<u32>(ci), bitcast<u32>(row));
-        let r = u2f(h);
-        let rank = u2f_rot(h, 7u);
-        let winW = (g.x1 - g.x0) * g.cellW;
-        let winH = (g.y1 - g.y0) * fh;
-        let winCx = left + (g.x0 + g.x1) * 0.5 * g.cellW;
+        let tpy = tp_at(s, y + 0.5 * fh);
+        let r = win_rect(s, cls);
+        let bw = bay * tpy;
+        let cx = bay_center(i, nB, bay) * tpy;
+        let winW = (r.y - r.x) * bw;
+        let winCx = cx + ((r.x + r.y) * 0.5 - 0.5) * bw;
+        let winY0 = y + r.z * fh;
+        let winY1 = y + r.w * fh;
+        let hc = hash3_u(s.seed ^ 0x51u, f, bitcast<u32>(i));
+        let hu = hash3_u(hc, bitcast<u32>(row), 7u);
+        let pu = u2f(hu);
+        let rank = u2f_rot(hu, 7u);
+        let side = select(-1.0, 1.0, (hc & 1024u) != 0u);
         if (style == ST_RESIDENTIAL) {
-          // Balcony stacks: whole columns of balconies, a few missing.
-          let colH = hash3_u(s.seed ^ 0x51u, f, bitcast<u32>(ci));
-          if (u2f(colH) < 0.45 && r < 0.9 && row > j0) {
+          if (row <= j0) { continue; }
+          if (cls == BAY_N) {
+            emit(T_VENT, spot(s, fc, winCx, winY1 + 0.08), vec3f(0.55), 0.5, rgba(vec3f(0.3, 0.3, 0.31)), 0u, 0u, rank, true);
+          } else if (u2f(hc) < 0.45) {
+            // Balcony column: same railing all the way up.
             var fl = 0u;
-            if ((colH >> 9u) % 3u == 0u) { fl |= IF_GLASS; }
-            if ((h >> 13u) % 4u == 0u) { fl |= IF_LIT; }
-            emit(T_BALCONY, spot(s, fc, cx, y + 0.02), vec3f(g.cellW * 0.95, 1.0, 1.0), 0.5, rgba(concrete * 1.1), rgba(vec3f(1.0, 0.75, 0.45)), fl, rank, false);
-          } else if (r < 0.45) {
-            let side = select(-1.0, 1.0, (h & 1024u) != 0u);
-            emit(T_AC, spot(s, fc, winCx + side * (winW * 0.5 - 0.5), y + g.y0 * fh + 0.05), vec3f(1.0), 0.3, rgba(vec3f(0.42, 0.43, 0.42)), neon_accent(h >> 3u), IF_LIT, rank, true);
+            if (u2f_rot(hc, 9u) < 0.33) { fl |= IF_GLASS; }
+            if (u2f_rot(hu, 13u) < 0.3) { fl |= IF_LIT; }
+            emit(T_BALCONY, spot(s, fc, cx, y + 0.02), vec3f(bw * 0.95, 1.0, 1.0), 0.5, rgba(concrete * 1.1), rgba(vec3f(1.0, 0.75, 0.45)), fl, rank, false);
+          } else {
+            // AC under the window, on this column's side.
+            if (pu < 0.8) {
+              emit(T_AC, spot(s, fc, winCx + side * (winW * 0.5 - 0.5), winY0 + 0.05), vec3f(1.0), 0.3, rgba(vec3f(0.55, 0.55, 0.52)), neon_accent(hu >> 3u), IF_LIT, rank, true);
+            }
+            if (u2f_rot(hu, 17u) < 0.12) {
+              emit(T_CAGE, spot(s, fc, winCx, (winY0 + winY1) * 0.5), vec3f(winW * 1.08, (winY1 - winY0) * 1.06, 1.0), 0.0, rgba(concrete), neon_accent(hu >> 5u), 0u, rank, false);
+            }
           }
         } else if (style == ST_SLUM) {
-          if (r < 0.3) {
-            emit(T_CAGE, spot(s, fc, winCx, y + g.y0 * fh + winH * 0.5), vec3f(winW * 1.08, winH * 1.06, 1.0), 0.0, rgba(concrete), neon_accent(h >> 5u), 0u, rank, false);
-          } else if (r < 0.48) {
-            emit(T_AWNING, spot(s, fc, winCx, y + g.y1 * fh + 0.12), vec3f(winW + 0.4, 1.0, 1.0), -0.3, rgba(concrete), neon_accent(h >> 5u), 0u, rank, false);
+          let ct = u2f(hc);
+          if (ct < 0.35) {
+            if (pu < 0.75) {
+              emit(T_CAGE, spot(s, fc, winCx, (winY0 + winY1) * 0.5), vec3f(winW * 1.08, (winY1 - winY0) * 1.06, 1.0), 0.0, rgba(concrete), neon_accent(hc >> 5u), 0u, rank, false);
+            }
+          } else if (ct < 0.6) {
+            if (pu < 0.7) {
+              emit(T_AWNING, spot(s, fc, winCx, winY1 + 0.12), vec3f(winW + 0.4, 1.0, 1.0), -0.3, rgba(concrete), neon_accent(hc >> 5u), 0u, rank, false);
+            }
           }
-          if (((h >> 16u) & 7u) < 3u) {
-            let xo = select(-0.3, 0.3, (h & 2048u) != 0u) * winW;
-            emit(T_AC, spot(s, fc, winCx + xo, y + 0.15), vec3f(1.0), 0.3, rgba(vec3f(0.38, 0.38, 0.36)), neon_accent(h >> 9u), IF_LIT, u2f_rot(h, 19u), true);
+          if (u2f_rot(hu, 16u) < 0.5) {
+            emit(T_AC, spot(s, fc, winCx + side * 0.3 * winW, y + 0.15), vec3f(1.0), 0.3, rgba(vec3f(0.5, 0.5, 0.47)), neon_accent(hu >> 9u), IF_LIT, u2f_rot(hu, 19u), true);
           }
-        } else if (style == ST_METAL) {
-          if (r < 0.15) {
+        } else {
+          // Metal: louvred vents every third floor, on a few columns.
+          if (row % 3 == 0 && u2f(hc) < 0.2) {
             emit(T_VENT, spot(s, fc, cx, y + 0.08 * fh), vec3f(1.0), 0.5, rgba(vec3f(0.16, 0.16, 0.17)), 0u, 0u, rank, true);
           }
         }

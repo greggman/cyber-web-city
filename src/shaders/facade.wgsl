@@ -38,7 +38,16 @@ struct Ctx {
   seed: u32,
   time: f32,
   hRel: f32,         // 0..1 height within segment
+  face: vec2f,       // base width of the face (0: round shape), taper scale
 };
+
+// The segment being shaded (for the shared bay grid in segment.wgsl).
+var<private> g_seg: Segment;
+
+// Position on the shared bay grid: (bay index or -1 in a pier, fraction).
+fn wall_bay(c: Ctx, bay: f32) -> vec2f {
+  return bay_at(c.facade.x / max(c.face.y, 1e-3), face_bays(c.face.x, bay), bay);
+}
 
 fn u_of(x: f32) -> u32 { return bitcast<u32>(i32(floor(x))); }
 
@@ -151,12 +160,36 @@ fn recess_for(kind: u32) -> f32 {
   }
 }
 
-fn window_facade(c: Ctx, ws: WinStyle, kind: u32, tint: vec3f, sf: ptr<function, Surface>) -> f32 {
-  let cell = vec2f(c.facade.x / ws.cellW, c.facade.y / ws.floorH);
+fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<function, Surface>) -> f32 {
+  var ws = ws_in;
+  // Columns come from the shared bay grid (segment.wgsl), so the kit placed
+  // by details_emit.wgsl lines up with these windows.
+  let nB = face_bays(c.face.x, ws.cellW);
+  let bx = bay_at(c.facade.x / max(c.face.y, 1e-3), nB, ws.cellW);
+  let cls = bay_class(g_seg, i32(bx.x), nB);
+  if (cls == BAY_N) {
+    let r = win_rect(g_seg, BAY_N);
+    ws.winX0 = r.x;
+    ws.winX1 = r.y;
+    ws.winY0 = r.z;
+    ws.winY1 = r.w;
+  }
+  let cell = vec2f(bx.x + bx.y, c.facade.y / ws.floorH);
   let id = floor(cell);
   let f = fract(cell);
-  let dpx = c.fw / vec2f(ws.cellW, ws.floorH);
-  let win = aa_box(f.x, ws.winX0, ws.winX1, dpx.x) * aa_box(f.y, ws.winY0, ws.winY1, dpx.y);
+  let dpx = c.fw / vec2f(ws.cellW * c.face.y, ws.floorH);
+  var win = aa_box(f.x, ws.winX0, ws.winX1, dpx.x) * aa_box(f.y, ws.winY0, ws.winY1, dpx.y);
+  // Corner piers and service bays are solid wall.
+  if (bx.x < 0.0 || cls == BAY_S || cls == BAY_C) { win = 0.0; }
+  if (cls == BAY_C) {
+    // Stair core: a glass-block slot, cool-lit, with landings half a floor off.
+    let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * aa_box(fract(cell.y + 0.5), 0.2, 0.8, dpx.y);
+    let blocks = mix(1.0, 0.6, step(0.85, fract(c.facade.y * 4.0)) * detail(vec2f(0.25), c.fw));
+    // Landings are lit unevenly (dead tubes, timers), dim fluorescent green.
+    let landing = hash3_u(c.seed ^ 0x2545f491u, u_of(bx.x), u_of(cell.y + 0.5));
+    let on = step(u2f(landing), 0.55) * (0.5 + 0.5 * u2f_rot(landing, 8u));
+    (*sf).emissive += vec3f(0.55, 0.8, 0.65) * 0.12 * slot * blocks * on;
+  }
   let roomId = floor(id.x / ws.roomCells);
   let floorId = u_of(id.y);
   let hRoom = hash3_u(c.seed, u_of(roomId), floorId);
@@ -358,11 +391,14 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
   let bayW = 8.0;
   // Heights from the street (podiums may start below ground).
   let y = c.world.y;
-  let sx = fract(c.facade.x / bayW);
-  let sid = u_of(c.facade.x / bayW);
+  // Shop bays sit on the shared grid (canopies in details_emit.wgsl match).
+  let wb = wall_bay(c, bayW);
+  let sx = wb.y;
+  let sid = u_of(wb.x);
+  let inBay = step(0.0, wb.x);
   let hs = hash2_u(c.seed, sid);
   let det = detail(vec2f(1.0), c.fw);
-  let glass = aa_box(sx, 0.05, 0.95, c.fw.x / bayW) * aa_box(y, 0.3, 4.6, c.fw.y);
+  let glass = aa_box(sx, 0.05, 0.95, c.fw.x / bayW) * aa_box(y, 0.3, 4.6, c.fw.y) * inBay;
   let shuttered = u2f_rot(hs, 4u) < 0.22;
   let shopCol = mix(vec3f(1.0, 0.85, 0.65), unpack_color(hash_u(hs) | 0xff000000u), 0.35);
   var wall = vec3f(0.12, 0.11, 0.1);
@@ -386,7 +422,7 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
     (*sf).reflectivity = mix(0.2, 0.8, glass);
   }
   // Sign board: dark panel with lit glyphs and a thin neon border.
-  let board = aa_box(y, 5.0, 6.8, c.fw.y) * aa_box(sx, 0.06, 0.94, c.fw.x / bayW);
+  let board = aa_box(y, 5.0, 6.8, c.fw.y) * aa_box(sx, 0.06, 0.94, c.fw.x / bayW) * inBay;
   let signCol = select(accent, vec3f(1.0, 0.95, 0.85), (hs & 3u) == 0u);
   let bp = vec2f((sx - 0.06) / 0.88 * bayW, y - 5.0); // meters on the board
   let border = board * (1.0 - aa_box(bp.x, 0.12, bayW * 0.88 - 0.12, c.fw.x) * aa_box(bp.y, 0.12, 1.68, c.fw.y));
@@ -419,12 +455,13 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).roughness = 0.5;
     (*sf).reflectivity = 0.3;
   } else if (style == ST_GLASS) {
-    ws = WinStyle(1.6, s.floorH, 0.06, 0.94, 0.14, 0.98, 4.0, 9.0, 0.12, 2.4, 0.35, 0.0);
+    let r = win_rect(s, BAY_W);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 4.0, 9.0, 0.12, 2.4, 0.35, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let glass = mix(vec3f(0.02, 0.035, 0.05), vec3f(0.03, 0.05, 0.06), hash11(c.seed));
     // Mullions (vertical) and transoms catch neon specular; spandrels are
     // ribbed dark panels.
-    let cellF = fract(vec2f(c.facade.x / ws.cellW, c.facade.y / ws.floorH));
+    let cellF = vec2f(wall_bay(c, ws.cellW).y, fract(c.facade.y / ws.floorH));
     let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
     let mull = (1.0 - aa_box(cellF.x, 0.07, 0.93, c.fw.x / ws.cellW)) * det;
     let rib = step(0.5, fract(c.facade.y * 2.5)) * (1.0 - step(0.14, cellF.y)) * det;
@@ -436,36 +473,24 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).metallic = mix(0.8, 0.0, w);
     (*sf).reflectivity = mix(mix(0.4, 0.7, mull), 0.9, w);
   } else if (style == ST_RESIDENTIAL) {
-    ws = WinStyle(3.4, s.floorH, 0.18, 0.82, 0.25, 0.85, 1.0, 5.0, 0.22, 1.6, 0.2, 0.45);
+    let r = win_rect(s, BAY_W);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 2.0, 5.0, 0.22, 1.6, 0.2, 0.45);
     let w = window_facade(c, ws, style, tint, sf);
     let concrete = mix(vec3f(0.3, 0.28, 0.26), vec3f(0.36, 0.3, 0.25), hash11(c.seed + 3u)) * g;
-    // Balcony ledges.
+    // Slab edge line at every floor (the balconies, AC units, cages and
+    // risers are kit pieces on the bay grid: details_emit.wgsl).
     let fy = fract(c.facade.y / s.floorH);
-    let ledge = aa_box(fy, 0.0, 0.08, c.fw.y / s.floorH) * step(0.5, fract(c.facade.x / (ws.cellW * 2.0)));
-    // Balcony railings, AC units with glowing fan grilles, drain pipes.
-    let cellR = fract(vec2f(c.facade.x / ws.cellW, c.facade.y / s.floorH));
-    let cid = floor(vec2f(c.facade.x / ws.cellW, c.facade.y / s.floorH));
-    let detR = detail(vec2f(ws.cellW, s.floorH), c.fw);
-    let rail = ledge * step(0.5, fract(c.facade.x * 4.0)) * aa_box(cellR.y, 0.08, 0.22, c.fw.y / s.floorH) * detR;
-    let hac = hash3_u(c.seed ^ 0x77u, u_of(cid.x), u_of(cid.y));
-    let ac = select(0.0, 1.0, (hac & 3u) == 0u) * aa_box(cellR.x, 0.8, 0.99, 0.02) * aa_box(cellR.y, 0.2, 0.6, 0.02) * detR;
-    let pipeX = fract(c.facade.x / (ws.cellW * 3.0));
-    let pipe = aa_box(pipeX, 0.0, 0.025, c.fw.x / (ws.cellW * 3.0)) * detR;
-    var wall = concrete * (1.0 - 0.6 * ledge);
-    wall = mix(wall, vec3f(0.22, 0.22, 0.24), rail * 0.8);
-    wall = mix(wall, vec3f(0.4, 0.4, 0.42), ac);
-    wall = mix(wall, vec3f(0.06, 0.06, 0.07), pipe);
-    (*sf).albedo = mix(wall, vec3f(0.02), w);
-    (*sf).roughness = mix(mix(0.8, 0.35, max(pipe, rail)), 0.1, w);
+    let slab = aa_box(fy, 0.0, 0.06, c.fw.y / s.floorH);
+    (*sf).albedo = mix(concrete * (1.0 - 0.35 * slab), vec3f(0.02), w);
+    (*sf).roughness = mix(0.8, 0.1, w);
     (*sf).reflectivity = mix(0.15, 0.6, w);
-    // Some AC units have a faint indicator glow.
-    (*sf).emissive += vec3f(0.2, 0.9, 0.5) * ac * select(0.0, 0.25, (hac & 12u) == 0u);
   } else if (style == ST_METAL) {
     // Ribbon windows split into 1.5 m panes by mullions; room width varies
     // per floor so lit rooms don't all read as identical dashes.
     let fidM = u_of(c.facade.y / s.floorH);
     let rc = 2.0 + floor(4.0 * hash21(c.seed ^ 0x3c6ef372u, fidM));
-    ws = WinStyle(1.5, s.floorH, 0.07, 0.93, 0.3 + 0.08 * hash21(c.seed, fidM / 6u), 0.72, rc, 6.0, 0.25, 1.2, 0.5, 0.1);
+    let r = win_rect(s, BAY_W);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, rc, 6.0, 0.25, 1.2, 0.5, 0.1);
     let w = window_facade(c, ws, style, tint, sf);
     let panel = fract(c.facade / vec2f(3.0, s.floorH));
     let seam = 1.0 - (1.0 - aa_box(panel.x, 0.0, 0.03, c.fw.x / 3.0)) * (1.0 - aa_box(panel.y, 0.0, 0.03, c.fw.y / s.floorH));
@@ -475,17 +500,13 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).roughness = mix(0.45, 0.1, w);
     (*sf).reflectivity = 0.4;
   } else if (style == ST_SLUM) {
-    // Irregular windows: per floor random cell widths.
-    let fid = u_of(c.facade.y / s.floorH);
-    let cw = 2.2 + 2.5 * hash21(c.seed, fid);
-    ws = WinStyle(cw, s.floorH, 0.15 + 0.1 * hash21(c.seed + 1u, fid), 0.8, 0.25, 0.8, 1.0, 4.0, 0.55, 1.3, 0.15, 0.4);
+    // One bay width per building (rooms differ between buildings, but
+    // each building's windows stack: ART_BIBLE.md S1).
+    let r = win_rect(s, BAY_W);
+    ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 1.0, 4.0, 0.55, 1.3, 0.15, 0.4);
     let w = window_facade(c, ws, style, tint, sf);
     let concrete = mix(vec3f(0.26, 0.24, 0.22), vec3f(0.32, 0.22, 0.18), hash11(c.seed + 5u)) * g * g;
-    // AC units: small dark boxes under some windows.
-    let cell = fract(vec2f(c.facade.x / cw, c.facade.y / s.floorH));
-    let cid = floor(vec2f(c.facade.x / cw, c.facade.y / s.floorH));
-    let ac = select(0.0, 1.0, (hash3_u(c.seed, u_of(cid.x), u_of(cid.y)) & 7u) <= 1u) * aa_box(cell.x, 0.3, 0.6, 0.02) * aa_box(cell.y, 0.05, 0.22, 0.02);
-    (*sf).albedo = mix(mix(concrete, vec3f(0.3, 0.3, 0.32), ac), vec3f(0.02), w);
+    (*sf).albedo = mix(concrete, vec3f(0.02), w);
     (*sf).roughness = mix(0.85, 0.15, w);
     (*sf).reflectivity = 0.2;
     // Tiny neon signs scattered on the walls.
@@ -505,9 +526,10 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // Dark stone with horizontal strip windows every few floors and ribs;
     // the strips are real rooms (interior mapping, varied lights, blinds).
     let bandH = s.floorH * 3.0;
-    ws = WinStyle(6.0, bandH, 0.12, 1.0, 0.0, 0.18, 1.0 + floor(3.0 * hash11(c.seed + 21u)), 8.0, 0.6, 5.0, 0.45, 0.1);
+    let r = win_rect(s, BAY_W);
+    ws = WinStyle(seg_bay(s), bandH, r.x, r.y, r.z, r.w, 1.0 + floor(3.0 * hash11(c.seed + 21u)), 8.0, 0.6, 5.0, 0.45, 0.1);
     let w = window_facade(c, ws, style, tint, sf);
-    let rib = aa_box(fract(c.facade.x / 6.0), 0.0, 0.12, c.fw.x / 6.0);
+    let rib = aa_box(wall_bay(c, ws.cellW).y, 0.0, 0.12, c.fw.x / ws.cellW);
     (*sf).albedo = mix(vec3f(0.07, 0.065, 0.06) * (1.0 + rib * 0.6) * g, vec3f(0.02), w);
     (*sf).roughness = mix(0.35, 0.06, w);
     (*sf).metallic = mix(0.3, 0.0, w);
@@ -518,7 +540,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     if (c.world.y < shopH) {
       shopfront(c, tint, accent, sf);
     } else {
-      ws = WinStyle(2.0, 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
+      ws = WinStyle(seg_bay(s), 4.5, 0.08, 0.92, 0.15, 0.95, 3.0, 8.0, 0.25, 2.0, 0.3, 0.0);
       let w = window_facade(c, ws, ST_GLASS, tint, sf);
       (*sf).albedo = mix(vec3f(0.08) * g, vec3f(0.02, 0.03, 0.04), w);
       (*sf).roughness = mix(0.6, 0.05, w);
@@ -563,7 +585,7 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).albedo = vec3f(0.02);
     (*sf).emissive += accent * 5.0 * pulse;
   } else if (style == ST_BRIDGE) {
-    ws = WinStyle(2.0, 5.0, 0.04, 0.96, 0.25, 0.85, 3.0, 6.0, 0.8, 1.6, 0.0, 0.0);
+    ws = WinStyle(seg_bay(s), 5.0, 0.04, 0.96, 0.25, 0.85, 3.0, 6.0, 0.8, 1.6, 0.0, 0.0);
     let w = window_facade(c, ws, ST_GLASS, tint, sf);
     (*sf).albedo = mix(vec3f(0.06), vec3f(0.02, 0.03, 0.04), w);
     (*sf).roughness = mix(0.5, 0.05, w);
@@ -732,7 +754,8 @@ fn apply_wet(c: Ctx, sf: ptr<function, Surface>, flat: bool) {
   }
 }
 
-fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, local: vec3f, capUv: vec2f) -> Shaded {
+fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, local: vec3f, capUv: vec2f, face: vec2f) -> Shaded {
+  g_seg = s;
   var sf: Surface;
   sf.normal = n;
   sf.roughness = 0.6;
@@ -748,6 +771,7 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
   c.seed = s.seed;
   c.time = frame.time;
   c.hRel = saturate(local.y / max(s.size.y, 1e-3));
+  c.face = face;
   if (s.style == ST_GROUND) {
     shade_ground(c, &sf);
     apply_wet(c, &sf, true);

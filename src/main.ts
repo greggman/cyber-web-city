@@ -219,11 +219,15 @@ async function main() {
   // Inspection cameras: cam=screen|holo|roof&n=K frame an ad, a hologram
   // or an exposed roof.
   const inspect =
-    camParam === 'screen' || camParam === 'holo' || camParam === 'roof'
+    camParam === 'screen' ||
+    camParam === 'holo' ||
+    camParam === 'roof' ||
+    camParam === 'facade'
       ? camParam
       : null;
   const inspectN = Number(params.get('n') ?? 0);
   let roofList: Segment[] | undefined;
+  let facadeList: typeof city.slots | undefined;
   let time = Number(params.get('t') ?? 0);
   // anim=S offsets animation time only (camera stays put): for flicker tests.
   const animOffset =
@@ -375,6 +379,19 @@ async function main() {
         mid,
       );
       camera.fovY = (60 * Math.PI) / 180;
+    } else if (inspect === 'facade') {
+      // A residential/slum facade from ~30 m, slightly off-axis and above.
+      facadeList ??= city.slots.filter(
+        sl => sl.height > 40 && sl.width > 25 && sl.district !== 0,
+      );
+      const sl = facadeList[inspectN % facadeList.length];
+      const y = sl.y + Math.min(sl.height * 0.5, 60);
+      const t: [number, number, number] = [sl.x, y, sl.z];
+      camera.camToWorld = lookAtCamera(
+        [sl.x + sl.nx * 30 + sl.nz * 12, y + 6, sl.z + sl.nz * 30 - sl.nx * 12],
+        t,
+      );
+      camera.fovY = (55 * Math.PI) / 180;
     } else if (inspect === 'roof') {
       roofList ??= exposedRoofs(city.segments);
       const g = roofList[inspectN % roofList.length];

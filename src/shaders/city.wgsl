@@ -42,6 +42,8 @@ struct VOut {
   @location(5) clipPrev: vec4f,
   @location(6) local: vec3f,
   @location(7) capUv: vec2f,
+  // Base width of this face (0 on round shapes) and the taper scale here.
+  @location(8) face: vec2f,
 };
 
 @vertex
@@ -56,6 +58,11 @@ fn vs_main(v: VIn) -> VOut {
   let tp = mix(1.0, s.taper, v.pos.y);
   o.facade = vec2f((v.facade.x * s.size.x + v.facade.y * s.size.z) * tp, x.world.y);
   o.capUv = v.facade * s.size.xz;
+  var faceW = 0.0;
+  if (s.shape <= 1u && abs(v.normal.y) < 0.5) {
+    faceW = select(s.size.z, s.size.x, abs(v.normal.z) > 0.5);
+  }
+  o.face = vec2f(faceW, tp);
   o.seg = si;
   o.clipCur = frame.viewProjNoJitter * vec4f(x.world, 1.0);
   o.clipPrev = frame.prevViewProj * vec4f(x.world, 1.0);
@@ -85,7 +92,7 @@ fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   let fw = fwidth(i.facade);
   let s = segments[i.seg];
   let n = normalize(i.normal);
-  let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv);
+  let sh = shade_facade(s, i.world, n, i.facade, fw, i.local, i.capUv, i.face);
   var o: GOut;
   o.color = vec4f(sh.color, 1.0);
   if (frame.debugView == 7u) {

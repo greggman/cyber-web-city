@@ -97,6 +97,57 @@ interface SegOpts {
   colorB?: number;
   flags?: number;
   floorH?: number;
+  /** Bay width of the facade grid (m); defaults per style. */
+  bay?: number;
+}
+
+/** Facade bay width per style; must match default_bay() in segment.wgsl. */
+export function defaultBay(style: Style): number {
+  switch (style) {
+    case Style.GlassOffice:
+      return 1.5;
+    case Style.Residential:
+      return 3.6;
+    case Style.MetalPanel:
+      return 1.5;
+    case Style.Slum:
+      return 3.0;
+    case Style.Monolith:
+      return 6.0;
+    case Style.Structure:
+      return 8.0;
+    default:
+      return 2.0;
+  }
+}
+
+export const WINDOWED = new Set<Style>([
+  Style.GlassOffice,
+  Style.Residential,
+  Style.MetalPanel,
+  Style.Slum,
+  Style.Monolith,
+  Style.Podium,
+]);
+
+/** Corner pier width when a face is snapped to whole bays. */
+export const PIER = 1;
+
+/**
+ * Snaps a face width to whole bays plus two corner piers (ART_BIBLE.md 3),
+ * so windows never get clipped at building corners. Rounds to the nearest
+ * bay count (changes the width by at most half a bay).
+ */
+export function snapFace(w: number, bay: number): number {
+  const n = Math.round((w - 2 * PIER) / bay);
+  if (n < 1) return w;
+  return n * bay + 2 * PIER;
+}
+
+/** Stores the bay width (decimetres) in the alpha byte of a packed color. */
+export function withBay(color: number, bay: number): number {
+  const a = Math.max(1, Math.min(254, Math.round(bay * 10)));
+  return ((color & 0xffffff) | (a << 24)) >>> 0;
 }
 
 export function seg(ctx: BuildCtx, o: SegOpts) {
@@ -105,20 +156,29 @@ export function seg(ctx: BuildCtx, o: SegOpts) {
   // percent jitter of size and top keeps any two pieces from being exactly
   // coplanar without visibly changing the design.
   const j = (k: number) => 1 + (ctx.rng.next() - 0.5) * k;
+  const style = o.style ?? Style.GlassOffice;
+  const shape = o.shape ?? Shape.Box;
+  const bay = o.bay ?? defaultBay(style);
+  let w = o.w;
+  let d = o.d;
+  if (shape <= Shape.BoxTwist && WINDOWED.has(style)) {
+    w = snapFace(w, bay);
+    d = snapFace(d, bay);
+  }
   ctx.segs.push({
     x: o.x,
     y: o.y,
     z: o.z,
     rotY: o.rotY ?? 0,
-    sx: o.w * j(0.008),
+    sx: w * j(0.008),
     sy: o.h * j(0.004),
-    sz: o.d * j(0.008),
+    sz: d * j(0.008),
     taper: o.taper ?? 1,
     twist: o.twist ?? 0,
-    shape: o.shape ?? Shape.Box,
-    style: o.style ?? Style.GlassOffice,
+    shape,
+    style,
     seed: ctx.rng.nextU32(),
-    colorA: o.colorA ?? tint(ctx.rng),
+    colorA: withBay(o.colorA ?? tint(ctx.rng), bay),
     colorB: o.colorB ?? neon(ctx.rng),
     flags: o.flags ?? 0,
     floorH: o.floorH ?? 4,
@@ -287,85 +347,97 @@ export function kitbashTier(
   colorA: number,
   colorB: number,
   floorH: number,
-  opts: {bays?: number; bands?: boolean; pilasters?: boolean} = {},
+  opts: {
+    bays?: number;
+    bands?: boolean;
+    pilasters?: boolean;
+    bay?: number;
+  } = {},
 ) {
+  // Massing on the host's bay grid (ART_BIBLE.md 5, "enclosure"): stacks
+  // whole bays wide, in the host's style, starting on floor lines and
+  // spanning the full tier or multiples of five floors. No random sizes.
   const r = ctx.rng;
   if (h < 20 || w < 14 || d < 14) return;
-  const bays = opts.bays ?? 1;
-  const alt = (s: Style) =>
-    r.chance(0.6)
-      ? s
-      : r.pick([
-          Style.MetalPanel,
-          Style.Residential,
-          Style.GlassOffice,
-          Style.Monolith,
-        ]);
+  const stacks = opts.bays ?? 1;
+  const bay = opts.bay ?? defaultBay(style);
+  const windowed = WINDOWED.has(style);
+  const sw = windowed ? snapFace(w, bay) : w;
+  const sd = windowed ? snapFace(d, bay) : d;
   // Room to the lot edge on each side: -x, +x, -z, +z.
   const room = [
-    cx - w / 2 - lot.x0,
-    lot.x1 - (cx + w / 2),
-    cz - d / 2 - lot.z0,
-    lot.z1 - (cz + d / 2),
+    cx - sw / 2 - lot.x0,
+    lot.x1 - (cx + sw / 2),
+    cz - sd / 2 - lot.z0,
+    lot.z1 - (cz + sd / 2),
   ];
+  const firstFloor = Math.ceil(y / floorH);
+  const floors = Math.floor((y + h) / floorH) - firstFloor;
   for (let side = 0; side < 4; side++) {
-    const n = r.int(0, bays + 2) - 1;
-    const faceLen = side < 2 ? d : w;
+    const n = r.int(0, stacks + 2) - 1;
+    const faceLen = side < 2 ? sd : sw;
+    const nFace = Math.round((faceLen - 2 * PIER) / bay);
     for (let k = 0; k < n; k++) {
-      const bw = r.range(6, Math.min(20, faceLen * 0.45));
-      const bd = Math.min(r.range(2.5, 7), room[side] + bw * 0.25 + 3);
-      if (bd < 1.5) continue;
-      const bh = h * r.range(0.3, 0.95);
-      const by = y + r.range(0, h - bh);
-      const along = r.range(-0.5, 0.5) * (faceLen - bw);
-      // Half-embedded in the tier so it reads as part of the building.
-      const off = (side < 2 ? w : d) / 2 + bd / 2 - 1;
+      // 1-2 bays on coarse grids, a 6-9 m group of modules on fine ones.
+      const nb = bay >= 3 ? r.int(1, 3) : r.int(4, 7);
+      if (nb > nFace - 2) continue;
+      const b0 = r.int(1, nFace - nb);
+      const along = (b0 + nb / 2 - nFace / 2) * bay;
+      const bw = nb * bay + 2 * PIER;
+      const bd = Math.min(r.range(1.5, 4), room[side] + 1.5);
+      if (bd < 1.2) continue;
+      let f0 = 0;
+      let nf = floors;
+      if (floors >= 10 && r.chance(0.5)) {
+        nf = 5 * r.int(1, Math.floor(floors / 5) + 1);
+        f0 = r.int(0, floors - nf + 1);
+      }
+      if (nf < 3) continue;
+      const by = (firstFloor + f0) * floorH;
+      const bh = nf * floorH;
+      // Embedded 1.5 m in the host so it reads as part of the building.
+      const off = (side < 2 ? sw : sd) / 2 + bd / 2 - 1.5;
       const sgn = side % 2 === 0 ? -1 : 1;
       seg(ctx, {
         x: side < 2 ? cx + sgn * off : cx + along,
         z: side < 2 ? cz + along : cz + sgn * off,
         y: by,
-        w: side < 2 ? bd + 2 : bw,
-        d: side < 2 ? bw : bd + 2,
+        w: side < 2 ? bd + 3 : bw,
+        d: side < 2 ? bw : bd + 3,
         h: bh,
-        style: alt(style),
+        style,
         colorA,
         colorB,
         floorH,
-        flags: r.chance(0.25) ? SegFlags.EdgeGlow : 0,
+        bay,
       });
     }
   }
-  if (opts.bands !== false) {
-    // Ring bands: a slightly larger collar every 25-60 m.
-    let by = y + r.range(12, 30);
-    while (by < y + h - 6) {
-      const out = Math.min(r.range(0.8, 2.2), ...room.map(v => v + 1));
-      const bh = r.range(2, 6);
+  if (opts.bands !== false && style === Style.GlassOffice) {
+    // Mechanical floors every 15 floors: a louvred double-height collar.
+    const every = 15 * floorH;
+    let by = Math.ceil((y + 12) / every) * every;
+    while (by + 2 * floorH < y + h - 6) {
+      const out = Math.min(r.range(0.6, 1.4), ...room.map(v => v + 1));
       seg(ctx, {
         x: cx,
         z: cz,
         y: by,
-        w: w + out * 2,
-        d: d + out * 2,
-        h: bh,
-        style: r.pick([
-          Style.MetalPanel,
-          Style.MetalPanel,
-          Style.Structure,
-          Style.LedFacade,
-        ]),
+        w: sw + out * 2,
+        d: sd + out * 2,
+        h: 2 * floorH,
+        style: Style.MetalPanel,
         colorA,
         colorB,
         floorH,
-        flags: r.chance(0.4) ? SegFlags.TopGlow : 0,
+        flags: SegFlags.NoWindows,
       });
-      by += r.range(25, 60);
+      by += every;
     }
   }
-  if (opts.pilasters !== false && r.chance(0.35)) {
-    // Corner pilasters running the full tier, poking above it.
-    const pw = r.range(2.5, Math.min(6, w * 0.15));
+  if (opts.pilasters !== false && style === Style.Monolith && r.chance(0.35)) {
+    // Stone corner pilasters running the full tier, poking above it.
+    const pw = r.range(2.5, Math.min(6, sw * 0.15));
     const extra = r.range(0, 12);
     for (const [sx, sz] of [
       [-1, -1],
@@ -374,17 +446,17 @@ export function kitbashTier(
       [1, 1],
     ]) {
       seg(ctx, {
-        x: cx + sx * (w / 2 - pw / 2 + 0.6),
-        z: cz + sz * (d / 2 - pw / 2 + 0.6),
+        x: cx + sx * (sw / 2 - pw / 2 + 0.6),
+        z: cz + sz * (sd / 2 - pw / 2 + 0.6),
         y,
         w: pw,
         d: pw,
         h: h + extra,
-        style: Style.MetalPanel,
+        style: Style.Monolith,
         colorA,
         colorB,
         floorH,
-        flags: r.chance(0.5) ? SegFlags.EdgeGlow : 0,
+        flags: SegFlags.NoWindows,
       });
     }
   }
@@ -786,9 +858,13 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
   let x = cx;
   let z = cz;
   const colorB = neon(r);
+  // One bay width per building: its windows stack floor to floor, while
+  // neighbours differ (ART_BIBLE.md S1).
+  const bay = r.range(2.4, 4.4);
   let first = true;
   while (y < H) {
     const h = Math.min(H - y, r.range(15, 60));
+    const fh = r.range(2.8, 3.3);
     const style = r.chance(0.75)
       ? Style.Slum
       : r.pick([
@@ -807,10 +883,12 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
       style,
       colorA: tint(r),
       colorB,
-      floorH: r.range(2.8, 3.3),
+      floorH: fh,
+      bay: style === Style.Slum ? bay : undefined,
     });
     addSlots(ctx, x, z, w, d, first ? 3 : y, y + h);
-    kitbashTier(ctx, lot, x, z, w, d, y, h, style, colorB, colorB, 3.0, {
+    kitbashTier(ctx, lot, x, z, w, d, y, h, style, colorB, colorB, fh, {
+      bay: style === Style.Slum ? bay : undefined,
       bays: 2,
       bands: false,
       pilasters: false,

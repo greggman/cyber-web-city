@@ -31,6 +31,8 @@ import {
   slumStack,
   twistTower,
   wedgeTower,
+  WINDOWED,
+  PIER,
 } from './buildings';
 
 /** Fraction of buildings per district that keep LED edge strips. */
@@ -768,7 +770,23 @@ export function generateCity(seed: number): CityData {
     if (fits(1)) continue;
     let k = 0.95;
     while (k > 0.5 && !fits(k)) k -= 0.05;
-    segments.setSize(i, g.sx * k, g.sz * k);
+    // Drop whole bays rather than squeezing them (ART_BIBLE.md 3).
+    const a = g.colorA >>> 24;
+    if (
+      g.shape <= Shape.BoxTwist &&
+      WINDOWED.has(g.style) &&
+      a > 0 &&
+      a < 255
+    ) {
+      const bay = a / 10;
+      const snap = (v: number) => {
+        const n = Math.floor((v - 2 * PIER) / bay);
+        return n >= 1 ? n * bay + 2 * PIER : v;
+      };
+      segments.setSize(i, snap(g.sx * k), snap(g.sz * k));
+    } else {
+      segments.setSize(i, g.sx * k, g.sz * k);
+    }
   }
   addRooftopMassing(segments, seed);
   for (const sl of slots) {
