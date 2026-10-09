@@ -397,6 +397,46 @@ export function shotAt(time: number, fixed?: number): Shot {
   };
 }
 
+/**
+ * Auto director: every fifth framing (about every two minutes) it cuts
+ * inside the car for one framing and looks around the cockpit. Returns the
+ * look-around phase in [0, 1) while inside, or -1.
+ */
+export function insideAt(time: number): number {
+  const k = Math.floor(time / SHOT_LEN);
+  if (((k % 5) + 5) % 5 !== 4) return -1;
+  return time / SHOT_LEN - k;
+}
+
+/**
+ * Where the driver looks during an inside shot: yaw and pitch offsets
+ * (rad) relative to straight ahead. Slow glances out of each side window,
+ * up through the canopy, down at the dash, then back to the road.
+ */
+export function lookAround(phase: number, time: number): [number, number] {
+  const ease = (t: number) => t * t * (3 - 2 * t);
+  const keys: [number, number, number][] = [
+    // [phase, yaw, pitch]
+    [0.0, 0, -0.1],
+    [0.12, 0, -0.1],
+    [0.25, 0.95, 0.05],
+    [0.4, 0.9, 0.35],
+    [0.5, 0, 0.55],
+    [0.62, -1.0, 0.15],
+    [0.74, -0.6, -0.35],
+    [0.86, 0, -0.1],
+    [1.0, 0, -0.1],
+  ];
+  let i = 0;
+  while (i < keys.length - 2 && phase > keys[i + 1][0]) i++;
+  const [p0, y0, q0] = keys[i];
+  const [p1, y1, q1] = keys[i + 1];
+  const t = ease(Math.max(0, Math.min(1, (phase - p0) / (p1 - p0))));
+  // Small head bob on top.
+  const bob = Math.sin(time * 1.7) * 0.015;
+  return [y0 + (y1 - y0) * t, q0 + (q1 - q0) * t + bob];
+}
+
 /** Smoothly follows the car with cinematic framings. */
 export class ChaseCamera {
   private pos: Vec3 | null = null;
@@ -405,6 +445,17 @@ export class ChaseCamera {
   /** Force one framing (keys 1-5); undefined cycles automatically. */
   fixedShot: number | undefined = undefined;
   fov = 55;
+
+  /** Resume following from a given eye/target (e.g. after a user orbit),
+   * gliding back to the framing instead of cutting. */
+  resumeFrom(eye: Vec3, target: Vec3, pose: CarPose, time: number) {
+    this.pos = sub(eye, pose.position);
+    this.target = sub(target, pose.position);
+    this.lastTime = time;
+    this.resumedAt = time;
+  }
+
+  private resumedAt = -1e9;
 
   update(
     pose: CarPose,
@@ -442,11 +493,14 @@ export class ChaseCamera {
       this.target = add(this.target, scale(sub(targetRel, this.target), b));
       // Keep height close to the framing so climbs/dives don't leave the
       // camera staring at the car's belly.
-      const y = Math.min(
-        Math.max(this.pos[1], eyeRel[1] - 1.5),
-        eyeRel[1] + 1.5,
-      );
-      this.pos = [this.pos[0], y, this.pos[2]];
+      // (Not while gliding back from a user orbit: that would snap.)
+      if (time - this.resumedAt > 3) {
+        const y = Math.min(
+          Math.max(this.pos[1], eyeRel[1] - 1.5),
+          eyeRel[1] + 1.5,
+        );
+        this.pos = [this.pos[0], y, this.pos[2]];
+      }
     }
     this.lastTime = time;
     // Slight roll with the car's bank.

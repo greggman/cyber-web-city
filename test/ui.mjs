@@ -70,4 +70,28 @@ await withPage('index.html?t=40', async page => {
   const after = await page.evaluate(() => window.__debug.audioRunning());
   check(!before && after, `sound starts on touch (before ${before}, after ${after})`);
 });
+// Dragging orbits the car; 6 s after the last input the auto camera
+// takes over again.
+await withPage('index.html?t=40&mute=1', async page => {
+  await page.waitForFunction(() => window.__debug?.orbitActive, {timeout: 60000});
+  await sleep(800);
+  const p0 = await page.evaluate(() => window.__debug.cameraPos());
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  for (let k = 1; k <= 10; k++) {
+    await page.mouse.move(640 + k * 30, 360 - k * 8);
+    await sleep(30);
+  }
+  await page.mouse.up();
+  await sleep(300);
+  const on = await page.evaluate(() => window.__debug.orbitActive());
+  const p1 = await page.evaluate(() => window.__debug.cameraPos());
+  await page.screenshot({path: 'out/ui/orbit.png'});
+  check(on, 'drag takes control (orbit active)');
+  await sleep(7000);
+  const off = await page.evaluate(() => window.__debug.orbitActive());
+  check(!off, 'auto camera resumes 6 s after the last input');
+  void p0;
+  void p1;
+});
 process.exit(failed ? 1 : 0);

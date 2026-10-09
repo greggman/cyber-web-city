@@ -19,8 +19,14 @@ import {unwarp} from './city/warp';
 import {generateSigns, brandGlyphs} from './city/signs';
 import {generateAds} from './city/ads';
 import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
-import {FlightPath, ChaseCamera} from './camera/flight';
-import {lookAtCamera, transformPoint, transformDir} from './math/vec';
+import {FlightPath, ChaseCamera, insideAt, lookAround} from './camera/flight';
+import {OrbitControl} from './camera/orbit';
+import {
+  lookAtCamera,
+  transformPoint,
+  transformDir,
+  type Vec3,
+} from './math/vec';
 import {MODELS} from './car/models';
 import {buildModelMesh} from './nurbs/model';
 import {CarRenderer, carLights} from './render/carRenderer';
@@ -194,6 +200,16 @@ async function main() {
   );
   const camera = new Camera();
   const chase = new ChaseCamera();
+  // Drag/pinch/wheel on the canvas orbits the car; the auto camera takes
+  // over again 6 s after the last input.
+  const orbit = new OrbitControl(canvas);
+  let wasOrbit = false;
+  let lastOrbit: {eye: Vec3; target: Vec3} | null = null;
+  (
+    window as unknown as {__debug: Record<string, unknown>}
+  ).__debug.orbitActive = () => orbit.active;
+  (window as unknown as {__debug: Record<string, unknown>}).__debug.cameraPos =
+    () => camera.position;
   if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
   const settings: RenderSettings = {
     fogColor: [0.05, 0.035, 0.022], // Smog Amber (ART_BIBLE.md 15.5)
@@ -386,6 +402,39 @@ async function main() {
     const pose = flight.pose(time);
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = ui.camera;
+    const orbitOn = orbit.active && ui.camera !== CameraMode.Map;
+    // The auto director goes inside the car now and then (chase mode,
+    // automatic framings only).
+    const inside =
+      ui.camera === CameraMode.Chase &&
+      chase.fixedShot === undefined &&
+      !orbitOn
+        ? insideAt(time)
+        : -1;
+    const inCockpit =
+      !orbitOn && (ui.camera === CameraMode.Cockpit || inside >= 0);
+    // Driver's eye view, looking (yaw, pitch) away from straight ahead.
+    const cockpitCam = (yaw: number, pitch: number) => {
+      const m = pose.matrix;
+      const eye = transformPoint(m, carEntry.driverEye);
+      const cp = Math.cos(pitch);
+      const look = transformDir(m, [
+        Math.sin(yaw) * cp,
+        Math.sin(pitch),
+        -Math.cos(yaw) * cp,
+      ]);
+      camera.camToWorld = lookAtCamera(
+        eye,
+        [eye[0] + look[0] * 10, eye[1] + look[1] * 10, eye[2] + look[2] * 10],
+        pose.up,
+      );
+      camera.fovY = (70 * Math.PI) / 180;
+    };
+    if (wasOrbit && !orbitOn && lastOrbit) {
+      // Hand back to the chase camera without a cut.
+      chase.resumeFrom(lastOrbit.eye, lastOrbit.target, pose, time);
+    }
+    wasOrbit = orbitOn;
     if (ui.camera === CameraMode.Map) {
       // Top-down view over the car (layout inspection).
       const p = pose.position;
@@ -467,6 +516,19 @@ async function main() {
             ];
       camera.camToWorld = lookAtCamera(eye, c);
       camera.fovY = (50 * Math.PI) / 180;
+    } else if (orbitOn) {
+      const f = pose.forward;
+      const o = orbit.update(
+        pose.position,
+        Math.atan2(-f[0], -f[2]),
+        camera.position,
+      );
+      lastOrbit = o;
+      camera.camToWorld = lookAtCamera(o.eye, o.target);
+      camera.fovY = (55 * Math.PI) / 180;
+    } else if (inside >= 0) {
+      const [yaw, pitch] = lookAround(inside, time);
+      cockpitCam(yaw, pitch);
     } else if (ui.camera === CameraMode.Skyline) {
       // Establishing shot: slowly orbit high above the car's area.
       const a = time * 0.02;
@@ -482,16 +544,7 @@ async function main() {
       camera.fovY = (chase.fov * Math.PI) / 180;
     } else {
       // Cockpit: the driver's eye, looking slightly down over the dash.
-      const m = pose.matrix;
-      const eye = transformPoint(m, carEntry.driverEye);
-      const sway = Math.sin(time * 0.6) * 0.03;
-      const look = transformDir(m, [sway, -0.12, -1]);
-      camera.camToWorld = lookAtCamera(
-        eye,
-        [eye[0] + look[0] * 10, eye[1] + look[1] * 10, eye[2] + look[2] * 10],
-        pose.up,
-      );
-      camera.fovY = (70 * Math.PI) / 180;
+      cockpitCam(Math.sin(time * 0.6) * 0.03, -0.12);
     }
     const cl = carLights(pose.matrix, time);
     packLights(cl, dynamicLights);
@@ -506,9 +559,9 @@ async function main() {
       dt: Math.max(dt, ui.paused ? 1 / 60 : 0),
       time,
       speed: pose.speed,
-      pov: ui.camera === CameraMode.Cockpit,
+      pov: inCockpit,
     });
-    audio.setInterior(ui.camera === CameraMode.Cockpit);
+    audio.setInterior(inCockpit);
     audio.update();
     rain.setFrame(camera.position, camera.forward, [
       pose.forward[0] * pose.speed,
