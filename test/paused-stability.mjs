@@ -2,6 +2,8 @@
 // from nondeterministic GPU work). Counts pixels that change sharply between
 // two screenshots of the same paused frame: node test/paused-stability.mjs
 // (TAA is off by default; TAA=taa=1 checks the converged TAA image too).
+// SSR is off: its stochastic per-frame sampling is meant to be resolved by
+// TAA, so with TAA off it changes every frame by design.
 import {withPage, sleep} from './harness.mjs';
 
 const VIEWS = ['cam=chase&t=60', 'cam=roof&n=40&t=20', 'cam=cable&n=3&t=20'];
@@ -9,7 +11,7 @@ const MAX = 200;
 let failed = false;
 for (const q of VIEWS) {
   await withPage(
-    `index.html?paused=1&${process.env.TAA ?? 'taa=0'}&rain=0&${q}`,
+    `index.html?paused=1&${process.env.TAA ?? 'taa=0'}&rain=0&ssr=0&${q}`,
     async page => {
       await sleep(1500);
       const a = await page.screenshot({encoding: 'base64'});

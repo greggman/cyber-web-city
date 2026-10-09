@@ -469,19 +469,37 @@ export function setbackTower(
   flags = 0,
 ) {
   const r = ctx.rng;
-  const ph = r.range(14, 36);
+  const glass = style === Style.GlassOffice;
+  // C1 (ART_BIBLE.md 4.1): 4 x 6 m podium; tiers are whole 15-floor
+  // blocks so setbacks happen only at mechanical floors, one 9 m module
+  // group per side; an open lattice crown.
+  const ph = glass ? 24 : r.range(14, 36);
   podium(ctx, lot, ph);
-  const tiers = r.int(2, 5);
   let w = (lot.x1 - lot.x0) * r.range(0.75, 0.95);
   let d = (lot.z1 - lot.z0) * r.range(0.75, 0.95);
   const cx = (lot.x0 + lot.x1) / 2;
   const cz = (lot.z0 + lot.z1) / 2;
-  let y = ph;
-  const colorA = tint(r, style === Style.GlassOffice ? 'cool' : undefined);
+  const colorA = tint(r, glass ? 'cool' : undefined);
   const colorB = neon(r);
-  const floorH = style === Style.Residential ? 3.2 : r.range(3.8, 4.4);
+  const floorH =
+    style === Style.Residential ? 3.2 : glass ? 4.2 : r.range(3.8, 4.4);
+  const block = 15 * floorH;
+  const blocks = Math.max(2, Math.round((H - ph) / block));
+  const tiers = Math.min(r.int(2, 5), blocks);
+  // Split the blocks between tiers (lower tiers get more).
+  const perTier: number[] = [];
+  let left = blocks;
   for (let t = 0; t < tiers; t++) {
-    const h = ((H - ph) / tiers) * r.range(0.8, 1.2);
+    const n =
+      t === tiers - 1
+        ? left
+        : Math.max(1, Math.round(left / (tiers - t) + r.range(-0.4, 0.8)));
+    perTier.push(Math.min(n, left - (tiers - t - 1)));
+    left -= perTier[t];
+  }
+  let y = ph;
+  for (let t = 0; t < tiers; t++) {
+    const h = perTier[t] * block;
     const tierStyle =
       style === Style.GlassOffice && r.chance(0.06) ? Style.LedFacade : style;
     seg(ctx, {
@@ -512,38 +530,17 @@ export function setbackTower(
       colorB,
       floorH,
     );
-    // Cantilevered glass pod jutting out of the tier (capped toward avenues).
-    if (r.chance(0.3) && h > 30) {
-      const side = r.int(0, 4);
-      const onAvenue = ctx.avenueSides[side];
-      const out = onAvenue ? r.range(3, 6) : r.range(6, 14);
-      const ph = r.range(10, Math.min(28, h * 0.5));
-      const py = y + r.range(0.2, 0.8) * (h - ph);
-      const along = (side < 2 ? d : w) * r.range(0.3, 0.6);
-      const sx = side < 2 ? out * 2 : along;
-      const sz = side < 2 ? along : out * 2;
-      const ox = side === 0 ? -w / 2 : side === 1 ? w / 2 : 0;
-      const oz = side === 2 ? -d / 2 : side === 3 ? d / 2 : 0;
-      seg(ctx, {
-        x: cx + ox,
-        z: cz + oz,
-        y: py,
-        w: sx,
-        d: sz,
-        h: ph,
-        style: Style.GlassOffice,
-        colorA,
-        colorB,
-        flags: SegFlags.EdgeGlow,
-        floorH,
-      });
-    }
     y += h;
-    w *= r.range(0.72, 0.9);
-    d *= r.range(0.72, 0.9);
+    if (w > 40 && d > 40) {
+      w -= 18;
+      d -= 18;
+    } else {
+      w *= 0.85;
+      d *= 0.85;
+    }
     if (t < tiers - 1 && r.chance(0.22)) {
-      // Sky lobby void: a narrow lit core between tiers.
-      const vh = r.range(12, 26);
+      // Sky lobby void at the mechanical floor: a narrow lit core.
+      const vh = 2 * floorH;
       seg(ctx, {
         x: cx,
         z: cz,
@@ -557,20 +554,39 @@ export function setbackTower(
         flags: SegFlags.FloorBands,
       });
       y += vh;
-    } else if (r.chance(0.3)) {
-      // Thin glowing band between tiers.
+    }
+  }
+  if (glass) {
+    // Open lattice crown over the top three floors, one crown light, and a
+    // mast on half of them.
+    const ch = 3 * floorH;
+    seg(ctx, {
+      x: cx,
+      z: cz,
+      y,
+      w,
+      d,
+      h: ch,
+      style: Style.Structure,
+      colorB,
+      flags: SegFlags.TopGlow,
+    });
+    y += ch;
+    if (r.chance(0.5)) {
       seg(ctx, {
         x: cx,
         z: cz,
         y,
-        w: w * 1.15,
-        d: d * 1.15,
-        h: 1.5,
-        style: Style.NeonRing,
-        colorB,
+        w: 3,
+        d: 3,
+        h: r.range(25, 70),
+        taper: 0.3,
+        style: Style.Structure,
+        flags: SegFlags.RoofBeacon,
       });
-      y += 1.5;
     }
+    ctx.roofs.push([cx, y, cz, Math.min(w, d)]);
+    return;
   }
   crown(ctx, cx, cz, y, w, d, style);
 }
@@ -591,6 +607,7 @@ export function cylinderTower(
   const taper = r.chance(0.5) ? r.range(0.55, 0.85) : 1;
   const colorB = neon(r);
   const h = H - ph;
+  const floorH = r.range(3.6, 4.2);
   seg(ctx, {
     x: cx,
     z: cz,
@@ -602,14 +619,14 @@ export function cylinderTower(
     shape: Shape.Cylinder,
     style,
     colorB,
-    floorH: r.range(3.6, 4.2),
-    flags: r.chance(0.4) ? SegFlags.FloorBands : 0,
+    floorH,
   });
-  // Glowing rings at intervals (Chinese supertall style).
+  // Rings only at mechanical floors (every 15 floors), at most four.
   if (r.chance(0.6)) {
-    const n = r.int(2, 6);
-    for (let k = 1; k <= n; k++) {
-      const t = k / (n + 1);
+    const mech = Math.floor(h / (15 * floorH));
+    const step = Math.max(1, Math.ceil(mech / 4));
+    for (let m = step; m < mech; m += step) {
+      const t = (m * 15 * floorH) / h;
       const dd = diam * (1 + (taper - 1) * t) * 1.06;
       seg(ctx, {
         x: cx,
@@ -738,20 +755,25 @@ export function pearlTower(ctx: BuildCtx, lot: Lot, H: number) {
 
 /** Mega-City One style residential slab with rooftop clutter. */
 export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
+  // M1 slab block (ART_BIBLE.md 4.2): 2.75 m floors in stacks of 30,
+  // separated by two-floor sky streets (inset, lit); upper stacks may step
+  // in one 7.2 m unit on the long faces. Core lift rooms on the roof.
   const r = ctx.rng;
   const cx = (lot.x0 + lot.x1) / 2;
   const cz = (lot.z0 + lot.z1) / 2;
-  const w = lot.x1 - lot.x0;
-  const d = lot.z1 - lot.z0;
   const colorA = tint(r, 'warm');
   const colorB = neon(r);
-  podium(ctx, lot, r.range(20, 40));
-  const tiers = r.int(1, 3);
-  let y = 30;
-  let ww = w * 0.96;
-  let dd = d * 0.96;
-  for (let t = 0; t < tiers; t++) {
-    const h = (H - 30) / tiers;
+  const fh = 2.75;
+  const ph = 22.5;
+  podium(ctx, lot, ph);
+  let ww = (lot.x1 - lot.x0) * 0.96;
+  let dd = (lot.z1 - lot.z0) * 0.96;
+  const stackH = 30 * fh;
+  const streetH = 2 * fh;
+  const longX = ww >= dd;
+  let y = ph;
+  while (y + stackH * 0.5 < H) {
+    const h = Math.min(stackH, Math.ceil((H - y) / fh) * fh);
     seg(ctx, {
       x: cx,
       z: cz,
@@ -762,8 +784,7 @@ export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
       style: Style.Residential,
       colorA,
       colorB,
-      floorH: 3.0,
-      flags: r.chance(0.35) ? SegFlags.FloorBands : 0,
+      floorH: fh,
     });
     addSlots(ctx, cx, cz, ww, dd, y, y + h);
     kitbashTier(
@@ -778,29 +799,47 @@ export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
       Style.Residential,
       colorA,
       colorB,
-      3.0,
-      {bays: 2},
+      fh,
+      {
+        bays: 2,
+        bands: false,
+      },
     );
     y += h;
-    ww *= 0.85;
-    dd *= 0.85;
-  }
-  // Rooftop: blocks, antennas, a big sign frame.
-  for (let k = 0; k < r.int(3, 8); k++) {
-    const bw = r.range(8, 30);
+    if (y + streetH + stackH * 0.5 >= H) break;
+    // Sky street: inset 3 m, lit underside and railings.
     seg(ctx, {
-      x: cx + r.range(-0.4, 0.4) * ww,
-      z: cz + r.range(-0.4, 0.4) * dd,
+      x: cx,
+      z: cz,
       y,
-      w: bw,
-      d: r.range(8, 30),
-      h: r.range(5, 25),
-      style: Style.MetalPanel,
-      flags: r.chance(0.3) ? SegFlags.RoofBeacon : 0,
+      w: ww - 6,
+      d: dd - 6,
+      h: streetH,
+      style: Style.Bridge,
+      colorA,
+      colorB,
+      floorH: fh,
+      flags: SegFlags.FloorBands,
     });
+    y += streetH;
+    if (r.chance(0.4)) {
+      if (longX) dd = Math.max(16, dd - 14.4);
+      else ww = Math.max(16, ww - 14.4);
+    }
   }
+  // Lift-motor rooms over the core: two floors, centred on the long face.
+  const coreW = 2 * 3.6 + 2;
+  seg(ctx, {
+    x: cx,
+    z: cz,
+    y,
+    w: longX ? coreW : ww * 0.5,
+    d: longX ? dd * 0.5 : coreW,
+    h: 2 * fh,
+    style: Style.MetalPanel,
+    flags: SegFlags.NoWindows | SegFlags.RoofBeacon,
+  });
   ctx.roofs.push([cx, y, cz, Math.min(ww, dd)]);
-  if (r.chance(0.5)) spire(ctx, cx, cz, y, Math.min(ww, dd));
 }
 
 /** Tyrell-like stepped pyramid occupying a whole superblock. */
