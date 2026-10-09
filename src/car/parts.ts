@@ -189,7 +189,7 @@ export function pipe(
   const railC = NurbsCurve.interpolate(rail, Math.min(3, rail.length - 1));
   const prof = NurbsCurve.circle([0, 0, 0], [1, 0, 0], [0, 1, 0], r);
   const s = sweep(prof, railC, {
-    sections: opts.sections ?? Math.max(4, rail.length * 3),
+    sections: opts.sections ?? Math.min(20, Math.max(4, rail.length * 2)),
     up: opts.up ?? [0, 1, 0],
   });
   // Normal should point away from the rail.

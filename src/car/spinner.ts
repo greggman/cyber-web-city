@@ -21,7 +21,6 @@ import {
   superBox,
   pipe,
   conform,
-  conformMap,
   surfaceLine,
   paramWhere,
   roundRect,
@@ -104,8 +103,9 @@ const beltY = K([
   [-1.0, 0.95],
   [0.0, 1.0],
   [1.0, 1.07],
-  [1.8, 1.15],
-  [2.6, 1.14],
+  [1.8, 1.14],
+  [2.2, 1.1],
+  [2.6, 0.99],
 ]);
 /** How far the fender/haunch top rises above the edge line. */
 const rise = K([
@@ -114,7 +114,7 @@ const rise = K([
   [0.5, 0.03],
   [1.2, 0.06],
   [1.8, 0.12],
-  [2.6, 0.1],
+  [2.6, 0.08],
 ]);
 const ledge = K([
   [-2.7, 0.14],
@@ -325,9 +325,13 @@ function vAtZ(s: NurbsSurface, u: number, z: number): number {
 
 /** Rakes the tail: shears points near the end forward with height. */
 function rake([x, y, z]: Vec3): Vec3 {
-  const k = RAKE * smooth(zT - 0.5, zT - 0.02, z);
-  return [x, y, z - k * (y - 0.45)];
+  const t = smooth(zT - 0.5, zT - 0.02, z);
+  const th = TUMBLE * Math.max(0, y - tailStripY());
+  return [x, y, z - t * (RAKE * (y - 0.45) + th)];
 }
+const TUMBLE = Math.tan((8 * Math.PI) / 180);
+/** Height of the tail light strip (pre-rake). */
+const tailStripY = () => edgeY(zT) - 0.075;
 
 // Materials.
 const PAINT: Vec3 = [0.085, 0.105, 0.14]; // deep blue-grey gunmetal
@@ -436,7 +440,7 @@ function liftDuct(z: number, r: number): Part[] {
       name: 'lift-ring-glow',
       surface: orient(
         revAxis(c, up, out, [
-          [r - 0.03, 0.05],
+          [r - 0.03, 0.045],
           [r - 0.03, 0.075],
         ]),
         [-1, 0, 0],
@@ -477,6 +481,23 @@ function liftDuct(z: number, r: number): Part[] {
       material: 'emissive',
       emissive: LIFT,
       tessellation: REV(3, 32),
+    },
+    {
+      // 3 cm orange ring facing down, just inside the lip.
+      name: 'lift-ring-glow',
+      surface: orient(
+        revAxis(c, up, out, [
+          [r - 0.03, 0.03],
+          [r - 0.045, 0.03],
+          [r - 0.06, 0.03],
+        ]),
+        [0, -1, 0],
+        0.5,
+        0,
+      ),
+      material: 'emissive',
+      emissive: scale(LIFT, 1.2),
+      tessellation: REV(1, 40),
     },
     {
       name: 'lift-hub',
@@ -604,33 +625,6 @@ function interior(all: Part[]) {
     material: 'carbon',
     mirror: true,
   });
-  const shelf = loft(
-    steps(bz, cZ1 + 0.04, 6).map(z =>
-      NurbsCurve.fromPoints([
-        [cEdgeX(z) - 0.065, shelfY, z],
-        [0.5 * cEdgeX(z), shelfY, z],
-        [0, shelfY, z],
-      ]),
-    ),
-  );
-  parts.push({
-    name: 'parcel-shelf',
-    surface: orient(shelf, [0, 1, 0]),
-    material: 'plastic',
-    color: [0.03, 0.03, 0.033],
-    mirror: true,
-    tessellation: {segmentsU: 2, segmentsV: 12},
-  });
-  parts.push(
-    box(
-      'shelf-light',
-      [0, shelfY + 0.004, bz + 0.03],
-      [0.6, 0.006, 0.012],
-      {material: 'emissive', emissive: [0.3, 2.5, 3]},
-      {seg: 6},
-    ),
-  );
-
   // Dashboard: one loft swept across the cabin; its ends wrap back and down
   // into the door cards like a curved cowl.
   const xe = cEdgeX(-0.6) - 0.07;
@@ -990,7 +984,7 @@ function exhaust(): Part[] {
       material: 'metal',
       color: TRIM,
       mirror: true,
-      tessellation: REV(8, 40),
+      tessellation: REV(6, 32),
     },
     {
       name: 'exhaust-duct',
@@ -1008,7 +1002,7 @@ function exhaust(): Part[] {
       color: [0.05, 0.05, 0.055],
       roughness: 0.35,
       mirror: true,
-      tessellation: REV(6, 40),
+      tessellation: REV(4, 32),
     },
     {
       name: 'exhaust-cone',
@@ -1053,7 +1047,7 @@ function exhaust(): Part[] {
       material: 'emissive',
       emissive: e,
       mirror: true,
-      tessellation: REV(2, 32),
+      tessellation: REV(1, 28),
     });
   }
   // Stator vanes.
@@ -1080,8 +1074,8 @@ export function buildSpinner(): Model {
 
   // Lift duct positions (holes are cut in the belly for them).
   const ducts: [number, number][] = [
-    [-1.85, 0.3],
-    [0.25, 0.32],
+    [-1.85, 0.36],
+    [0.25, 0.38],
   ];
 
   // Main hull: a full-width lower loft (belly, flanks below the crease and
@@ -1093,7 +1087,7 @@ export function buildSpinner(): Model {
     ...steps(-1.0, POD_Z0, 4),
     ...steps(POD_Z0 + 0.15, zT, 8),
   ];
-  const hullTessV = 56;
+  const hullTessV = 50;
   const upper = loft(hullZ.map(upperSection));
   const lower = orient(loft(hullZ.map(lowerFull)), [0, -1, 0], 0.5, 0.5);
   parts.push({
@@ -1102,7 +1096,7 @@ export function buildSpinner(): Model {
     material: 'paint',
     color: PAINT,
     mirror: true,
-    tessellation: {segmentsU: 16, segmentsV: hullTessV},
+    tessellation: {segmentsU: 12, segmentsV: hullTessV},
   });
   const inDuct = (p: Vec3) =>
     ducts.some(([z, r]) => Math.hypot(p[0], p[2] - z) < r - 0.02);
@@ -1117,7 +1111,7 @@ export function buildSpinner(): Model {
     color: PAINT2,
     roughness: 0.45,
     tessellation: {
-      segmentsU: 60,
+      segmentsU: 52,
       segmentsV: hullTessV,
       keep: (u, v) =>
         !ductV.some(([a, b]) => v > a && v < b) ||
@@ -1125,6 +1119,76 @@ export function buildSpinner(): Model {
     },
   });
   for (const [z, r] of ducts) parts.push(...liftDuct(z, r));
+
+  // Belly detail: two keel strakes, cross panel lines and access hatches.
+  for (const x of [-0.52, 0.52]) {
+    parts.push({
+      name: 'keel-strake',
+      surface: pipe(
+        steps(-2.25, zT - 0.6, 10).map(z => [x, keel(z) - 0.004, z] as Vec3),
+        0.016,
+      ),
+      material: 'metal',
+      color: TRIM,
+      tessellation: {segmentsU: 5, segmentsV: 28},
+    });
+  }
+  const bellyCache = new Map<number, NurbsCurve>();
+  const bellyU = (z: number, x: number) => {
+    let c = bellyCache.get(z);
+    if (!c) bellyCache.set(z, (c = lowerFull(z)));
+    return paramWhere(c, p => p[0] - x);
+  };
+  for (const z of [-2.35, -1.2, -0.55, 0.85, 1.5]) {
+    const v = vAtZ(lower, 0.5, z);
+    parts.push({
+      name: 'belly-line',
+      surface: surfaceLine(
+        lower,
+        steps(bellyU(z, -0.6), bellyU(z, 0.6), 6).map(
+          u => [u, v] as [number, number],
+        ),
+        0.004,
+      ),
+      material: 'rubber',
+      tessellation: {segmentsU: 4, segmentsV: 12},
+    });
+  }
+  for (const [z0, z1, x0, x1] of [
+    [-1.05, -0.7, -0.4, -0.12],
+    [-1.05, -0.7, 0.12, 0.4],
+    [1.0, 1.35, -0.3, 0.3],
+  ]) {
+    const v0 = vAtZ(lower, 0.5, z0);
+    const v1 = vAtZ(lower, 0.5, z1);
+    const zm = (z0 + z1) / 2;
+    parts.push({
+      name: 'belly-hatch',
+      surface: conform(lower, bellyU(zm, x0), bellyU(zm, x1), v0, v1, 0.003, {
+        nu: 4,
+        nv: 4,
+      }),
+      material: 'metal',
+      color: [0.08, 0.085, 0.09],
+      tessellation: {segmentsU: 2, segmentsV: 2},
+    });
+    for (const [bx, bz] of [
+      [x0 + 0.03, z0 + 0.03],
+      [x1 - 0.03, z0 + 0.03],
+      [x0 + 0.03, z1 - 0.03],
+      [x1 - 0.03, z1 - 0.03],
+    ]) {
+      parts.push(
+        box(
+          'hatch-bolt',
+          [bx, keel(bz) - 0.006, bz],
+          [0.012, 0.005, 0.012],
+          {material: 'metal', color: TRIM},
+          {e: 0.5, seg: 3},
+        ),
+      );
+    }
+  }
 
   // Pod details: red side marker, orange lift strip, exhaust assembly.
   parts.push(
@@ -1171,7 +1235,7 @@ export function buildSpinner(): Model {
     material: 'glass',
     color: [0.85, 0.9, 1.0],
     doubleSided: true,
-    tessellation: {segmentsU: 32, segmentsV: 36},
+    tessellation: {segmentsU: 28, segmentsV: 32},
   });
   const deck = orient(
     loft(steps(zC1, zT, 6).map(z => topSection(z))),
@@ -1185,47 +1249,47 @@ export function buildSpinner(): Model {
     tessellation: panelTess,
   });
 
-  // Buttress sail panels: painted strips that grow over the lower rear
-  // corners of the glass and run down the deck to the haunches.
-  const vS = vAtZ(canopy, 0.0, fwd(0.75));
-  const sailW = (t: number) => 0.16 * Math.sin(Math.min(1, t) * Math.PI * 0.5);
+  // Buttress sails: thick (4.4 cm) painted fins swept along the lower rear
+  // corners of the glass and down the deck to the haunches, with a bright
+  // highlight edge along their inner top.
+  const vS = vAtZ(canopy, 0.0, fwd(0.7));
+  const sailW = (t: number) => 0.17 * Math.sin(Math.min(1, t) * Math.PI * 0.5);
+  const sailSt: [NurbsSurface, number, number, number][] = [];
+  for (const b of steps(0, 1, 8))
+    sailSt.push([canopy, vS + (1 - vS) * b, sailW(b), 1]);
+  for (const b of steps(0.2, 1, 4))
+    sailSt.push([deck, 0.72 * b, 0.17 - 0.09 * b, 1]);
+  sailSt.push([deck, 0.75, 0.07, 0.15]);
   for (const side of [0, 1]) {
     const uu = (w: number) => (side === 0 ? w : 1 - w);
-    parts.push({
-      name: 'sail',
-      surface: orient(
-        conformMap(
-          canopy,
-          (a, b) => [uu(a * sailW(b)), vS + (1 - vS) * b],
-          0.004,
-          5,
-          9,
-        ),
-        [0, 1, 0],
-        0.5,
-        0.9,
-      ),
-      material: 'paint',
-      color: PAINT,
-      tessellation: {segmentsU: 4, segmentsV: 18},
+    const secs: NurbsCurve[] = [];
+    const edge: Vec3[] = [];
+    sailSt.forEach(([S, v, w0, k], i) => {
+      const w = Math.max(w0, 0.012);
+      const E = S.evaluate(uu(0.004), v);
+      const I = S.evaluate(uu(w), v);
+      const n = S.normal(uu(w / 2), v);
+      const X = normalize(sub(I, E));
+      const hx = (Math.hypot(...sub(I, E)) / 2) * (i === 0 ? 0.3 : 1);
+      const hy = 0.022 * (i === 0 ? 0.2 : k);
+      const C = add(scale(add(E, I), 0.5), scale(n, hy + 0.002));
+      secs.push(roundRect(C, X, n, Math.max(hx * k, 0.004), hy));
+      if (i > 1 && i < sailSt.length - 1) {
+        edge.push(add(add(C, scale(X, hx * 0.92)), scale(n, hy * 0.9)));
+      }
     });
     parts.push({
       name: 'sail',
-      surface: orient(
-        conformMap(
-          deck,
-          (a, b) => [uu(a * (0.16 - 0.1 * b)), 0.75 * b],
-          0.004,
-          5,
-          6,
-        ),
-        [0, 1, 0],
-        0.5,
-        0.2,
-      ),
+      surface: orient(loft(secs), [0, 1, 0], 0, 0.5),
       material: 'paint',
       color: PAINT,
-      tessellation: {segmentsU: 4, segmentsV: 10},
+      tessellation: {segmentsU: 12, segmentsV: 22},
+    });
+    parts.push({
+      name: 'sail-edge',
+      surface: pipe(edge, 0.005),
+      material: 'chrome',
+      tessellation: {segmentsU: 5, segmentsV: 24},
     });
   }
 
@@ -1242,9 +1306,39 @@ export function buildSpinner(): Model {
     tessellation: {segmentsU: 4, segmentsV: 48},
   });
 
+  // Body-colour tonneau under the fastback glass, from the seat bulkhead to
+  // the deck lid, with a raised centre spine.
+  {
+    const z0 = fwd(1.0);
+    const y0 = 0.98;
+    const ts = steps(0, 1, 6);
+    const end = topSection(zC1);
+    const secs = ts.map(t => {
+      const z = z0 + (zC1 - z0) * t;
+      const ex = edgeX(z) - 0.07 * (1 - t);
+      const spine = 0.05 * (1 - t * t);
+      return NurbsCurve.fromPoints(
+        TOP_XF.map((xf, i) => {
+          const e = end.points[i];
+          const yStart =
+            y0 + (i === 4 ? spine : i === 3 || i === 5 ? spine * 0.3 : 0);
+          const y = yStart + (e[1] - y0) * t + (i === 4 ? spine * t : 0);
+          return [xf * ex, i === 4 ? y : yStart + (e[1] - y0) * t, z] as Vec3;
+        }),
+      );
+    });
+    parts.push({
+      name: 'tonneau',
+      surface: orient(loft(secs), [0, 1, 0]),
+      material: 'paint',
+      color: PAINT,
+      tessellation: {segmentsU: 16, segmentsV: 14},
+    });
+  }
+
   // Glass rim: a dark seal all round the base of the bubble, plus a thin
   // bright edge just inside it (reads as the glass thickness).
-  const railZ = steps(zC0 + 0.01, zC1 - 0.01, 18);
+  const railZ = steps(zC0 + 0.01, zC1 - 0.01, 10);
   for (const [off, r, mat] of [
     [0.004, 0.013, {material: 'rubber'}],
     [0.03, 0.005, {material: 'chrome'}],
@@ -1311,26 +1405,20 @@ export function buildSpinner(): Model {
     color: TRIM,
     tessellation: {segmentsU: 6, segmentsV: 40},
   });
+  // Beacon: a 0.30 x 0.06 m smoked lens set flush into the top of the hoop
+  // under the glass, with the amber / cyan emitters inside it.
   const topY = hoopC.evaluate(0.5)[1];
-  parts.push(
-    box(
-      'beacon-base',
-      [0, topY + 0.006, hoopZ],
-      [0.18, 0.008, 0.05],
-      {material: 'metal', color: DARK},
-      {e: 0.2, seg: 10},
-    ),
-  );
+  const by = topY - 0.035;
   for (const [x, col] of [
-    [0.085, AMBER],
-    [-0.085, CYAN],
+    [0.07, AMBER],
+    [-0.07, CYAN],
   ] as const) {
     parts.push(
       box(
         'beacon',
-        [x, topY + 0.02, hoopZ],
-        [0.075, 0.01, 0.03],
-        {material: 'emissive', emissive: scale(col, 0.8)},
+        [x, by, hoopZ],
+        [0.06, 0.016, 0.018],
+        {material: 'emissive', emissive: scale(col, 0.9)},
         {seg: 6},
       ),
     );
@@ -1338,10 +1426,19 @@ export function buildSpinner(): Model {
   parts.push(
     box(
       'beacon-lens',
-      [0, topY + 0.022, hoopZ],
-      [0.175, 0.02, 0.045],
+      [0, by, hoopZ],
+      [0.15, 0.03, 0.032],
       {material: 'tinted-glass', doubleSided: true},
-      {e: 0.25, seg: 12},
+      {e: 0.2, seg: 12},
+    ),
+  );
+  parts.push(
+    box(
+      'beacon-housing',
+      [0, by - 0.032, hoopZ],
+      [0.16, 0.008, 0.036],
+      {material: 'metal', color: TRIM},
+      {e: 0.2, seg: 10, y: [0, 1, 0], z: [0, 0, 1]},
     ),
   );
 
@@ -1454,22 +1551,10 @@ export function buildSpinner(): Model {
   }
 
   // Nose fascia and tail panel: planar caps ruled horizontally from the
-  // half outline to the center plane (no pole, so shading stays flat). The
-  // tail panel has the exhaust holes cut out (hidden under the lip rings).
-  const capOutline = (z: number): NurbsCurve => {
-    const pts: Vec3[] = [...lowerPoints(z)];
-    const us = upperSection(z);
-    for (let i = 1; i <= 10; i++) pts.push(us.evaluate(i / 10));
-    const ts = topSection(z);
-    for (let i = 1; i <= 8; i++) pts.push(ts.evaluate(0.5 * (i / 8)));
-    return NurbsCurve.interpolate(pts);
-  };
-  for (const [z, dir, name] of [
-    [zN, -1, 'nose-fascia'],
-    [zT, 1, 'tail-panel'],
-  ] as const) {
-    const outline = capOutline(z);
-    const cap = orient(
+  // half outline to the center plane (no pole, so shading stays flat).
+  const capFrom = (pts: Vec3[], dir: number): NurbsSurface => {
+    const outline = NurbsCurve.interpolate(pts);
+    return orient(
       ruled(
         outline.transform(([, y, zz]) => [0, y, zz]),
         outline,
@@ -1478,29 +1563,56 @@ export function buildSpinner(): Model {
       0.5,
       0.5,
     );
-    if (dir < 0) {
+  };
+  {
+    const pts: Vec3[] = [...lowerPoints(zN)];
+    const us = upperSection(zN);
+    for (let i = 1; i <= 10; i++) pts.push(us.evaluate(i / 10));
+    const ts = topSection(zN);
+    for (let i = 1; i <= 8; i++) pts.push(ts.evaluate(0.5 * (i / 8)));
+    parts.push({
+      name: 'nose-fascia',
+      surface: capFrom(pts, -1),
+      material: 'plastic',
+      color: FASCIA,
+      roughness: 0.5,
+      mirror: true,
+      tessellation: {segmentsU: 48, segmentsV: 1},
+    });
+  }
+  // Tail: painted above the light strip, black below it, the lower part with
+  // the exhaust holes cut out (hidden under the lip rings).
+  const ys = tailStripY();
+  const usT = upperSection(zT);
+  const tS = paramWhere(usT, p => p[1] - ys);
+  {
+    const lowPts: Vec3[] = [...lowerPoints(zT)];
+    for (let i = 1; i <= 4; i++) lowPts.push(usT.evaluate((tS * i) / 4));
+    const upPts: Vec3[] = [];
+    for (let i = 0; i <= 6; i++)
+      upPts.push(usT.evaluate(tS + ((1 - tS) * i) / 6));
+    const ts = topSection(zT);
+    for (let i = 1; i <= 8; i++) upPts.push(ts.evaluate(0.5 * (i / 8)));
+    parts.push({
+      name: 'tail-upper',
+      surface: capFrom(upPts, 1),
+      material: 'paint',
+      color: PAINT,
+      mirror: true,
+      tessellation: {segmentsU: 24, segmentsV: 1},
+    });
+    const low = capFrom(lowPts, 1);
+    // Both halves explicitly (trim functions see their own surface).
+    for (const half of [low, low.mirrorX()]) {
       parts.push({
-        name,
-        surface: cap,
-        material: 'plastic',
-        color: FASCIA,
-        roughness: 0.5,
-        mirror: true,
-        tessellation: {segmentsU: 48, segmentsV: 1},
-      });
-      continue;
-    }
-    // Tail: both halves explicitly (trim functions see their own surface).
-    for (const half of [cap, cap.mirrorX()]) {
-      parts.push({
-        name,
+        name: 'tail-lower',
         surface: half,
         material: 'plastic',
         color: FASCIA,
         roughness: 0.5,
         tessellation: {
-          segmentsU: 64,
-          segmentsV: 22,
+          segmentsU: 36,
+          segmentsV: 18,
           keep: (u, v) => {
             // Ruled horizontally: y depends on u only.
             const p = half.evaluate(u, 1);
@@ -1512,10 +1624,35 @@ export function buildSpinner(): Model {
       });
     }
   }
+  // The light strip wraps 0.25 m around each rear quarter.
+  const vWrap = vAtZ(upper, tS, zT - 0.25);
+  parts.push({
+    name: 'tail-wrap-bezel',
+    surface: conform(upper, tS - 0.07, tS + 0.07, vWrap - 0.01, 1, 0.003, {
+      nu: 4,
+      nv: 5,
+    }),
+    material: 'metal',
+    color: DARK,
+    mirror: true,
+    tessellation: {segmentsU: 3, segmentsV: 8},
+  });
+  parts.push({
+    name: 'tail-wrap',
+    surface: conform(upper, tS - 0.035, tS + 0.035, vWrap, 1, 0.006, {
+      nu: 4,
+      nv: 5,
+    }),
+    material: 'emissive',
+    color: [1, 0.05, 0.02],
+    emissive: TAIL,
+    mirror: true,
+    tessellation: {segmentsU: 2, segmentsV: 8},
+  });
 
-  // Diffuser: fins under the tail between the exhausts, following the
-  // rising belly.
-  for (const x of [0.12, 0.34]) {
+  // Diffuser: four fins under the tail between the exhausts, rising with
+  // the belly and continuing up the black lower tail face as ribs.
+  for (const x of [0.15, 0.42]) {
     const zs = steps(zT - 0.55, zT + 0.01, 4);
     parts.push({
       name: 'diffuser-fin',
@@ -1528,7 +1665,7 @@ export function buildSpinner(): Model {
                 z =>
                   [
                     x,
-                    keel(z) - 0.09 * smooth(zT - 0.55, zT - 0.2, z),
+                    keel(z) - 0.12 * smooth(zT - 0.55, zT - 0.15, z),
                     z,
                   ] as Vec3,
               ),
@@ -1544,6 +1681,17 @@ export function buildSpinner(): Model {
       doubleSided: true,
       tessellation: {segmentsU: 8, segmentsV: 2},
     });
+    const y0 = keel(zT) - 0.12;
+    const y1 = ys - 0.09;
+    parts.push(
+      box(
+        'diffuser-rib',
+        [x, (y0 + y1) / 2, zT + 0.012],
+        [0.012, (y1 - y0) / 2, 0.022],
+        {material: 'metal', color: TRIM},
+        {e: 0.3, seg: 4, mirror: true},
+      ),
+    );
   }
 
   // Nose: slim full-width light bar, slim grille, chin blade tied to the
@@ -1656,7 +1804,7 @@ export function buildSpinner(): Model {
   parts.push(
     box(
       'tail-light',
-      [0, tailTop - 0.07, zT + 0.008],
+      [0, ys, zT + 0.008],
       [flareW(zT) - 0.06, 0.02, 0.012],
       {material: 'emissive', color: [1, 0.05, 0.02], emissive: TAIL},
       {e: 0.2, seg: 10},
@@ -1665,7 +1813,7 @@ export function buildSpinner(): Model {
   parts.push(
     box(
       'tail-light-bezel',
-      [0, tailTop - 0.07, zT + 0.002],
+      [0, ys, zT + 0.002],
       [flareW(zT) - 0.04, 0.032, 0.01],
       {material: 'metal', color: DARK},
       {e: 0.2, seg: 10},
