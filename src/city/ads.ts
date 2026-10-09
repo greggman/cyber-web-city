@@ -3,7 +3,29 @@
 import {Rng} from '../math/random';
 import type {Vec3} from '../math/vec';
 import type {FacadeSlot} from './buildings';
-import {NEON} from './buildings';
+import {
+  CYAN,
+  HOLO_ICE,
+  HOLO_ROSE,
+  MAGENTA,
+  NEON_WHITE,
+  RED,
+  TUNGSTEN,
+  ULTRAVIOLET,
+  type RGB,
+} from './palette';
+
+/** Ad scene colours (ART_BIBLE.md 15.7), by scene id. */
+const AD_COLORS: [RGB, RGB][] = [
+  [RED, NEON_WHITE], // bottle
+  [HOLO_ROSE, HOLO_ICE], // dancer
+  [RED, TUNGSTEN], // koi
+  [RED, NEON_WHITE], // face
+  [TUNGSTEN, RED], // noodles
+  [HOLO_ICE, NEON_WHITE], // pharma
+  [HOLO_ICE, HOLO_ROSE], // jellyfish
+  [NEON_WHITE, RED], // logo
+];
 import {District, SUPER} from './layout';
 import {unwarp, warp} from './warp';
 
@@ -56,11 +78,14 @@ export function generateAds(
   const rng = new Rng(seed, 5150);
   const tiles: AdTile[] = [];
   for (let i = 0; i < AD_TILES; i++) {
-    const a = rng.pick(NEON);
-    let b = rng.pick(NEON);
-    if (b === a) b = NEON[(NEON.indexOf(a) + 3) % NEON.length];
+    // Colours per scene (ART_BIBLE.md 15.7); the second copy of the
+    // dancer and jellyfish tiles carry the Market magenta signature.
+    const scene = i % AD_SCENES;
+    let [a, b] = AD_COLORS[scene % AD_COLORS.length];
+    if (i >= AD_SCENES && (scene === 1 || scene === 6))
+      [a, b] = [MAGENTA, CYAN];
     tiles.push({
-      scene: i % AD_SCENES,
+      scene,
       colorA: a,
       colorB: b,
       glyphs: brandGlyphs(rng),
@@ -122,8 +147,10 @@ export function generateAds(
     // Keep clear of neighbouring towers (the roof itself is below y0).
     if (!isClear(r[0], r[2], scale * 0.35, r[1] + 1, r[1] + scale * 2.3))
       continue;
-    const c = rng.pick(NEON);
-    const c2 = rng.pick(NEON);
+    // The hologram pair, rose and ice (ART_BIBLE.md 15.7).
+    const [c, c2] = rng.chance(0.5)
+      ? [HOLO_ROSE, HOLO_ICE]
+      : [HOLO_ICE, HOLO_ROSE];
     holograms.push({
       pos: [r[0], r[1], r[2]],
       scale,
@@ -153,8 +180,10 @@ export function generateAds(
       pos: [ix, 0, iz],
       scale,
       kind: rng.pick([0, 1, 3, 2, 0, 1]),
-      color: rng.pick(NEON),
-      color2: rng.pick(NEON),
+      // Route giants carry the magenta signature, alternating with the
+      // rose-led pair so one view never mixes two pairs.
+      color: giants.length % 2 === 0 ? MAGENTA : HOLO_ROSE,
+      color2: HOLO_ICE,
       rot: rng.range(0, Math.PI * 2),
     });
     if (giants.length >= 60) break;
@@ -177,8 +206,9 @@ export function generateAds(
       pos: [ix, 0, iz],
       scale,
       kind: rng.pick([0, 1, 3]),
-      color: rng.pick(NEON),
-      color2: rng.pick(NEON),
+      // Landmark giants: the one ultraviolet in a view (15.2b).
+      color: ULTRAVIOLET,
+      color2: HOLO_ICE,
       rot: rng.range(0, Math.PI * 2),
     });
   }

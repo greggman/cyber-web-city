@@ -7,6 +7,7 @@
 // Runs after the warp, in world space: positions follow each roof's final
 // (warped, corridor-shrunk) pose.
 import {Rng, hashCombine} from '../math/random';
+import {AMBER, NEON_WHITE, RED, type RGB} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
 
@@ -182,26 +183,23 @@ export function addRooftopMassing(segments: SegmentList, seed: number) {
       const fx = alongX ? 0 : side * 0.7;
       const fz = alongX ? side * 0.7 : 0;
       const [bw, bd] = alongX ? [w, 1.2] : [1.2, w];
+      const board = rng.pick(BOARDS);
       put(fx, fz, bw * 0.9, bd * 0.5, legs, {style: Style.Structure});
       put(fx, fz, bw, bd, h, {
         y: top + legs,
         style: Style.LedFacade,
         flags: 0,
-        color: packColor(...neonPair(rng)[0]),
-        accent: packColor(...neonPair(rng)[1]),
+        color: packColor(...board[0]),
+        accent: packColor(...board[1]),
       });
     }
   }
 }
 
-const NEONS: [number, number, number][] = [
-  [1.0, 0.08, 0.55],
-  [0.05, 0.85, 1.0],
-  [1.0, 0.5, 0.05],
-  [0.55, 0.15, 1.0],
-  [0.15, 1.0, 0.45],
+// Rooftop billboards use the sign set (ART_BIBLE.md 15.4).
+const BOARDS: [RGB, RGB][] = [
+  [RED, NEON_WHITE],
+  [NEON_WHITE, RED],
+  [AMBER, NEON_WHITE],
+  [RED, AMBER],
 ];
-
-function neonPair(rng: Rng) {
-  return [rng.pick(NEONS), rng.pick(NEONS)];
-}

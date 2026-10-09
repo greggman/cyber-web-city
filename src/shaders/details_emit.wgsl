@@ -299,13 +299,16 @@ fn laundry_color(h: u32) -> u32 {
 }
 
 fn neon_accent(h: u32) -> u32 {
+  // Kit accents (awning fabric, status lights, stall goods) from the
+  // colour script (ART_BIBLE.md 15): signal red, amber, warm white and
+  // muted fabric tones, one cool faded teal.
   let k = h % 6u;
-  var c = vec3f(1.0, 0.1, 0.5);
-  if (k == 1u) { c = vec3f(0.1, 0.9, 1.0); }
-  if (k == 2u) { c = vec3f(1.0, 0.55, 0.1); }
-  if (k == 3u) { c = vec3f(0.2, 1.0, 0.4); }
-  if (k == 4u) { c = vec3f(1.0, 0.15, 0.1); }
-  if (k == 5u) { c = vec3f(0.6, 0.3, 1.0); }
+  var c = vec3f(1.0, 0.06, 0.02);
+  if (k == 1u) { c = vec3f(1.0, 0.42, 0.06); }
+  if (k == 2u) { c = vec3f(1.0, 0.72, 0.43); }
+  if (k == 3u) { c = vec3f(0.8, 0.45, 0.12); }
+  if (k == 4u) { c = vec3f(0.6, 0.15, 0.06); }
+  if (k == 5u) { c = vec3f(0.2, 0.45, 0.45); }
   return rgba(c);
 }
 

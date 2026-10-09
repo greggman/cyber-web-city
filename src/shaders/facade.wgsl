@@ -73,7 +73,8 @@ fn light_color(kind: u32, h: f32, tint: vec3f) -> vec3f {
   let warm = mix(tint, vec3f(1.0, 0.64, 0.34), 0.5 + 0.5 * fract(h * 7.0));
   let cool = mix(vec3f(0.78, 0.9, 1.0), vec3f(0.92, 0.95, 1.0), fract(h * 5.0));
   let fluoro = vec3f(0.62, 1.0, 0.72);
-  let tinted = select(vec3f(1.0, 0.3, 0.55), vec3f(0.3, 0.85, 0.9), fract(h * 11.0) < 0.5);
+  // Curtain-tinted rooms: ochre, rust or faded red (ART_BIBLE.md 15.6).
+  let tinted = select(vec3f(1.0, 0.45, 0.12), vec3f(0.85, 0.2, 0.1), fract(h * 11.0) < 0.5);
   let tv = vec3f(0.4, 0.5, 1.0);
   switch kind {
     case ST_RESIDENTIAL: {
@@ -842,7 +843,7 @@ fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
     // Perimeter lights.
     let ang = atan2(q.y, q.x);
     let dots = smoothstep(0.35, 0.0, length(vec2f(r - 11.0, (fract(ang / TAU * 24.0) - 0.5) * r * TAU / 24.0)));
-    (*sf).emissive += vec3f(0.2, 1.0, 0.4) * dots * 3.0;
+    (*sf).emissive += vec3f(1.0, 0.42, 0.06) * dots * 3.0;
   }
   // Parapet edge glow.
   let edge = min(half.x - abs(q.x), half.y - abs(q.y));

@@ -13,7 +13,7 @@ import cablesWgsl from '../shaders/cables.wgsl';
 const LANTERN_COLORS: [number, number, number][] = [
   [1, 0.1, 0.04],
   [1, 0.5, 0.12],
-  [1, 0.22, 0.5],
+  [1, 0.46, 0.15], // tungsten (red and tungsten only: ART_BIBLE.md 15.6)
   [1, 0.75, 0.45],
 ];
 
