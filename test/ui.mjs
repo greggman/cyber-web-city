@@ -57,4 +57,17 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   check(st.camera === 0 && st.shot === 1, `key 2 picks chase framing 2 (${st.camera}/${st.shot})`);
   check(ctx.errors.length === 0, `no WebGPU/page errors (${ctx.errors.slice(0, 2)})`);
 });
+// Sound starts on the first touch (mobile browsers only unlock audio on a
+// gesture).
+await withPage('index.html?t=40', async page => {
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => window.__debug?.audioRunning, {timeout: 60000});
+  await sleep(500);
+  const before = await page.evaluate(() => window.__debug.audioRunning());
+  await page.touchscreen.tap(640, 400);
+  await sleep(500);
+  const after = await page.evaluate(() => window.__debug.audioRunning());
+  check(!before && after, `sound starts on touch (before ${before}, after ${after})`);
+});
 process.exit(failed ? 1 : 0);

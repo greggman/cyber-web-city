@@ -26,6 +26,11 @@ export class Ambience {
 
   constructor(private readonly seed = 1) {}
 
+  /** True once the audio context is running (unlocked by a gesture). */
+  get running(): boolean {
+    return this.ctx?.state === 'running';
+  }
+
   /** Creates the graph; must be called from a user gesture. */
   start() {
     if (this.ctx) {

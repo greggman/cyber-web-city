@@ -249,10 +249,26 @@ async function main() {
 
   const audio = new Ambience(seed);
   audio.setMuted(!ui.sound);
+  // Start sound on the first touch, click or key. Mobile Safari only
+  // unlocks audio on touchend/click (not pointerdown), so listen to all of
+  // them, in the capture phase (UI buttons stop propagation), until the
+  // context is actually running.
+  const gestures = ['pointerdown', 'touchend', 'click', 'keydown'];
   const startAudio = () => {
-    if (ui.sound) audio.start();
+    if (!ui.sound) return;
+    audio.start();
+    if (audio.running) {
+      for (const g of gestures) {
+        window.removeEventListener(g, startAudio, true);
+      }
+    }
   };
-  window.addEventListener('pointerdown', startAudio);
+  for (const g of gestures) {
+    window.addEventListener(g, startAudio, {capture: true, passive: true});
+  }
+  (
+    window as unknown as {__debug: Record<string, unknown>}
+  ).__debug.audioRunning = () => audio.running;
 
   // Apply a UI setting to the renderer/simulation.
   const apply = (key: keyof UiState) => {
