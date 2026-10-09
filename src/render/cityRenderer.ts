@@ -41,7 +41,7 @@ export class CityRenderer {
   private buckets: Bucket[] = [];
   private vertexBuffer!: GPUBuffer;
   private indexBuffer!: GPUBuffer;
-  private segmentBuffer!: GPUBuffer;
+  segmentBuffer!: GPUBuffer;
   private visibleBuffer!: GPUBuffer;
   private argsBuffer!: GPUBuffer;
   private argsInit!: Uint32Array;
@@ -68,6 +68,7 @@ export class CityRenderer {
     segments: SegmentList,
     sceneBindGroup: GPUBindGroup,
     sceneLayout: GPUBindGroupLayout,
+    aoLayout: GPUBindGroupLayout,
   ) {
     const device = this.device;
     const lib = buildShapeLibrary();
@@ -211,6 +212,7 @@ export class CityRenderer {
     const layout = pipelineLayout(device, 'city/draw/pipelineLayout', [
       sceneLayout,
       drawLayout,
+      aoLayout,
     ]);
     const module = createShaderModule(device, {label: 'city', code: cityWgsl});
     const vertexState: GPUVertexState = {
@@ -324,11 +326,13 @@ export class CityRenderer {
     });
   }
 
-  drawDepth(pass: GPURenderPassEncoder) {
+  drawDepth(pass: GPURenderPassEncoder, aoBindGroup: GPUBindGroup) {
+    pass.setBindGroup(2, aoBindGroup);
     this.draw(pass, this.depthPipeline);
   }
 
-  drawColor(pass: GPURenderPassEncoder) {
+  drawColor(pass: GPURenderPassEncoder, aoBindGroup: GPUBindGroup) {
+    pass.setBindGroup(2, aoBindGroup);
     this.draw(pass, this.colorPipeline);
   }
 

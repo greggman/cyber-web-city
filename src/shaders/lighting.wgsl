@@ -10,12 +10,19 @@ struct Surface {
   reflectivity: f32,
 };
 
+// Ambient visibility from SSAO (set by shaders that sample it; 1 = none).
+var<private> g_ao: f32 = 1.0;
+
 fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
-  let sky = vec3f(0.02, 0.022, 0.045) * frame.cityGlow;
-  let ground = vec3f(0.11, 0.05, 0.03) * frame.cityGlow;
-  // Deeper in the canyons there is more bounced street light.
+  // Three bands of city light: the glowing smog dome above (top faces), the
+  // horizon haze (walls) and bounced street light from below (undersides,
+  // stronger deeper in the canyons). The differences between them are what
+  // make ledges, fins and greebles read at night.
+  let sky = vec3f(0.26, 0.18, 0.34) * frame.cityGlow;
+  let horizon = vec3f(0.12, 0.085, 0.12) * frame.cityGlow;
   let depthBoost = 1.0 + 3.0 * exp(-max(worldY, 0.0) / 90.0);
-  return mix(ground * depthBoost, sky, n.y * 0.5 + 0.5);
+  let ground = vec3f(0.2, 0.1, 0.06) * depthBoost * frame.cityGlow;
+  return sky * smoothstep(-0.1, 1.0, n.y) + horizon * (1.0 - abs(n.y)) + ground * smoothstep(0.1, -1.0, n.y);
 }
 
 // What glossy surfaces reflect before SSR: a dim city below and a faintly
@@ -73,10 +80,10 @@ fn light_clustered(world: vec3f, n: vec3f, v: vec3f, albedo: vec3f, rough: f32, 
 fn shade_surface(sf: Surface, world: vec3f) -> vec3f {
   let V = normalize(frame.camPos - world);
   let diffuse = sf.albedo * (1.0 - sf.metallic);
-  var c = diffuse * ambient_light(sf.normal, world.y);
+  var c = diffuse * ambient_light(sf.normal, world.y) * g_ao;
   // Cheap ambient specular so glass and wet surfaces aren't flat.
   let fres = pow(1.0 - saturate(dot(sf.normal, V)), 5.0);
-  c += (0.04 + 0.96 * fres) * reflection_env(reflect(-V, sf.normal)) * (1.0 - sf.roughness * 0.7) * sf.reflectivity;
+  c += (0.04 + 0.96 * fres) * reflection_env(reflect(-V, sf.normal)) * (1.0 - sf.roughness * 0.7) * sf.reflectivity * mix(1.0, g_ao, 0.7);
   let lit = light_clustered(world, sf.normal, V, sf.albedo, sf.roughness, sf.metallic);
   if (frame.debugView != 0u) {
     switch frame.debugView {
@@ -85,6 +92,7 @@ fn shade_surface(sf: Surface, world: vec3f) -> vec3f {
       case 3u: { return sf.emissive; }
       case 4u: { return lit; }
       case 5u: { return c; }
+      case 8u: { return vec3f(g_ao); }
       case 6u: {
         let viewZ = -(frame.view * vec4f(world, 1.0)).z;
         let n = f32(clusterCounts[cluster_index(g_fragCoord.xy, viewZ, frame.invResolution)]);

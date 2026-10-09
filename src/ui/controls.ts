@@ -24,6 +24,8 @@ export interface UiState {
   ssr: boolean;
   volumetrics: boolean;
   taa: boolean;
+  details: boolean;
+  ao: boolean;
 }
 
 export const DEFAULTS: UiState = {
@@ -40,6 +42,8 @@ export const DEFAULTS: UiState = {
   ssr: true,
   volumetrics: true,
   taa: true,
+  details: true,
+  ao: true,
 };
 
 const STORAGE_KEY = 'cyber-web-city/settings';
@@ -55,6 +59,8 @@ const PERSIST: (keyof UiState)[] = [
   'ssr',
   'volumetrics',
   'taa',
+  'details',
+  'ao',
 ];
 
 export function loadSaved(): Partial<UiState> {
@@ -137,7 +143,8 @@ const CSS = `
 const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
 
 type NumKey = 'volume' | 'timeScale' | 'rain' | 'haze' | 'exposure';
-type BoolKey = 'paused' | 'sound' | 'hud' | 'ssr' | 'volumetrics' | 'taa';
+type BoolKey =
+  'paused' | 'sound' | 'hud' | 'ssr' | 'volumetrics' | 'taa' | 'details' | 'ao';
 
 const SLIDERS: [NumKey, string, number, number, number][] = [
   ['volume', 'Volume', 0, 1, 0.05],
@@ -156,6 +163,8 @@ const TOGGLES: [BoolKey, string][][] = [
     ['ssr', 'Reflections'],
     ['volumetrics', 'Light shafts'],
     ['taa', 'Anti-aliasing'],
+    ['details', 'Facade detail'],
+    ['ao', 'Ambient occlusion'],
   ],
 ];
 

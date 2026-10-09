@@ -1,12 +1,7 @@
 // City building segments: GPU-driven instanced draw.
 #include "scene.wgsl"
 
-struct Segment {
-  pos: vec3f, rotY: f32,
-  size: vec3f, taper: f32,
-  twist: f32, shape: u32, style: u32, seed: u32,
-  colorA: u32, colorB: u32, flags: u32, floorH: f32,
-};
+#include "segment.wgsl"
 
 struct Bucket { base: u32, lod: u32, _p0: u32, _p1: u32 };
 
@@ -14,43 +9,17 @@ struct Bucket { base: u32, lod: u32, _p0: u32, _p1: u32 };
 @group(1) @binding(1) var<storage, read> visible: array<u32>;
 @group(1) @binding(2) var<uniform> bucket: Bucket;
 
+// SSAO (half resolution), sampled in screen space.
+@group(2) @binding(0) var aoTex: texture_2d<f32>;
+@group(2) @binding(1) var aoSampler: sampler;
+
+
 struct VIn {
   @location(0) pos: vec3f,
   @location(1) normal: vec3f,
   @location(2) facade: vec2f,
   @builtin(instance_index) ii: u32,
 };
-
-struct Xf { world: vec3f, normal: vec3f, local: vec3f };
-
-fn rot2(v: vec2f, a: f32) -> vec2f {
-  let c = cos(a);
-  let s = sin(a);
-  return vec2f(c * v.x - s * v.y, s * v.x + c * v.y);
-}
-
-fn seg_transform(s: Segment, p: vec3f, n: vec3f) -> Xf {
-  let h = p.y;
-  let tp = mix(1.0, s.taper, h);
-  var lp = vec3f(p.x * s.size.x * tp, p.y * s.size.y, p.z * s.size.z * tp);
-  var ln = vec3f(n.x / s.size.x, n.y / s.size.y, n.z / s.size.z);
-  if (abs(n.y) < 0.5) {
-    let d0 = 0.5 * length(vec2f(n.x * s.size.x, n.z * s.size.z));
-    ln = normalize(vec3f(normalize(ln.xz), 0.0).xzy);
-    ln.y = d0 * (1.0 - s.taper) / s.size.y;
-  }
-  ln = normalize(ln);
-  let tw = s.twist * h;
-  lp = vec3f(rot2(lp.xz, tw), lp.y).xzy;
-  ln = vec3f(rot2(ln.xz, tw), ln.y).xzy;
-  let wp = vec3f(rot2(lp.xz, s.rotY), lp.y).xzy;
-  let wn = vec3f(rot2(ln.xz, s.rotY), ln.y).xzy;
-  var x: Xf;
-  x.world = wp + s.pos;
-  x.normal = wn;
-  x.local = lp;
-  return x;
-}
 
 fn segment_for(ii: u32) -> u32 {
   return visible[bucket.base + ii];
@@ -111,6 +80,7 @@ fn velocity_from(clipCur: vec4f, clipPrev: vec4f) -> vec2f {
 @fragment
 fn fs_main(i: VOut, @builtin(front_facing) front: bool) -> GOut {
   g_fragCoord = i.pos;
+  g_ao = textureSampleLevel(aoTex, aoSampler, i.pos.xy * frame.invResolution, 0.0).r;
   // Derivatives must be taken in uniform control flow, before any branching.
   let fw = fwidth(i.facade);
   let s = segments[i.seg];

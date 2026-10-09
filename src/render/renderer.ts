@@ -24,6 +24,8 @@ import {Post, taaJitter} from './post';
 import {Ssr} from './ssr';
 import {GpuTimer, setActiveTimer, tw} from '../gpu/timer';
 import {HiZ} from './hiz';
+import {DetailRenderer} from './detailRenderer';
+import {Ssao} from './ssao';
 import {Volumetrics} from './volumetrics';
 import {fullscreenPipeline, runFullscreen} from './fullscreen';
 import compositeWgsl from '../shaders/composite.wgsl';
@@ -56,6 +58,8 @@ export class Renderer {
   readonly frame: FrameUniforms;
   readonly targets: Targets;
   readonly city: CityRenderer;
+  readonly details: DetailRenderer;
+  readonly ssao: Ssao;
   readonly signs: SignRenderer;
   readonly post: Post;
   readonly ssr: Ssr;
@@ -93,6 +97,8 @@ export class Renderer {
     this.frame = new FrameUniforms(device);
     this.targets = new Targets(device);
     this.city = new CityRenderer(device);
+    this.details = new DetailRenderer(device);
+    this.ssao = new Ssao(device);
     this.signs = new SignRenderer(device);
     this.post = new Post(device);
     this.ssr = new Ssr(device);
@@ -151,7 +157,13 @@ export class Renderer {
         [this.frameLayout, this.tonemapLayout],
         [{format: this.gpu.presentationFormat}],
       ),
-      this.city.init(scene.segments, this.sceneBindGroup, this.sceneLayout),
+      this.city.init(
+        scene.segments,
+        this.sceneBindGroup,
+        this.sceneLayout,
+        this.ssao.aoLayout,
+      ),
+      this.ssao.init(this.frameLayout),
       this.signs.init(scene.signs, this.sceneLayout),
       this.lights.init(this.frame.buffer),
       this.post.init(this.frameLayout),
@@ -161,6 +173,12 @@ export class Renderer {
     ]);
     this.compositePipeline = composite;
     this.tonemapPipeline = tonemap;
+    await this.details.init(
+      this.city.segmentBuffer,
+      this.city.count,
+      this.sceneLayout,
+      this.ssao.aoLayout,
+    );
   }
 
   private rebuildScreenBindGroups() {
@@ -230,6 +248,14 @@ export class Renderer {
       height,
       camera.fovY,
     );
+    this.details.useHiz = s.occlusion;
+    this.details.update(
+      encoder,
+      this.frame.viewProjNoJitter,
+      prevViewProj,
+      this.frame.camPos,
+      this.frameIndex,
+    );
     this.signs.cull(encoder, this.frame.viewProjNoJitter, this.frame.camPos);
     for (const hook of this.preLightHooks) hook(encoder);
     this.lights.run(encoder);
@@ -248,11 +274,22 @@ export class Renderer {
         depthStoreOp: 'store',
       },
     });
-    this.city.drawDepth(depthPass);
+    this.city.drawDepth(depthPass, this.ssao.aoBindGroup);
+    this.details.drawDepth(
+      depthPass,
+      this.sceneBindGroup,
+      this.ssao.aoBindGroup,
+    );
     depthPass.end();
     if (s.occlusion) {
       if (this.hiz.build(encoder, this.targets)) {
         this.city.setHiz(
+          this.hiz.view,
+          this.hiz.mips,
+          this.hiz.width,
+          this.hiz.height,
+        );
+        this.details.setHiz(
           this.hiz.view,
           this.hiz.mips,
           this.hiz.width,
@@ -263,6 +300,7 @@ export class Renderer {
     } else {
       this.city.useHiz = false;
     }
+    this.ssao.run(encoder, this.targets, this.frameBindGroup);
 
     const opaque = encoder.beginRenderPass({
       label: 'opaque',
@@ -293,7 +331,8 @@ export class Renderer {
         depthStoreOp: 'store',
       },
     });
-    this.city.drawColor(opaque);
+    this.city.drawColor(opaque, this.ssao.aoBindGroup);
+    this.details.draw(opaque, this.sceneBindGroup, this.ssao.aoBindGroup);
     this.signs.draw(opaque, this.sceneBindGroup);
     for (const d of this.opaqueDrawers) d(opaque);
     opaque.end();

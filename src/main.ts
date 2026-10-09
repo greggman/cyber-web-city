@@ -203,6 +203,9 @@ async function main() {
   if (params.get('ssr') === '0' || params.get('quality') === 'low')
     ui.ssr = false;
   if (params.get('taa') === '0') ui.taa = false;
+  if (params.get('details') === '0') ui.details = false;
+  if (params.get('ao') === '0') ui.ao = false;
+  if (params.get('quality') === 'low') renderer.details.distScale = 0.5;
   if (params.has('hud')) ui.hud = params.get('hud') === '1';
   ui.paused = params.get('paused') === '1';
   // Inspection cameras: cam=screen&n=K or cam=holo&n=K frame an ad/hologram.
@@ -252,13 +255,30 @@ async function main() {
       case 'taa':
         settings.taa = ui.taa;
         break;
+      case 'details':
+        renderer.details.enabled = ui.details;
+        break;
+      case 'ao':
+        renderer.ssao.enabled = ui.ao;
+        break;
       case 'camera':
         chase.fixedShot = ui.shot;
         break;
     }
   };
   (
-    ['rain', 'haze', 'exposure', 'ssr', 'volumetrics', 'taa', 'camera'] as const
+    [
+      'volume',
+      'rain',
+      'haze',
+      'exposure',
+      'ssr',
+      'volumetrics',
+      'taa',
+      'details',
+      'ao',
+      'camera',
+    ] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
   (window as unknown as {__ui: UiState}).__ui = ui; // for test/ui.mjs
@@ -426,6 +446,8 @@ async function main() {
       time,
       visibleSegments: renderer.city.visibleSegments,
       holograms: adData.holograms.length,
+      details: renderer.details.counts,
+      detailSegs: renderer.details.nearCount,
       gpu: renderer.timer.results,
       gpuFrameMs: renderer.timer.frameMs,
     };

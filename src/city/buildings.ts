@@ -264,6 +264,128 @@ function crown(
 }
 
 /** Classic setback tower: podium + 2-4 shrinking tiers + crown. */
+/**
+ * Kitbash massing for one tier (Megacity-style): breaks a plain box into a
+ * composition of volumes that reads from a distance: bay stacks jutting out
+ * of the faces, ring bands wrapping the shaft and corner pilasters. All of
+ * it stays inside the lot.
+ */
+export function kitbashTier(
+  ctx: BuildCtx,
+  lot: Lot,
+  cx: number,
+  cz: number,
+  w: number,
+  d: number,
+  y: number,
+  h: number,
+  style: Style,
+  colorA: number,
+  colorB: number,
+  floorH: number,
+  opts: {bays?: number; bands?: boolean; pilasters?: boolean} = {},
+) {
+  const r = ctx.rng;
+  if (h < 20 || w < 14 || d < 14) return;
+  const bays = opts.bays ?? 1;
+  const alt = (s: Style) =>
+    r.chance(0.6)
+      ? s
+      : r.pick([
+          Style.MetalPanel,
+          Style.Residential,
+          Style.GlassOffice,
+          Style.Monolith,
+        ]);
+  // Room to the lot edge on each side: -x, +x, -z, +z.
+  const room = [
+    cx - w / 2 - lot.x0,
+    lot.x1 - (cx + w / 2),
+    cz - d / 2 - lot.z0,
+    lot.z1 - (cz + d / 2),
+  ];
+  for (let side = 0; side < 4; side++) {
+    const n = r.int(0, bays + 2) - 1;
+    const faceLen = side < 2 ? d : w;
+    for (let k = 0; k < n; k++) {
+      const bw = r.range(6, Math.min(20, faceLen * 0.45));
+      const bd = Math.min(r.range(2.5, 7), room[side] + bw * 0.25 + 3);
+      if (bd < 1.5) continue;
+      const bh = h * r.range(0.3, 0.95);
+      const by = y + r.range(0, h - bh);
+      const along = r.range(-0.5, 0.5) * (faceLen - bw);
+      // Half-embedded in the tier so it reads as part of the building.
+      const off = (side < 2 ? w : d) / 2 + bd / 2 - 1;
+      const sgn = side % 2 === 0 ? -1 : 1;
+      seg(ctx, {
+        x: side < 2 ? cx + sgn * off : cx + along,
+        z: side < 2 ? cz + along : cz + sgn * off,
+        y: by,
+        w: side < 2 ? bd + 2 : bw,
+        d: side < 2 ? bw : bd + 2,
+        h: bh,
+        style: alt(style),
+        colorA,
+        colorB,
+        floorH,
+        flags: r.chance(0.25) ? SegFlags.EdgeGlow : 0,
+      });
+    }
+  }
+  if (opts.bands !== false) {
+    // Ring bands: a slightly larger collar every 25-60 m.
+    let by = y + r.range(12, 30);
+    while (by < y + h - 6) {
+      const out = Math.min(r.range(0.8, 2.2), ...room.map(v => v + 1));
+      const bh = r.range(2, 6);
+      seg(ctx, {
+        x: cx,
+        z: cz,
+        y: by,
+        w: w + out * 2,
+        d: d + out * 2,
+        h: bh,
+        style: r.pick([
+          Style.MetalPanel,
+          Style.MetalPanel,
+          Style.Structure,
+          Style.LedFacade,
+        ]),
+        colorA,
+        colorB,
+        floorH,
+        flags: r.chance(0.4) ? SegFlags.TopGlow : 0,
+      });
+      by += r.range(25, 60);
+    }
+  }
+  if (opts.pilasters !== false && r.chance(0.35)) {
+    // Corner pilasters running the full tier, poking above it.
+    const pw = r.range(2.5, Math.min(6, w * 0.15));
+    const extra = r.range(0, 12);
+    for (const [sx, sz] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      seg(ctx, {
+        x: cx + sx * (w / 2 - pw / 2 + 0.6),
+        z: cz + sz * (d / 2 - pw / 2 + 0.6),
+        y,
+        w: pw,
+        d: pw,
+        h: h + extra,
+        style: Style.MetalPanel,
+        colorA,
+        colorB,
+        floorH,
+        flags: r.chance(0.5) ? SegFlags.EdgeGlow : 0,
+      });
+    }
+  }
+}
+
 export function setbackTower(
   ctx: BuildCtx,
   lot: Lot,
@@ -301,6 +423,20 @@ export function setbackTower(
       floorH,
     });
     addSlots(ctx, cx, cz, w, d, y, y + h);
+    kitbashTier(
+      ctx,
+      lot,
+      cx,
+      cz,
+      w,
+      d,
+      y,
+      h,
+      tierStyle,
+      colorA,
+      colorB,
+      floorH,
+    );
     // Cantilevered glass pod jutting out of the tier (capped toward avenues).
     if (r.chance(0.3) && h > 30) {
       const side = r.int(0, 4);
@@ -555,6 +691,21 @@ export function megablock(ctx: BuildCtx, lot: Lot, H: number) {
       flags: r.chance(0.35) ? SegFlags.FloorBands : 0,
     });
     addSlots(ctx, cx, cz, ww, dd, y, y + h);
+    kitbashTier(
+      ctx,
+      lot,
+      cx,
+      cz,
+      ww,
+      dd,
+      y,
+      h,
+      Style.Residential,
+      colorA,
+      colorB,
+      3.0,
+      {bays: 2},
+    );
     y += h;
     ww *= 0.85;
     dd *= 0.85;
@@ -655,6 +806,11 @@ export function slumStack(ctx: BuildCtx, lot: Lot, H: number) {
       floorH: r.range(2.8, 3.3),
     });
     addSlots(ctx, x, z, w, d, first ? 3 : y, y + h);
+    kitbashTier(ctx, lot, x, z, w, d, y, h, style, colorB, colorB, 3.0, {
+      bays: 2,
+      bands: false,
+      pilasters: false,
+    });
     first = false;
     y += h;
     // Shrink or shift a little; occasionally cantilever outward (within lot).
@@ -801,6 +957,23 @@ export function ledSlab(ctx: BuildCtx, lot: Lot, H: number) {
     floorH: 3.5,
   });
   addSlots(ctx, cx, cz, w, d, ph, H);
+  if (shape === Shape.Box) {
+    kitbashTier(
+      ctx,
+      lot,
+      cx,
+      cz,
+      w,
+      d,
+      ph,
+      H - ph,
+      Style.MetalPanel,
+      neon(r),
+      neon(r),
+      3.5,
+      {bays: 0},
+    );
+  }
   crown(ctx, cx, cz, H, w * 0.8, d * 0.8, Style.MetalPanel);
 }
 
@@ -828,6 +1001,7 @@ export function wedgeTower(ctx: BuildCtx, lot: Lot, H: number, style: Style) {
     colorB,
     flags: SegFlags.EdgeGlow,
   });
+  kitbashTier(ctx, lot, cx, cz, w, d, ph, body, style, colorA, colorB, 3.6);
   seg(ctx, {
     x: cx,
     z: cz,
