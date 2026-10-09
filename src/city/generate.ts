@@ -258,7 +258,10 @@ export function generateCity(seed: number): CityData {
                   fl &= ~SegFlags.EdgeGlow;
                 }
               }
-              if (!bands || g.style === Style.Slum) fl &= ~SegFlags.FloorBands;
+              // No neon on housing (ART_BIBLE.md 10).
+              const housing =
+                g.style === Style.Slum || g.style === Style.Residential;
+              if (!bands || housing) fl &= ~SegFlags.FloorBands;
               if (!crown || g.style === Style.Podium) fl &= ~SegFlags.TopGlow;
               if (fl !== g.flags) segments.setFlags(k, fl);
             }

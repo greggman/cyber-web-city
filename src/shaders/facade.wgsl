@@ -169,6 +169,49 @@ struct WinStyle {
 // after the style sets the wall albedo).
 var<private> g_revealAO: f32 = 1.0;
 
+// ---------------------------------------------------------------- relief
+// Analytic surface relief (ART_BIBLE.md 12). Features add the slope of a
+// height field in tangent space (x along the wall, y up, meters) and the
+// result tilts the normal once, after the wall is shaded, so every light
+// (neon, clustered sign lights, reflections, SSR) rakes across it. A feature
+// narrower than a few pixels fades out and its slope variance moves into
+// roughness, so wet walls don't sparkle in the distance.
+var<private> g_slope: vec2f;
+var<private> g_slopeVar: f32;
+var<private> g_joint: f32; // how much of the pixel is a joint/recess (holds water first)
+
+// Slope of a rounded ridge (depth > 0) or groove (depth < 0) of width w
+// centred at x = 0.
+fn bump_slope(x: f32, w: f32, depth: f32) -> f32 {
+  if (abs(x) >= w * 0.5) { return 0.0; }
+  return -depth * PI / w * sin(TAU * x / w);
+}
+
+fn bump_mask(x: f32, w: f32) -> f32 {
+  if (abs(x) >= w * 0.5) { return 0.0; }
+  return 0.5 + 0.5 * cos(TAU * x / w);
+}
+
+// Distance from x to the nearest multiple of `period` (signed).
+fn to_line(x: f32, period: f32) -> f32 { return x - round(x / period) * period; }
+
+// Adds a feature's slope, faded by its pixel size; the lost part of its
+// slope variance (sigma2, already scaled by coverage) goes to roughness.
+fn add_relief(c: Ctx, slope: vec2f, fwid: f32, sigma2: f32) {
+  // TAA resolves 1-2 px features, so relief fades later than texture
+  // detail: fully on from 2.5 px, gone below 0.75 px.
+  let px = fwid / max(max(c.fw.x, c.fw.y), 1e-5);
+  let k = smoothstep(0.75, 2.5, px);
+  g_slope += slope * k;
+  g_slopeVar += (1.0 - k) * sigma2;
+}
+
+fn apply_relief(c: Ctx, sf: ptr<function, Surface>) {
+  (*sf).normal = normalize((*sf).normal - c.t * g_slope.x - c.b * g_slope.y);
+  let r = (*sf).roughness;
+  (*sf).roughness = min(sqrt(r * r + g_slopeVar), 1.0);
+}
+
 fn recess_for(kind: u32) -> f32 {
   switch kind {
     case ST_GLASS: { return 0.14; }
@@ -202,7 +245,7 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   if (bx.x < 0.0 || cls == BAY_S || cls == BAY_C) { win = 0.0; }
   if (cls == BAY_C) {
     // Stair core: a glass-block slot, cool-lit, with landings half a floor off.
-    let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * aa_box(fract(cell.y + 0.5), 0.2, 0.8, dpx.y);
+    let slot = aa_box(bx.y, 0.38, 0.62, dpx.x) * (1.0 - 0.5 * aa_box(fract(cell.y + 0.5), 0.0, 0.06, dpx.y));
     let blocks = mix(1.0, 0.6, step(0.85, fract(c.facade.y * 4.0)) * detail(vec2f(0.25), c.fw));
     // Landings are lit unevenly (dead tubes, timers), dim fluorescent green.
     let landing = hash3_u(c.seed ^ 0x2545f491u, u_of(bx.x), u_of(cell.y + 0.5));
@@ -241,6 +284,31 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     // Mostly downward onto the sill.
     let dist = length(dd * vec2f(1.0, select(2.0, 0.8, lpm.y < q0.y)));
     (*sf).emissive += lc * pane * lit * det * (1.0 - win) * 0.05 * exp(-dist * 2.5);
+    if (bx.x >= 0.0 && cls != BAY_S && cls != BAY_C) {
+      // Recessed frame band (0.08 m) with a bevelled outer edge, and a sill
+      // lip under the opening: its top faces the sky and catches every sign
+      // reflection in the rain (ART_BIBLE.md 12.2).
+      let fwd = 0.08;
+      let inX = lpm.x > q0.x - fwd && lpm.x < q1.x + fwd;
+      let inY = lpm.y > q0.y - fwd && lpm.y < q1.y + fwd;
+      if (inX && inY) {
+        let ex = min(lpm.x - (q0.x - fwd), (q1.x + fwd) - lpm.x);
+        let ey = (q1.y + fwd) - lpm.y;
+        // Outer bevel: the frame face sits 0.05 m back from the wall.
+        let sx = select(1.0, -1.0, lpm.x > (q0.x + q1.x) * 0.5);
+        var sl = vec2f(sx * bump_slope(ex - 0.012, 0.024, 0.03), -bump_slope(ey - 0.012, 0.024, 0.03));
+        add_relief(c, sl, 0.024, 0.02 * 0.1);
+        g_revealAO *= mix(1.0, 0.72, detail(vec2f(fwd), c.fw));
+        g_joint = max(g_joint, 0.6);
+      }
+      let sillY = q0.y - fwd - 0.035;
+      if (lpm.x > q0.x - fwd - 0.1 && lpm.x < q1.x + fwd + 0.1) {
+        let dy = lpm.y - sillY;
+        add_relief(c, vec2f(0.0, bump_slope(dy, 0.07, 0.05)), 0.07, 0.05 * 0.05);
+        // Drip groove shadow under the lip.
+        g_revealAO *= 1.0 - 0.35 * bump_mask(dy + 0.05, 0.03) * detail(vec2f(0.03), c.fw);
+      }
+    }
   }
   if (det > 0.0 && win > 0.0) {
     // Recessed window: trace the view ray into the opening. It either
@@ -284,7 +352,12 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
       let open = 0.15 + 0.3 * u2f_rot(hRoom, 27u);
       inner = mix(inner, lc * cc * 0.6 * folds, step(open, abs(fr.x - 0.5) * 2.0));
     }
-    if (reveal == 0.0) { em = inner * lit * pane; }
+    if (reveal == 0.0) {
+      // Unlit rooms aren't black holes: the city glow and the street below
+      // faintly light the ceiling and furniture.
+      let dimRoom = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, vec3f(0.05, 0.04, 0.06) * frame.cityGlow, kind);
+      em = mix(dimRoom, inner * pane, lit);
+    }
     // Unlit windows: occasional TV flicker.
     if (reveal == 0.0 && lit < 0.5 && u2f_rot(hRoom, 3u) < 0.015) {
       let flick = 0.75 + 0.25 * sin(c.time * (1.5 + 2.0 * u2f(hRoom)) + f32(hRoom & 255u));
@@ -439,6 +512,8 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
     let rib = 0.75 + 0.25 * step(0.5, fract(y * 6.0));
     let graf = step(0.72, vnoise2(vec2f(c.facade.x, y) * vec2f(0.8, 1.5) + f32(hs & 63u))) * det;
     wall = mix(vec3f(0.3, 0.3, 0.31) * rib, unpack_color(hash_u(hs + 7u) | 0xff000000u) * 0.4, graf);
+    // Rolling-shutter slats: fine horizontal glints under the canopy light.
+    add_relief(c, vec2f(0.0, 0.006 * TAU / 0.08 * cos(TAU * y / 0.08)) * glass, 0.04, 0.03 * glass);
     (*sf).albedo = mix(vec3f(0.1), wall, glass);
     (*sf).roughness = 0.5;
     (*sf).metallic = 0.6 * glass;
@@ -473,6 +548,14 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
   (*sf).emissive += em;
 }
 
+// V-joints on a panel grid: vertical every `pw` meters along the bay grid
+// (or plain facade meters when pw is not the bay), horizontal every `ph`.
+fn panel_joints(c: Ctx, xLine: f32, yLine: f32, w: f32, depth: f32, mask: f32) {
+  let sl = vec2f(bump_slope(xLine, w, depth), bump_slope(yLine, w, depth)) * mask;
+  add_relief(c, sl, w, 0.05 * w * 2.0);
+  g_joint = max(g_joint, max(bump_mask(xLine, w), bump_mask(yLine, w)) * mask);
+}
+
 fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
   let tint = unpack_color(s.colorA);
   let accent = unpack_color(s.colorB);
@@ -503,6 +586,16 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).roughness = mix(mix(0.35, 0.18, mull), 0.04, w);
     (*sf).metallic = mix(0.8, 0.0, w);
     (*sf).reflectivity = mix(mix(0.4, 0.7, mull), 0.9, w);
+    // Mullion caps proud of the glass (the glints that sweep across a
+    // tower as the camera moves), spandrel inset chamfers and ribs.
+    let mx = to_line(cellF.x, 1.0) * ws.cellW;
+    add_relief(c, vec2f(bump_slope(mx, 0.06, 0.08), 0.0), 0.06, 0.05 * 0.04);
+    let spand = 1.0 - step(r.z, cellF.y);
+    let sy = cellF.y * ws.floorH;
+    let chamfer = bump_slope(sy - 0.02, 0.04, -0.03) - bump_slope(sy - (r.z * ws.floorH - 0.02), 0.04, -0.03);
+    let ribs = 0.01 * TAU / 0.4 * cos(TAU * sy / 0.4) * spand;
+    add_relief(c, vec2f(0.0, chamfer * spand), 0.04, 0.0);
+    add_relief(c, vec2f(0.0, ribs), 0.2, 0.02 * spand);
   } else if (style == ST_RESIDENTIAL) {
     let r = win_rect(s, BAY_W);
     ws = WinStyle(seg_bay(s), s.floorH, r.x, r.y, r.z, r.w, 2.0, 5.0, 0.22, 1.6, 0.2, 0.45);
@@ -515,6 +608,9 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).albedo = mix(concrete * (1.0 - 0.35 * slab), vec3f(0.02), w);
     (*sf).roughness = mix(0.8, 0.1, w);
     (*sf).reflectivity = mix(0.15, 0.6, w);
+    // Precast panel V-joints on the bay lines and at mid-floor.
+    let jb = wall_bay(c, ws.cellW);
+    panel_joints(c, to_line(jb.y, 1.0) * ws.cellW, to_line(c.facade.y / s.floorH + 0.5, 1.0) * s.floorH, 0.02, -0.02, 1.0 - w);
   } else if (style == ST_METAL) {
     // Ribbon windows split into 1.5 m panes by mullions; room width varies
     // per floor so lit rooms don't all read as identical dashes.
@@ -525,6 +621,10 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let w = window_facade(c, ws, style, tint, sf);
     let panel = fract(c.facade / vec2f(3.0, s.floorH));
     let seam = 1.0 - (1.0 - aa_box(panel.x, 0.0, 0.03, c.fw.x / 3.0)) * (1.0 - aa_box(panel.y, 0.0, 0.03, c.fw.y / s.floorH));
+    panel_joints(c, to_line(c.facade.x, 3.0), to_line(c.facade.y, s.floorH), 0.03, -0.02, 1.0 - w);
+    // Pillowed panels: soft oil-can reflections.
+    let pc = (panel - 0.5) * vec2f(3.0, s.floorH);
+    add_relief(c, -pc * vec2f(0.006 / 2.25, 0.006 / (0.25 * s.floorH * s.floorH)) * (1.0 - w), 1.5, 0.0);
     let base = mix(vec3f(0.16, 0.17, 0.19), vec3f(0.22, 0.2, 0.18), hash11(c.seed + 9u));
     (*sf).albedo = mix(base * (1.0 - 0.5 * seam) * g, vec3f(0.02), w);
     (*sf).metallic = mix(0.7, 0.0, w);
@@ -540,6 +640,8 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     (*sf).albedo = mix(concrete, vec3f(0.02), w);
     (*sf).roughness = mix(0.85, 0.15, w);
     (*sf).reflectivity = 0.2;
+    // Board-formed concrete: 0.15 m board lines, seen in grazing light.
+    add_relief(c, vec2f(0.0, 0.004 * TAU / 0.15 * cos(TAU * c.facade.y / 0.15)) * (1.0 - w), 0.075, 0.01);
     // Tiny neon signs scattered on the walls.
     let sc = floor(c.facade / vec2f(9.0, 7.0));
     let sh = hash3_u(c.seed ^ 0xabcdu, u_of(sc.x), u_of(sc.y));
@@ -562,6 +664,9 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     let w = window_facade(c, ws, style, tint, sf);
     let rib = aa_box(wall_bay(c, ws.cellW).y, 0.0, 0.12, c.fw.x / ws.cellW);
     (*sf).albedo = mix(vec3f(0.07, 0.065, 0.06) * (1.0 + rib * 0.6) * g, vec3f(0.02), w);
+    // Basalt joints, 1.5 x 0.75 m, staggered.
+    let course = floor(c.facade.y / 0.75);
+    panel_joints(c, to_line(c.facade.x + 0.75 * (course % 2.0), 1.5), to_line(c.facade.y, 0.75), 0.012, -0.008, 1.0 - w);
     (*sf).roughness = mix(0.35, 0.06, w);
     (*sf).metallic = mix(0.3, 0.0, w);
     (*sf).reflectivity = mix(0.5, 0.85, w);
@@ -828,7 +933,10 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
       sf.albedo *= wth;
       sf.reflectivity *= wth * wth;
     }
+    apply_relief(c, &sf);
     apply_wet(c, &sf, false);
+    // Joints and recesses fill with water first (ART_BIBLE.md 12.4).
+    sf.roughness = mix(sf.roughness, 0.05, g_joint * frame.wetness);
     // Vertical LED strips on box edges.
     // Edge strips: landmarks light only their top 30%; LED frames run full
     // height (ART_BIBLE.md 10).
