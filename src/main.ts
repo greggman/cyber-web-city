@@ -64,7 +64,12 @@ async function main() {
   const genMs = performance.now() - t0;
   const renderer = new Renderer(gpu);
   loadmsg.textContent = 'Compiling shaders';
-  await renderer.init({segments: city.segments, signs, lights});
+  await renderer.init({
+    segments: city.segments,
+    signs,
+    lights,
+    districts: city.districts,
+  });
   // Quality preset: low drops SSR and thins the rain.
   renderer.ssr.enabled =
     params.get('quality') !== 'low' && params.get('ssr') !== '0';

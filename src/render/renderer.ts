@@ -50,6 +50,8 @@ export interface SceneData {
   segments: SegmentList;
   signs: Sign[];
   lights: LightDesc[];
+  /** District per superblock (for the district-tinted haze). */
+  districts: {n: number; data: Uint8Array};
 }
 
 /** Dynamic light slots reserved for traffic and the player's car. */
@@ -76,6 +78,7 @@ export class Renderer {
   sceneBindGroup!: GPUBindGroup;
   private compositePipeline!: GPURenderPipeline;
   private compositeLayout: GPUBindGroupLayout;
+  private districtTex!: GPUTexture;
   private compositeBindGroup!: GPUBindGroup;
   private tonemapPipeline!: GPURenderPipeline;
   private tonemapLayout: GPUBindGroupLayout;
@@ -120,6 +123,7 @@ export class Renderer {
       ['f', 'tex-depth'],
       ['f', 'tex-float-3d'],
       ['f', 'sampler'],
+      ['f', 'tex-uint'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
       ['f', 'tex-float'],
@@ -135,6 +139,25 @@ export class Renderer {
 
   async init(scene: SceneData) {
     const device = this.gpu.device;
+    // Superblock district map for the composite's district-tinted haze.
+    const dn = scene.districts.n * 2;
+    this.districtTex = device.createTexture({
+      label: 'composite/districts',
+      size: [dn, dn],
+      format: 'r8uint',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    const padded = Math.ceil(dn / 256) * 256;
+    const rows = new Uint8Array(padded * dn);
+    for (let y = 0; y < dn; y++) {
+      rows.set(scene.districts.data.subarray(y * dn, y * dn + dn), y * padded);
+    }
+    device.queue.writeTexture(
+      {texture: this.districtTex},
+      rows,
+      {bytesPerRow: padded},
+      [dn, dn],
+    );
     this.lights = new LightClusters(device, scene.lights, DYNAMIC_LIGHTS);
     this.frameBindGroup = bindGroup(device, 'frame', this.frameLayout, [
       {buffer: this.frame.buffer},
@@ -200,7 +223,13 @@ export class Renderer {
       device,
       'composite',
       this.compositeLayout,
-      [v.color, v.depth, this.volume.view, this.volSampler],
+      [
+        v.color,
+        v.depth,
+        this.volume.view,
+        this.volSampler,
+        this.districtTex.createView({label: 'composite/districts/view'}),
+      ],
     );
     this.targetsVersion = this.targets.version;
     this.tonemapKey = '';

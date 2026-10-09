@@ -56,6 +56,8 @@ export interface CityData {
   landmarks: [number, number, number][];
   /** Cable bundles strung across inner streets (world space). */
   cables: Cable[];
+  /** District per superblock, (2N)^2 row-major from (-N, -N) (grid space). */
+  districts: {n: number; data: Uint8Array};
 }
 
 export interface Cable {
@@ -104,6 +106,18 @@ function splitLots(
 
 function inset(l: Lot, m: number): Lot {
   return {x0: l.x0 + m, z0: l.z0 + m, x1: l.x1 - m, z1: l.z1 - m};
+}
+
+/**
+ * Height classes (ART_BIBLE.md 7): 15% tall, 50% mid, 35% low (at most
+ * 0.35x the tallest), so a district reads as a skyline with a few peaks
+ * rather than a forest of equal towers.
+ */
+function heightClass(rng: Rng, tallest: number): number {
+  const r = rng.next();
+  if (r < 0.15) return tallest * rng.range(0.8, 1);
+  if (r < 0.65) return tallest * rng.range(0.45, 0.7);
+  return tallest * rng.range(0.18, 0.35);
 }
 
 export function generateCity(seed: number): CityData {
@@ -282,9 +296,16 @@ export function generateCity(seed: number): CityData {
               const lots = splitLots(rng, block, 45, rng.int(0, 2));
               for (const lot of lots) {
                 const big = Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0) > 70;
-                const landmark = big && rng.chance(0.18 * hs);
+                const lx = (lot.x0 + lot.x1) / 2;
+                const lz = (lot.z0 + lot.z1) / 2;
+                // Landmarks at least 900 m apart (ART_BIBLE.md 7).
+                const landmark =
+                  big &&
+                  rng.chance(0.18 * hs) &&
+                  landmarks.every(m => Math.hypot(m[0] - lx, m[2] - lz) >= 900);
                 const H =
-                  (landmark ? rng.range(900, 1700) : rng.range(220, 650)) * hs;
+                  (landmark ? rng.range(900, 1700) : heightClass(rng, 650)) *
+                  hs;
                 build(lot, (ctx, l) => {
                   const k = rng.weighted([
                     3,
@@ -335,7 +356,7 @@ export function generateCity(seed: number): CityData {
             case District.Slum: {
               const lots = splitLots(rng, block, 18, 4);
               for (const lot of lots) {
-                const H = rng.range(90, 380) * hs;
+                const H = Math.max(40, heightClass(rng, 380)) * hs;
                 build(lot, (ctx, l) => {
                   if (rng.chance(0.12))
                     setbackTower(ctx, l, H, Style.Residential);
@@ -348,7 +369,7 @@ export function generateCity(seed: number): CityData {
             case District.Market: {
               const lots = splitLots(rng, block, 28, 2);
               for (const lot of lots) {
-                const H = rng.range(130, 420) * hs;
+                const H = Math.max(50, heightClass(rng, 420)) * hs;
                 build(lot, (ctx, l) => {
                   const k = rng.weighted([0.8, 2.5, 1.5, 1]);
                   if (k === 0) ledSlab(ctx, l, H);
@@ -836,7 +857,26 @@ export function generateCity(seed: number): CityData {
     return cx * 1000 + cz;
   });
   for (const sl of slots) if (sl.seg >= 0) sl.seg = newIndex[sl.seg];
-  return {seed, segments, slots, roofs, obstacles, landmarks, cables};
+  const districts = {n: N, data: new Uint8Array(4 * N * N)};
+  for (let i = -N; i < N; i++) {
+    for (let j = -N; j < N; j++) {
+      districts.data[(j + N) * 2 * N + (i + N)] = superblockInfo(
+        i,
+        j,
+        seed,
+      ).district;
+    }
+  }
+  return {
+    seed,
+    segments,
+    slots,
+    roofs,
+    obstacles,
+    landmarks,
+    cables,
+    districts,
+  };
 }
 
 /**

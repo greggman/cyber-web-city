@@ -2,12 +2,45 @@
 #include "frame.wgsl"
 #include "common.wgsl"
 #include "sky.wgsl"
+#include "warp.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(1) @binding(0) var colorTex: texture_2d<f32>;
 @group(1) @binding(1) var depthTex: texture_depth_2d;
 @group(1) @binding(2) var volumeTex: texture_3d<f32>;
 @group(1) @binding(3) var volSampler: sampler;
+@group(1) @binding(4) var districtTex: texture_2d<u32>;
+
+// Haze tint per district (ART_BIBLE.md 10): Core cool blue-grey, Megablock
+// warm brown, Slum green, Market magenta, Corporate clean amber.
+fn district_tint(d: u32) -> vec3f {
+  switch d {
+    case 0u: { return vec3f(0.82, 0.92, 1.18); }
+    case 1u: { return vec3f(1.15, 0.96, 0.8); }
+    case 2u: { return vec3f(0.86, 1.12, 0.9); }
+    case 3u: { return vec3f(1.16, 0.84, 1.14); }
+    case 4u: { return vec3f(1.18, 1.0, 0.72); }
+    default: { return vec3f(1.0); }
+  }
+}
+
+fn tint_at(i: vec2i, n: i32) -> vec3f {
+  let p = clamp(i, vec2i(0), vec2i(n - 1));
+  return district_tint(textureLoad(districtTex, p, 0).r);
+}
+
+// Bilinear blend of the four nearest superblocks' tints at a world xz
+// (unwarped to the grid; SUPER = 300 and AVENUE_W = 64 as in layout.ts).
+fn haze_tint(xz: vec2f) -> vec3f {
+  let g = unwarp2(xz);
+  let n = i32(textureDimensions(districtTex).x);
+  let q = (g - 32.0) / 300.0 - 0.5 + f32(n / 2);
+  let i = vec2i(floor(q));
+  let f = fract(q);
+  let a = mix(tint_at(i, n), tint_at(i + vec2i(1, 0), n), f.x);
+  let b = mix(tint_at(i + vec2i(0, 1), n), tint_at(i + vec2i(1, 1), n), f.x);
+  return mix(a, b, f.y);
+}
 
 // Must match volumetric.wgsl.
 fn volume_light(uv: vec2f, viewZ: f32) -> vec3f {
@@ -50,7 +83,8 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let c = textureLoad(colorTex, p, 0).rgb;
   var fog = fog_amount(frame.camPos, world);
   if (frame.debugView != 0u) { fog = 0.0; }
-  let fogged = mix(c, fog_color(dir, world.y), fog);
+  // The haze picks up the district's light (fades out over open sky).
+  let fogged = mix(c, fog_color(dir, world.y) * haze_tint(world.xz), fog);
   let lin = linear_depth(depth, frame.near);
   return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin), 1.0);
 }
