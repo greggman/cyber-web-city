@@ -105,23 +105,21 @@ const CSS = `
   background: rgba(8, 6, 18, 0.82); border: 1px solid rgba(120, 255, 255, 0.35);
   border-radius: 10px; color: #cfe; font: 12px/1.3 ui-monospace, monospace;
   backdrop-filter: blur(6px); box-shadow: 0 0 24px rgba(255, 60, 200, 0.15);
+  touch-action: pan-y; /* the panel can still scroll on small screens */
 }
 .ui-panel[hidden] { display: none; }
-#ui-cam-panel { left: 10px; }
+#ui-toast {
+  position: fixed; left: 10px; top: 54px; z-index: 10; padding: 5px 10px;
+  background: rgba(8, 6, 18, 0.82); border: 1px solid rgba(120, 255, 255, 0.35);
+  border-radius: 8px; color: #8ff; font: 12px ui-monospace, monospace;
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+#ui-toast.show { opacity: 1; }
 #ui-gear-panel { right: 10px; width: 270px; }
 .ui-panel h3 {
   margin: 6px 6px 4px; font-size: 10px; font-weight: 600; letter-spacing: .15em;
   color: rgba(255, 120, 230, 0.8); text-transform: uppercase;
 }
-.ui-item {
-  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box;
-  padding: 6px 8px; border: 0; border-radius: 6px; background: none;
-  color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.ui-item:hover { background: rgba(120, 255, 255, 0.1); }
-.ui-item[aria-checked="true"] { color: #6ff; }
-.ui-item[aria-checked="true"]::before { content: '●'; color: #6ff; }
-.ui-item[aria-checked="false"]::before { content: '○'; opacity: .5; }
 .ui-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px; }
 .ui-row label { flex: 1; cursor: pointer; }
 .ui-row input[type=range] { width: 100px; accent-color: #f5c; }
@@ -133,25 +131,7 @@ const CSS = `
 .ui-reset:hover { background: rgba(255, 120, 230, 0.12); }
 `;
 
-interface Choice {
-  label: string;
-  camera: CameraMode;
-  shot?: number;
-}
-
-const CAMERAS: (Choice | string)[] = [
-  'Chase',
-  {label: 'Auto (cinematic)', camera: CameraMode.Chase},
-  {label: 'Classic', camera: CameraMode.Chase, shot: 0},
-  {label: 'Low & close', camera: CameraMode.Chase, shot: 1},
-  {label: 'High wide', camera: CameraMode.Chase, shot: 2},
-  {label: 'Side tracking', camera: CameraMode.Chase, shot: 3},
-  {label: 'Front ¾', camera: CameraMode.Chase, shot: 4},
-  'Other',
-  {label: 'Cockpit', camera: CameraMode.Cockpit},
-  {label: 'Skyline orbit', camera: CameraMode.Skyline},
-  {label: 'Top-down map', camera: CameraMode.Map},
-];
+const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
 
 type NumKey = 'timeScale' | 'rain' | 'haze' | 'exposure';
 type BoolKey = 'paused' | 'sound' | 'hud' | 'ssr' | 'volumetrics' | 'taa';
@@ -176,7 +156,9 @@ const TOGGLES: [BoolKey, string][][] = [
 ];
 
 export class Controls {
-  private camItems: [HTMLButtonElement, Choice][] = [];
+  private camBtn!: HTMLButtonElement;
+  private toast!: HTMLElement;
+  private toastTimer = 0;
   private inputs = new Map<keyof UiState, HTMLInputElement>();
   private outputs = new Map<keyof UiState, HTMLOutputElement>();
   private panels: [HTMLButtonElement, HTMLElement][] = [];
@@ -189,29 +171,19 @@ export class Controls {
     style.textContent = CSS;
     document.head.appendChild(style);
 
-    // Camera button + menu.
-    const camBtn = this.button('ui-cam-btn', 'Camera', CAMERA_ICON);
-    const camPanel = this.panel('ui-cam-panel', 'Camera');
-    for (const c of CAMERAS) {
-      if (typeof c === 'string') {
-        const h = document.createElement('h3');
-        h.textContent = c;
-        camPanel.appendChild(h);
-        continue;
-      }
-      const b = document.createElement('button');
-      b.className = 'ui-item';
-      b.setAttribute('role', 'menuitemradio');
-      b.textContent = c.label;
-      b.addEventListener('click', () => {
-        this.state.camera = c.camera;
-        this.state.shot = c.shot;
-        this.refresh();
-        this.onChange('camera');
-      });
-      camPanel.appendChild(b);
-      this.camItems.push([b, c]);
-    }
+    // Camera button: each click cycles to the next camera.
+    const camBtn = this.button('ui-cam-btn', 'Next camera (C)', CAMERA_ICON);
+    camBtn.removeAttribute('aria-expanded');
+    camBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      this.closeAll();
+      this.cycleCamera();
+    });
+    this.camBtn = camBtn;
+    this.toast = document.createElement('div');
+    this.toast.id = 'ui-toast';
+    this.toast.setAttribute('role', 'status');
+    document.body.appendChild(this.toast);
 
     // Settings button + panel.
     const gearBtn = this.button('ui-gear-btn', 'Settings', GEAR_ICON);
@@ -240,10 +212,7 @@ export class Controls {
     });
     gearPanel.appendChild(reset);
 
-    this.panels = [
-      [camBtn, camPanel],
-      [gearBtn, gearPanel],
-    ];
+    this.panels = [[gearBtn, gearPanel]];
     for (const [btn, panel] of this.panels) {
       btn.addEventListener('click', e => {
         e.stopPropagation();
@@ -351,6 +320,25 @@ export class Controls {
     }
   }
 
+  /** Switches to the next camera (chase, cockpit, skyline, map). */
+  cycleCamera() {
+    this.state.camera = ((this.state.camera + 1) %
+      CAMERA_NAMES.length) as CameraMode;
+    this.state.shot = undefined;
+    this.onChange('camera');
+    this.showToast(`${CAMERA_NAMES[this.state.camera]} camera`);
+  }
+
+  showToast(text: string) {
+    this.toast.textContent = text;
+    this.toast.classList.add('show');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(
+      () => this.toast.classList.remove('show'),
+      1400,
+    );
+  }
+
   closeAll() {
     for (const [b, p] of this.panels) {
       p.hidden = true;
@@ -360,12 +348,6 @@ export class Controls {
 
   /** Syncs the controls with the state (call after keyboard changes). */
   refresh() {
-    for (const [b, c] of this.camItems) {
-      const on =
-        c.camera === this.state.camera &&
-        (c.camera !== CameraMode.Chase || c.shot === this.state.shot);
-      b.setAttribute('aria-checked', String(on));
-    }
     for (const [k, input] of this.inputs) {
       const v = this.state[k];
       if (typeof v === 'boolean') input.checked = v;
@@ -378,6 +360,7 @@ export class Controls {
   }
 
   setVisible(v: boolean) {
+    this.camBtn.style.display = v ? '' : 'none';
     for (const [b, p] of this.panels) {
       b.style.display = v ? '' : 'none';
       if (!v) p.hidden = true;

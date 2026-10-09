@@ -31,10 +31,11 @@ The site deploys to GitHub Pages on every push to `main`
 
 ## Controls
 
-The camera icon (top left) picks a camera or chase framing; the gear icon
+Clicking the camera icon (top left) cycles chase → cockpit → skyline → map;
+the gear icon
 (top right) opens settings (pause, sound, stats, flight speed, rain, haze,
 brightness, reflections, light shafts, anti-aliasing). Settings are saved
-in the browser. Keyboard shortcuts:
+in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 
 | Key | Action |
 |---|---|

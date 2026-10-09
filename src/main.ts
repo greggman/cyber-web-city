@@ -254,6 +254,7 @@ async function main() {
     ['rain', 'haze', 'exposure', 'ssr', 'volumetrics', 'taa', 'camera'] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
+  (window as unknown as {__ui: UiState}).__ui = ui; // for test/ui.mjs
   // Screenshot/test runs (paused=1, nohelp=1 or ui=0) hide the overlay UI.
   if (ui.paused || params.get('nohelp') === '1' || params.get('ui') === '0') {
     document.getElementById('help')!.style.display = 'none';
@@ -274,9 +275,7 @@ async function main() {
       startAudio();
     }
     if (e.key === 'c' || e.key === 'C') {
-      ui.camera = ((ui.camera + 1) % 4) as CameraMode;
-      ui.shot = undefined;
-      apply('camera');
+      controls.cycleCamera();
     } else if (e.key === ' ') {
       ui.paused = !ui.paused;
       e.preventDefault();
