@@ -171,4 +171,16 @@ await withPage('index.html?t=40&mute=1', async page => {
   const b = await open();
   check(a && !b, `settings button opens then closes the panel (${a} -> ${b})`);
 });
+// size=WxH: fixed-size canvas, centred, rendering at exactly that size.
+await withPage('index.html?t=40&mute=1&size=640x360', async page => {
+  const r = await page.evaluate(() => {
+    const c = document.getElementById('c');
+    const b = c.getBoundingClientRect();
+    return {w: c.width, h: c.height, x: b.left, y: b.top, vw: innerWidth, vh: innerHeight};
+  });
+  check(
+    r.w === 640 && r.h === 360 && r.x === (r.vw - 640) / 2 && r.y === (r.vh - 360) / 2,
+    `size=640x360 renders 640x360, centred (${JSON.stringify(r)})`,
+  );
+});
 process.exit(failed ? 1 : 0);

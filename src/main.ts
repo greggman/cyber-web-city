@@ -3,6 +3,7 @@
 // URL params:
 //   seed=N        world seed
 //   t=SECONDS     start time along the flight path
+//   size=WxH      fixed canvas size in CSS px, centred (video capture)
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
 //   cam=facade&n=K[&d=D]  inspect a building face (optionally of district D)
 //   paused=1      freeze time (deterministic screenshots)
@@ -63,6 +64,14 @@ const startupMs: Record<string, number> = {};
 async function main() {
   onGpuError(showError);
   const canvas = document.getElementById('c') as HTMLCanvasElement;
+  // size=WIDTHxHEIGHT: a fixed CSS size, centred (for capturing video at an
+  // exact size). Rendering follows the canvas's CSS size.
+  const sizeMatch = /^(\d+)x(\d+)$/.exec(params.get('size') ?? '');
+  if (sizeMatch) {
+    canvas.style.width = `${sizeMatch[1]}px`;
+    canvas.style.height = `${sizeMatch[2]}px`;
+    document.documentElement.classList.add('fixed-size');
+  }
   const gpu = await initGpu(canvas);
   const renderer = new Renderer(gpu);
   const tShaders = performance.now();

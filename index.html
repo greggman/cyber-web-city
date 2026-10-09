@@ -26,6 +26,10 @@
         -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
       }
       canvas { display: block; width: 100%; height: 100%; }
+      /* ?size=WxH: fixed-size canvas centred in the page (margin: auto keeps
+         it reachable by scrolling when the window is smaller). */
+      .fixed-size body { display: flex; }
+      .fixed-size canvas { flex: none; margin: auto; }
       #loadmsg {
         position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
         color: #7ff; font: 16px/1.4 ui-monospace, monospace; letter-spacing: 0.2em;
