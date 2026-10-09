@@ -125,7 +125,7 @@ async function main() {
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
   const lowQuality = params.get('quality') === 'low';
-  const rain = new Rain(gpu.device, lowQuality ? 25000 : 60000);
+  const rain = new Rain(gpu.device, lowQuality ? 18000 : 35000);
   await rain.init(renderer.sceneLayout);
   rain.intensity = Number(params.get('rain') ?? 1);
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));

@@ -255,15 +255,15 @@ export function carLights(m: Mat4, time: number): LightDesc[] {
   return [
     {
       pos: P([-0.6, 0.7, -2.9]),
-      radius: 90,
-      color: [30, 27, 22],
-      spot: {dir: fwd, cosCone: Math.cos(0.35)},
+      radius: 60,
+      color: [16, 15, 13],
+      spot: {dir: fwd, cosCone: Math.cos(0.45)},
     },
     {
       pos: P([0.6, 0.7, -2.9]),
-      radius: 90,
-      color: [30, 27, 22],
-      spot: {dir: fwd, cosCone: Math.cos(0.35)},
+      radius: 60,
+      color: [16, 15, 13],
+      spot: {dir: fwd, cosCone: Math.cos(0.45)},
     },
     {
       pos: P([0, 0.7, 3.2]),

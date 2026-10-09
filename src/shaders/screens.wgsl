@@ -65,7 +65,7 @@ fn fs(i: VOut) -> GOut {
   // LED subpixels up close.
   let px = i.uv * vec2f(s.width, s.height) / 0.25;
   let fw = fwidth(px);
-  let det = 1.0 - smoothstep(0.3, 0.8, max(fw.x, fw.y));
+  let det = 1.0 - smoothstep(0.12, 0.35, max(fw.x, fw.y));
   let sub = fract(px.x) * 3.0;
   let mask = vec3f(step(sub, 1.0), step(1.0, sub) * step(sub, 2.0), step(2.0, sub)) * 2.2;
   let rowGap = smoothstep(0.0, 0.15, fract(px.y)) * smoothstep(1.0, 0.85, fract(px.y));

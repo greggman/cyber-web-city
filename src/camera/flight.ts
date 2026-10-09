@@ -116,6 +116,9 @@ export class FlightPath {
               : Math.max(target, o.y1 + 40);
         }
       }
+      // Gentle climbs and dives only (max ~10 degrees).
+      const maxStep = n * SUPER * 0.12;
+      target = Math.max(alt - maxStep, Math.min(alt + maxStep, target));
       // Lateral offset within the lane.
       const side = rng.range(-8, 8);
       const perp: Vec3 = [-dir[1], 0, dir[0]];
@@ -228,7 +231,9 @@ export class FlightPath {
     const s2 = this.distanceAt(time + 0.05);
     const speed = (s2 - s) / 0.05;
     let pos = this.pointAt(s);
-    const fwd = this.tangentAt(s + 3);
+    // Follow the path's pitch only partially: flying cars stay fairly level.
+    const tan = this.tangentAt(s + 3);
+    const fwd = normalize([tan[0], tan[1] * 0.5, tan[2]]);
     // Bank into turns: lateral acceleration v^2 * k.
     const k =
       (this.signedCurvature(s + 4) + this.signedCurvature(s + 10)) * 0.5;
@@ -265,8 +270,8 @@ interface Shot {
 // Cinematic framings cycled during the flight.
 const SHOTS: Shot[] = [
   {back: 11, side: 0, up: 2.6, lookAhead: 6, fov: 55}, // classic chase
-  {back: 7, side: -2.5, up: -0.6, lookAhead: 10, fov: 62}, // low, close, looking up
-  {back: 22, side: 6, up: 9, lookAhead: 0, fov: 45}, // high wide
+  {back: 9, side: -2.2, up: 0.5, lookAhead: 10, fov: 60}, // low, close
+  {back: 18, side: 5, up: 4.5, lookAhead: 4, fov: 48}, // high wide
   {back: 2, side: 9, up: 1.2, lookAhead: 2, fov: 50}, // side tracking
   {back: -12, side: 4, up: 2.0, lookAhead: -2, fov: 48}, // front three-quarter, looking back
 ];
@@ -328,6 +333,13 @@ export class ChaseCamera {
       const b = 1 - Math.exp(-dt * 8);
       this.pos = add(this.pos, scale(sub(desiredEye, this.pos), a));
       this.target = add(this.target, scale(sub(desiredTarget, this.target), b));
+      // Keep height close to the framing so climbs/dives don't leave the
+      // camera staring at the car's belly.
+      const y = Math.min(
+        Math.max(this.pos[1], desiredEye[1] - 1.5),
+        desiredEye[1] + 1.5,
+      );
+      this.pos = [this.pos[0], y, this.pos[2]];
     }
     this.lastTime = time;
     // Slight roll with the car's bank.

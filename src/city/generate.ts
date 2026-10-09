@@ -446,7 +446,7 @@ export function generateCity(seed: number): CityData {
               : rng.chance(0.2)
                 ? SegFlags.FloorBands
                 : 0,
-            taper: rng.chance(0.2) ? rng.range(0.6, 0.9) : 1,
+            taper: 1,
             floorH: 3.4,
           });
         }

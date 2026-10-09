@@ -197,7 +197,7 @@ function crown(
   style: Style,
 ) {
   const r = ctx.rng;
-  const kind = r.int(0, 5);
+  const kind = r.weighted([0.4, 1, 1.6, 1, 1]);
   let top = y;
   if (kind === 0) {
     // Pyramid cap.

@@ -252,10 +252,19 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     ws = WinStyle(1.6, s.floorH, 0.06, 0.94, 0.14, 0.98, 4.0, 9.0, 0.12, 2.4, 0.35, 0.0);
     let w = window_facade(c, ws, style, tint, sf);
     let glass = mix(vec3f(0.02, 0.035, 0.05), vec3f(0.03, 0.05, 0.06), hash11(c.seed));
-    (*sf).albedo = mix(vec3f(0.05, 0.055, 0.06) * g, glass, w);
-    (*sf).roughness = mix(0.35, 0.04, w);
+    // Mullions (vertical) and transoms catch neon specular; spandrels are
+    // ribbed dark panels.
+    let cellF = fract(vec2f(c.facade.x / ws.cellW, c.facade.y / ws.floorH));
+    let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
+    let mull = (1.0 - aa_box(cellF.x, 0.04, 0.96, c.fw.x / ws.cellW)) * det;
+    let rib = step(0.5, fract(c.facade.y * 2.5)) * (1.0 - step(0.14, cellF.y)) * det;
+    var frameCol = vec3f(0.05, 0.055, 0.06) * g;
+    frameCol = mix(frameCol, vec3f(0.35, 0.37, 0.4), mull);
+    frameCol *= 1.0 - rib * 0.4;
+    (*sf).albedo = mix(frameCol, glass, w);
+    (*sf).roughness = mix(mix(0.35, 0.18, mull), 0.04, w);
     (*sf).metallic = mix(0.8, 0.0, w);
-    (*sf).reflectivity = mix(0.4, 0.9, w);
+    (*sf).reflectivity = mix(mix(0.4, 0.7, mull), 0.9, w);
   } else if (style == ST_RESIDENTIAL) {
     ws = WinStyle(3.4, s.floorH, 0.18, 0.82, 0.25, 0.85, 1.0, 5.0, 0.22, 1.6, 0.2, 0.45);
     let w = window_facade(c, ws, style, tint, sf);
@@ -263,9 +272,24 @@ fn shade_wall(c: Ctx, s: Segment, sf: ptr<function, Surface>) {
     // Balcony ledges.
     let fy = fract(c.facade.y / s.floorH);
     let ledge = aa_box(fy, 0.0, 0.08, c.fw.y / s.floorH) * step(0.5, fract(c.facade.x / (ws.cellW * 2.0)));
-    (*sf).albedo = mix(concrete * (1.0 - 0.6 * ledge), vec3f(0.02), w);
-    (*sf).roughness = mix(0.8, 0.1, w);
+    // Balcony railings, AC units with glowing fan grilles, drain pipes.
+    let cellR = fract(vec2f(c.facade.x / ws.cellW, c.facade.y / s.floorH));
+    let cid = floor(vec2f(c.facade.x / ws.cellW, c.facade.y / s.floorH));
+    let detR = detail(vec2f(ws.cellW, s.floorH), c.fw);
+    let rail = ledge * step(0.5, fract(c.facade.x * 4.0)) * aa_box(cellR.y, 0.08, 0.22, c.fw.y / s.floorH) * detR;
+    let hac = hash3_u(c.seed ^ 0x77u, u_of(cid.x), u_of(cid.y));
+    let ac = select(0.0, 1.0, (hac & 3u) == 0u) * aa_box(cellR.x, 0.84, 0.98, 0.02) * aa_box(cellR.y, 0.3, 0.55, 0.02) * detR;
+    let pipeX = fract(c.facade.x / (ws.cellW * 3.0));
+    let pipe = aa_box(pipeX, 0.0, 0.025, c.fw.x / (ws.cellW * 3.0)) * detR;
+    var wall = concrete * (1.0 - 0.6 * ledge);
+    wall = mix(wall, vec3f(0.22, 0.22, 0.24), rail * 0.8);
+    wall = mix(wall, vec3f(0.28, 0.28, 0.3), ac);
+    wall = mix(wall, vec3f(0.06, 0.06, 0.07), pipe);
+    (*sf).albedo = mix(wall, vec3f(0.02), w);
+    (*sf).roughness = mix(mix(0.8, 0.35, max(pipe, rail)), 0.1, w);
     (*sf).reflectivity = mix(0.15, 0.6, w);
+    // Some AC units have a faint indicator glow.
+    (*sf).emissive += vec3f(0.2, 0.9, 0.5) * ac * select(0.0, 0.25, (hac & 12u) == 0u);
   } else if (style == ST_METAL) {
     ws = WinStyle(3.0, s.floorH, 0.04, 0.96, 0.35, 0.7, 3.0, 6.0, 0.25, 1.2, 0.3, 0.0);
     let w = window_facade(c, ws, style, tint, sf);

@@ -5,7 +5,7 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
   let d = normalize(dir);
   let up = d.y;
   // Base gradient: hazy orange/magenta near the horizon to near-black zenith.
-  let horizon = vec3f(0.20, 0.085, 0.12);
+  let horizon = vec3f(0.13, 0.06, 0.11);
   let mid = vec3f(0.05, 0.025, 0.06);
   let zenith = vec3f(0.006, 0.005, 0.012);
   var c = mix(horizon, mid, smoothstep(0.0, 0.18, up));

@@ -37,7 +37,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let uv = i.uv;
   // Chromatic aberration: radial offset for R and B.
   let dir = (uv - 0.5);
-  let ca = dir * 0.0025;
+  let ca = dir * 0.0012 * smoothstep(0.25, 0.7, length(dir));
   let r = textureSampleLevel(hdrTex, linearSampler, uv + ca, 0.0).r;
   let g = textureSampleLevel(hdrTex, linearSampler, uv, 0.0).g;
   let b = textureSampleLevel(hdrTex, linearSampler, uv - ca, 0.0).b;

@@ -124,9 +124,9 @@ export class Rain {
     p.set(vel, 0);
     new Uint32Array(p.buffer)[3] = this.count;
     p.set(center, 4);
-    p[7] = this.intensity * 3;
+    p[7] = this.intensity * 1.7;
     p.set(BOX, 8);
-    p[11] = 1 / 40; // streak exposure (s)
+    p[11] = 1 / 60; // streak exposure (s)
     p.set([2.5, 0, 1.2], 12);
     p[15] = 10;
     this.device.queue.writeBuffer(this.params, 0, p);

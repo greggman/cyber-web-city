@@ -57,9 +57,12 @@ fn cs_inject(@builtin(global_invocation_id) gid: vec3u) {
       att *= smoothstep(L.cosCone, mix(L.cosCone, 1.0, 0.3), dot(-l, L.dir));
     }
     // Cap each light so beams aimed at the camera don't white out.
-    light += min(L.color * att * phase_hg(dot(-dir, l), 0.35) * 4.0 * PI, vec3f(6.0));
+    light += min(L.color * att * phase_hg(dot(-dir, l), 0.3) * 4.0 * PI, vec3f(2.5));
   }
-  textureStore(injectOut, gid, vec4f(light * density, density));
+  // Fade out right in front of the camera (no glowing disk around the
+  // viewer's own headlights).
+  let nearFade = smoothstep(4.0, 18.0, dist);
+  textureStore(injectOut, gid, vec4f(light * density * nearFade, density));
 }
 
 @compute @workgroup_size(8, 8, 1)

@@ -132,7 +132,7 @@ fn fs(i: VOut) -> @location(0) vec4f {
   let uv = i.uv;
   let t = T.time;
   // Background: animated gradient with stripes.
-  var c = mix(T.colA * 0.15, T.colB * 0.35, uv.y);
+  var c = mix(vec3f(0.005), T.colB * 0.12, uv.y * uv.y);
   c += T.colB * 0.25 * step(0.85, fract(uv.x * 6.0 + t * 0.3)) * (1.0 - uv.y);
   // Camera.
   let ro = vec3f(0.0, 0.0, 3.2);
@@ -152,7 +152,7 @@ fn fs(i: VOut) -> @location(0) vec4f {
     let alb = material(m, p, n);
     let l1 = normalize(vec3f(0.6, 0.7, 0.5));
     let rim = pow(1.0 - saturate(dot(n, -rd)), 3.0);
-    c = alb * (0.15 + 0.85 * saturate(dot(n, l1))) + T.colA * rim * 1.5 + T.colB * saturate(-n.x) * 0.4;
+    c = alb * (0.1 + 1.1 * saturate(dot(n, l1))) + T.colA * rim * 2.0 + T.colB * saturate(-n.x) * 0.6;
     let spec = pow(saturate(dot(reflect(rd, n), l1)), 40.0);
     c += vec3f(spec);
   }
