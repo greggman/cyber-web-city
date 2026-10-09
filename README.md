@@ -1,4 +1,4 @@
-# Cyber Web City
+# Cyber Web City in 180k
 
 A relaxing night flight through an enormous, rain-soaked, procedurally
 generated cyberpunk megacity. It is inspired by Blade Runner, Dredd, The Fifth
@@ -147,5 +147,5 @@ them.
 | `src/camera/` | Autopilot flight path, chase framings |
 | `src/render/` | One class per system (city, signs, lights, SSR, volumetrics, rain, canopy, ads, traffic, post, Hi-Z) |
 | `src/shaders/` | WGSL, assembled with `#include` |
-| `src/audio/` | Generative Vangelis-inspired score (`music.ts`: CS-80-style pads, gliding lead, FM bells, hall reverb) and the rain bed |
+| `src/audio/` | Generative Vangelis-inspired score (`music.ts`: CS-80-style pads, gliding lead, FM bells, hall reverb); no ambient noise |
 | `test/` | Puppeteer harness, smoke test, screenshot tools, shader validator, unit tests |

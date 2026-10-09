@@ -349,7 +349,6 @@ async function main() {
         audio.setVolume(ui.volume);
         break;
       case 'rain':
-        audio.setRain(ui.rain);
         rain.intensity = ui.rain;
         settings.rain = ui.rain;
         settings.wetness = Math.min(1, ui.rain * 2);
@@ -623,7 +622,6 @@ async function main() {
       speed: pose.speed,
       pov: inCockpit,
     });
-    audio.setInterior(inCockpit);
     audio.update();
     rain.setFrame(camera.position, camera.forward, [
       pose.forward[0] * pose.speed,
