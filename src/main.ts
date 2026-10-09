@@ -53,6 +53,9 @@ async function main() {
   const renderer = new Renderer(gpu);
   loadmsg.textContent = 'Compiling shaders';
   await renderer.init({segments: city.segments, signs, lights});
+  // Quality preset: low drops SSR and thins the rain.
+  renderer.ssr.enabled =
+    params.get('quality') !== 'low' && params.get('ssr') !== '0';
   const carEntry = MODELS.spinner;
   const carMesh = buildModelMesh(carEntry.build());
   const car = new CarRenderer(gpu.device);
@@ -117,7 +120,8 @@ async function main() {
   renderer.transparentDrawers.unshift(p =>
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
-  const rain = new Rain(gpu.device);
+  const lowQuality = params.get('quality') === 'low';
+  const rain = new Rain(gpu.device, lowQuality ? 25000 : 60000);
   await rain.init(renderer.sceneLayout);
   rain.intensity = Number(params.get('rain') ?? 1);
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
@@ -151,6 +155,7 @@ async function main() {
     debugView: Number(params.get('debug') ?? 0),
     quality: params.get('quality') === 'low' ? 0 : 1,
     taa: params.get('taa') !== '0',
+    occlusion: params.get('occlusion') !== '0',
   };
   if (params.get('paused') === '1' || params.get('nohelp') === '1') {
     document.getElementById('help')!.style.display = 'none';
@@ -270,7 +275,15 @@ async function main() {
       hud.textContent =
         `${fps.toFixed(0)} fps  ${canvas.width}x${canvas.height}\n` +
         `segments ${renderer.city.count}  traffic ${traffic.count} (${trafficMesh.triangleCount} tris)  signs ${signs.length}  lights ${lights.length}  gen ${genMs.toFixed(0)} ms\n` +
-        `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m`;
+        `t ${time.toFixed(1)}s  speed ${(pose.speed * 3.6).toFixed(0)} km/h  alt ${pose.position[1].toFixed(0)} m` +
+        `\nvisible segments ${renderer.city.visibleSegments}` +
+        (renderer.timer.enabled
+          ? '\n' +
+            Object.entries(renderer.timer.results)
+              .map(([k, v]) => `${k.padEnd(18)} ${v.toFixed(2)} ms`)
+              .join('\n') +
+            `\nGPU frame ${renderer.timer.frameMs.toFixed(2)} ms`
+          : '\n(no timestamp-query)');
     } else {
       hud.textContent = '';
     }
@@ -279,6 +292,9 @@ async function main() {
       segments: renderer.city.count,
       genMs,
       time,
+      visibleSegments: renderer.city.visibleSegments,
+      gpu: renderer.timer.results,
+      gpuFrameMs: renderer.timer.frameMs,
     };
     requestAnimationFrame(frame);
   }

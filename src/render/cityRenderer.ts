@@ -3,6 +3,7 @@
 // One compute dispatch culls every segment and appends visible ones into
 // per-mesh buckets. Each bucket is then drawn with a single
 // drawIndexedIndirect, so the CPU cost is independent of city size.
+import {tw} from '../gpu/timer';
 import {
   createBuffer,
   createBufferWithData,
@@ -141,7 +142,7 @@ export class CityRenderer {
     this.argsBuffer = createBuffer(device, {
       label: 'city/indirectArgs',
       size: this.argsInit.byteLength,
-      usage: U.INDIRECT | U.STORAGE | U.COPY_DST,
+      usage: U.INDIRECT | U.STORAGE | U.COPY_DST | U.COPY_SRC,
     });
     const baseBuffer = createBufferWithData(
       device,
@@ -302,7 +303,10 @@ export class CityRenderer {
     f[45] = this.hizSize[1];
     this.device.queue.writeBuffer(this.cullParams, 0, this.cullParamsData);
     this.device.queue.writeBuffer(this.argsBuffer, 0, this.argsInit);
-    const pass = encoder.beginComputePass({label: 'city/cull'});
+    const pass = encoder.beginComputePass({
+      label: 'city/cull',
+      timestampWrites: tw('city/cull'),
+    });
     pass.setPipeline(this.cullPipeline);
     pass.setBindGroup(0, this.cullBindGroup);
     pass.dispatchWorkgroups(Math.ceil(this.segmentCount / 64));
@@ -326,6 +330,42 @@ export class CityRenderer {
 
   drawColor(pass: GPURenderPassEncoder) {
     this.draw(pass, this.colorPipeline);
+  }
+
+  private readback: GPUBuffer | null = null;
+  private readbackBusy = false;
+  /** Segments that survived culling (sampled every ~half second). */
+  visibleSegments = 0;
+
+  /** Copies the indirect args for an async read of visible counts. */
+  sampleStats(encoder: GPUCommandEncoder, frameIndex: number) {
+    if (this.readbackBusy || frameIndex % 30 !== 0) return;
+    this.readback ??= this.device.createBuffer({
+      label: 'city/statsReadback',
+      size: this.argsInit.byteLength,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    encoder.copyBufferToBuffer(
+      this.argsBuffer,
+      0,
+      this.readback,
+      0,
+      this.argsInit.byteLength,
+    );
+    this.readbackBusy = true;
+    const rb = this.readback;
+    queueMicrotask(() => {
+      void this.device.queue.onSubmittedWorkDone().then(() =>
+        rb.mapAsync(GPUMapMode.READ).then(() => {
+          const a = new Uint32Array(rb.getMappedRange());
+          let n = 0;
+          for (let i = 1; i < a.length; i += 5) n += a[i];
+          this.visibleSegments = n;
+          rb.unmap();
+          this.readbackBusy = false;
+        }),
+      );
+    });
   }
 
   get count() {

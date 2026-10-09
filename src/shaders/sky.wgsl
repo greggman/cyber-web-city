@@ -41,14 +41,14 @@ fn fog_amount(camPos: vec3f, worldPos: vec3f) -> f32 {
   } else {
     integral = base * dist;
   }
-  return 1.0 - exp(-integral);
+  // Plus a distance floor so the far edge of the world always fades out.
+  return max(1.0 - exp(-integral), 1.0 - exp(-dist / 9000.0));
 }
 
 fn fog_color(dir: vec3f, worldY: f32) -> vec3f {
-  // Brightest toward the horizon smog band, darker looking down into the
-  // canyons or up at the sky.
-  let y = normalize(dir).y;
-  let horizon = exp(-abs(y) * 5.0);
-  let c = frame.fogColor * (0.45 + 0.9 * horizon) * mix(1.0, 0.7, saturate(-y));
-  return c * frame.cityGlow;
+  // Match the sky at the horizon so distant geometry dissolves seamlessly;
+  // darker looking down into the canyons.
+  let d = normalize(dir);
+  let horizonSky = sky_color(vec3f(d.x, max(d.y, 0.0) + 0.012, d.z), frame.time);
+  return mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
 }

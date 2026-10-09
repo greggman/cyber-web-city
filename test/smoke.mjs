@@ -24,7 +24,7 @@ for (const [i, p] of pages.entries()) {
     if (hud) console.log('[smoke] stats', JSON.stringify(hud));
     if (ctx.errors.length) {
       failed = true;
-      console.log(`[smoke] FAIL: ${ctx.errors.length} error(s):\n  ` + ctx.errors.join('\n  '));
+      console.log(`[smoke] FAIL: ${ctx.errors.length} error(s):\n  ` + ctx.errors.slice(0, 8).join('\n  '));
     }
     if (process.env.SMOKE_ALLOW_BLANK !== '1' && stats.colors < 8) {
       failed = true;

@@ -109,7 +109,7 @@ export function generateCity(seed: number): CityData {
       roofs,
       avenueSides: [false, false, false, false],
     };
-    const size = CITY_HALF_SIZE * 2 + 6000;
+    const size = CITY_HALF_SIZE * 2 + 30000;
     seg(ctx, {
       x: 0,
       z: 0,
@@ -390,6 +390,64 @@ export function generateCity(seed: number): CityData {
             z1: z + w / 2,
             y0: y,
             y1: y + h,
+          });
+        }
+      }
+    }
+  }
+
+  // Far field: a ring of simpler buildings beyond the detailed city so the
+  // skyline continues to the horizon (seen through haze, beyond the flight
+  // area). Cheap boxes/cylinders; the facade shader's distant averages do
+  // the rest.
+  {
+    const rng = new Rng(seed, 4040);
+    const ctx: BuildCtx = {
+      segs: segments,
+      rng,
+      district: District.Megablock,
+      slots: [],
+      roofs: [],
+      avenueSides: [false, false, false, false],
+    };
+    const R = CITY_RADIUS_SUPERS + 24;
+    for (let i = -R; i < R; i++) {
+      for (let j = -R; j < R; j++) {
+        if (i >= -N && i < N && j >= -N && j < N) continue;
+        const info = superblockInfo(i, j, seed);
+        const n = rng.int(2, 6);
+        for (let k = 0; k < n; k++) {
+          const w = rng.range(40, 110);
+          const d = rng.range(40, 110);
+          const x =
+            i * SUPER + half + rng.range(w / 2, SUPER - AVENUE_W - w / 2);
+          const z =
+            j * SUPER + half + rng.range(d / 2, SUPER - AVENUE_W - d / 2);
+          const h =
+            rng.range(80, 500) *
+            info.heightScale *
+            (rng.chance(0.05) ? 2.5 : 1);
+          seg(ctx, {
+            x,
+            z,
+            y: 0,
+            w,
+            d,
+            h,
+            shape: rng.chance(0.2) ? Shape.Cylinder : Shape.Box,
+            style: rng.pick([
+              Style.Residential,
+              Style.GlassOffice,
+              Style.Slum,
+              Style.MetalPanel,
+            ]),
+            flags: rng.chance(0.15)
+              ? SegFlags.EdgeGlow
+              : rng.chance(0.2)
+                ? SegFlags.FloorBands
+                : 0,
+            taper: rng.chance(0.2) ? rng.range(0.6, 0.9) : 1,
+            floorH: 3.4,
           });
         }
       }
