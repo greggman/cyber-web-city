@@ -13,7 +13,7 @@ struct Surface {
 // Ambient visibility from SSAO (set by shaders that sample it; 1 = none).
 var<private> g_ao: f32 = 1.0;
 
-fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
+fn ambient_light(n: vec3f, worldY: f32, dist: f32) -> vec3f {
   // Three bands of city light: the glowing smog dome above (top faces), the
   // horizon haze (walls) and bounced street light from below (undersides,
   // stronger deeper in the canyons). The differences between them are what
@@ -22,7 +22,10 @@ fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
   // The smog glow is brighter toward the city core: faces turned toward
   // it are lit more than the others, so building forms separate.
   let face = 0.55 + 0.45 * dot(normalize(n.xz + vec2f(1e-4)), vec2f(0.6, 0.8)) * (1.0 - abs(n.y));
-  let horizon = vec3f(0.24, 0.16, 0.22) * face * frame.cityGlow;
+  // Fill light is for reading form up close; far away the city should be
+  // carried by its lights, not by evenly lit grey walls.
+  let far = mix(1.0, 0.35, smoothstep(150.0, 900.0, dist));
+  let horizon = vec3f(0.24, 0.16, 0.22) * face * far * frame.cityGlow;
   let depthBoost = 1.0 + 3.0 * exp(-max(worldY, 0.0) / 90.0);
   let ground = vec3f(0.2, 0.1, 0.06) * depthBoost * frame.cityGlow;
   return sky * smoothstep(-0.1, 1.0, n.y) + horizon * (1.0 - abs(n.y)) + ground * smoothstep(0.1, -1.0, n.y);
@@ -32,9 +35,9 @@ fn ambient_light(n: vec3f, worldY: f32) -> vec3f {
 // glowing smog layer at the horizon.
 fn reflection_env(r: vec3f) -> vec3f {
   let horizon = exp(-abs(r.y) * 6.0);
-  let below = vec3f(0.05, 0.028, 0.024) * (1.0 - smoothstep(-0.2, 0.0, r.y));
-  let above = vec3f(0.03, 0.024, 0.05) * smoothstep(0.0, 0.3, r.y);
-  return (below + above + vec3f(0.14, 0.07, 0.1) * horizon) * frame.cityGlow;
+  let below = vec3f(0.035, 0.02, 0.017) * (1.0 - smoothstep(-0.2, 0.0, r.y));
+  let above = vec3f(0.016, 0.013, 0.028) * smoothstep(0.0, 0.3, r.y);
+  return (below + above + vec3f(0.11, 0.05, 0.075) * horizon) * frame.cityGlow;
 }
 
 fn ggx_d(nh: f32, a: f32) -> f32 {
@@ -83,7 +86,7 @@ fn light_clustered(world: vec3f, n: vec3f, v: vec3f, albedo: vec3f, rough: f32, 
 fn shade_surface(sf: Surface, world: vec3f) -> vec3f {
   let V = normalize(frame.camPos - world);
   let diffuse = sf.albedo * (1.0 - sf.metallic);
-  var c = diffuse * ambient_light(sf.normal, world.y) * g_ao;
+  var c = diffuse * ambient_light(sf.normal, world.y, distance(world, frame.camPos)) * g_ao;
   // Cheap ambient specular so glass and wet surfaces aren't flat.
   let fres = pow(1.0 - saturate(dot(sf.normal, V)), 5.0);
   c += (0.04 + 0.96 * fres) * reflection_env(reflect(-V, sf.normal)) * (1.0 - sf.roughness * 0.7) * sf.reflectivity * mix(1.0, g_ao, 0.7);

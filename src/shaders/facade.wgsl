@@ -331,7 +331,14 @@ fn weathering(c: Ctx, s: Segment) -> f32 {
   let runoff = smoothstep(14.0, 0.0, top) * (0.4 + 0.6 * vnoise2(vec2f(c.facade.x * 1.3, c.world.y * 0.08)));
   let splash = smoothstep(4.0, 0.0, c.world.y) * 0.5;
   let fine = mix(0.9, 1.0 - 0.28 * streak, detS);
-  return mix(1.0, panel, detP) * fine * (1.0 - 0.3 * runoff) * (1.0 - splash);
+  // Structure that reads at mid range: floor slab edges and pilasters,
+  // fading to their average (not to flat) with distance.
+  let detF = detail(vec2f(4.0, fh), c.fw) * (1.0 - detail(vec2f(0.25), c.fw) * 0.5);
+  let slab = aa_box(fract(c.facade.y / fh), 0.0, 0.07, c.fw.y / fh);
+  let pilStep = 6.0 + 3.0 * f32(s.seed % 3u);
+  let pil = aa_box(fract(c.facade.x / pilStep), 0.0, 0.08, c.fw.x / pilStep);
+  let structure = mix(0.93, (1.0 - 0.45 * slab) * (1.0 + 0.3 * pil), detF);
+  return mix(1.0, panel, detP) * fine * structure * (1.0 - 0.3 * runoff) * (1.0 - splash);
 }
 
 // A blocky pseudo-glyph (5x5 cells) for shop signs: strokes from a hash.
@@ -760,7 +767,10 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
     shade_wall(c, s, &sf);
     sf.albedo *= g_revealAO;
     if (s.style != ST_LED && s.style != ST_NEONRING) {
-      sf.albedo *= weathering(c, s);
+      // Also on reflectivity: curtain walls read through their reflections.
+      let wth = weathering(c, s);
+      sf.albedo *= wth;
+      sf.reflectivity *= wth * wth;
     }
     apply_wet(c, &sf, false);
     // Vertical LED strips on box edges.
