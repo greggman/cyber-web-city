@@ -58,6 +58,8 @@ export interface CityData {
   landmarks: [number, number, number][];
   /** Cable bundles strung across inner streets (world space). */
   cables: Cable[];
+  /** Refinery flare stack tops, world space (themes with flares). */
+  flares: [number, number, number][];
   /** District per superblock, (2N)^2 row-major from (-N, -N) (grid space). */
   districts: {n: number; data: Uint8Array};
 }
@@ -131,6 +133,7 @@ export function generateCity(
   const roofs: [number, number, number, number][] = [];
   const obstacles: Obstacle[] = [];
   const landmarks: [number, number, number][] = [];
+  const flares: [number, number, number][] = [];
   const cables: Cable[] = [];
   const N = CITY_RADIUS_SUPERS;
   const half = AVENUE_W / 2;
@@ -671,6 +674,35 @@ export function generateCity(
           continue;
         }
         const info = superblockInfo(i, j, seed);
+        // Refineries in the outer ring (Blade Runner's Hades landscape):
+        // clusters of tall stacks, their tops flaring.
+        if (
+          theme().flares &&
+          Math.max(Math.abs(i + 0.5), Math.abs(j + 0.5)) > N + 6 &&
+          hashFloat(seed, i, j, 501) < 0.03
+        ) {
+          const fr = new Rng(seed, (i + 5000) * 9973 + j);
+          const k = fr.int(2, 5);
+          for (let q = 0; q < k; q++) {
+            const x = (i + 0.5) * SUPER + fr.range(-90, 90);
+            const z = (j + 0.5) * SUPER + fr.range(-90, 90);
+            const h = fr.range(140, 260);
+            seg(ctx, {
+              x,
+              z,
+              y: 0,
+              w: 9,
+              d: 9,
+              h,
+              taper: 0.6,
+              shape: Shape.Cylinder,
+              style: Style.Structure,
+              flags: SegFlags.RoofBeacon,
+            });
+            flares.push([x, h, z]);
+          }
+          continue;
+        }
         const n = rng.int(2, 6);
         for (let k = 0; k < n; k++) {
           const w = rng.range(40, 110);
@@ -896,6 +928,7 @@ export function generateCity(
     sl.height = Math.min(sl.height, s.y + s.sy - sl.y);
   }
   for (const r of roofs) [r[0], r[2]] = warp(r[0], r[2]);
+  for (const f of flares) [f[0], f[2]] = warp(f[0], f[2]);
   for (const l of landmarks) [l[0], l[2]] = warp(l[0], l[2]);
   for (const c of cables) {
     [c.a[0], c.a[2]] = warp(c.a[0], c.a[2]);
@@ -928,6 +961,7 @@ export function generateCity(
     roofs,
     obstacles,
     landmarks,
+    flares,
     cables,
     districts,
   };

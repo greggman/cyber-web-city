@@ -14,6 +14,44 @@
 // Xenon searchlights (ART_BIBLE.md 15.5), uploaded by volumetrics.ts.
 struct Beam { origin: vec3f, len: f32, dir: vec3f, intensity: f32 };
 @group(1) @binding(5) var<uniform> beams: array<Beam, 16>;
+
+// Refinery flares (Hades): the 16 nearest stack tops, xyz + phase in w.
+@group(1) @binding(6) var<uniform> flares: array<vec4f, 16>;
+
+// Fireballs bursting from flare stacks at irregular intervals, drawn
+// analytically along the view ray (clipped by scene depth), lighting the
+// smoke around them.
+fn flare_light(ro: vec3f, rd: vec3f, maxT: f32) -> vec3f {
+  var c = vec3f(0.0);
+  let t = frame.time;
+  for (var i = 0u; i < 16u; i++) {
+    let f = flares[i];
+    if (f.w < 0.0) { continue; }
+    let period = 9.0 + 9.0 * fract(f.w * 7.31);
+    let ph = fract(t / period + f.w);
+    let burst = smoothstep(0.0, 0.025, ph) * (1.0 - smoothstep(0.07, 0.22, ph));
+    let flick = 0.7 + 0.3 * sin(t * 13.0 + f.w * 40.0) * sin(t * 5.1 + f.w * 9.0);
+    // Flame: a column from the top, 40 m idle, up to 260 m in a burst
+    // (Hades: visible from across the city).
+    let hgt = 40.0 + 220.0 * burst;
+    let ctr = f.xyz + vec3f(0.0, hgt * 0.5, 0.0);
+    let tc = max(dot(ctr - ro, rd), 0.0);
+    let p = ro + rd * tc;
+    let q = p - f.xyz;
+    let y = clamp(q.y / hgt, 0.0, 1.0);
+    let r = length(q.xz);
+    let w = (8.0 + 60.0 * burst * y) * (0.85 + 0.3 * flick);
+    // The core is hidden by buildings in front of it; its glow in the
+    // smoke is not.
+    let visible = step(tc, maxT + 40.0);
+    let core = exp(-(r * r) / (w * w)) * smoothstep(1.0, 0.55, y) * step(-5.0, q.y) * visible;
+    let col = mix(vec3f(1.0, 0.75, 0.35), vec3f(1.0, 0.25, 0.03), y);
+    c += col * core * (3.0 + 25.0 * burst) * flick;
+    let dist = length(p - ctr);
+    c += vec3f(1.0, 0.32, 0.05) * exp(-dist / (250.0 + 700.0 * burst)) * (0.04 + 0.35 * burst);
+  }
+  return c * frame.cityGlow;
+}
 const XENON = vec3f(0.716, 0.807, 1.0);
 
 // Light scattered toward the camera by each beam, integrated analytically
@@ -116,7 +154,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let dir = normalize(world - frame.camPos);
   if (depth <= 0.0) {
     let sky = sky_color(dir, frame.time);
-    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + beam_light(frame.camPos, dir, 1e5), 1.0);
+    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + beam_light(frame.camPos, dir, 1e5) + flare_light(frame.camPos, dir, 1e5), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;
   var fog = fog_amount(frame.camPos, world);
@@ -128,5 +166,5 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let fogged = mix(c, fog_color(dir, world.y, distance(world, frame.camPos)) * mix(vec3f(1.0), haze_tint(world.xz), tintK), fog);
   let lin = linear_depth(depth, frame.near);
   let rayLen = distance(world, frame.camPos);
-  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin) + beam_light(frame.camPos, dir, rayLen), 1.0);
+  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin) + beam_light(frame.camPos, dir, rayLen) + flare_light(frame.camPos, dir, rayLen), 1.0);
 }

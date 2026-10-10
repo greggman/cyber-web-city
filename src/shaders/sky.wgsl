@@ -30,6 +30,7 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
   if (frame.mountains > 0.0) {
     c = mountains(d, c);
   }
+
   return c * frame.cityGlow;
 }
 
@@ -102,3 +103,4 @@ fn fog_color(dir: vec3f, worldY: f32, dist: f32) -> vec3f {
   let k = max(smoothstep(80.0, 400.0, worldY), smoothstep(600.0, 1800.0, dist) * up);
   return mix(low, steel, 0.8 * k);
 }
+

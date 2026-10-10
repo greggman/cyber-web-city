@@ -88,6 +88,9 @@ function nextTheme() {
 }
 /** How much of the theme's weather is rain (snow/ash/dust have their own). */
 const weatherRain = cityTheme.weather === 'rain' ? cityTheme.weatherAmount : 0;
+/** Particle amount for the theme's weather (rain, snow, ash or dust). */
+const weatherParticles =
+  cityTheme.weather === 'none' ? 0 : cityTheme.weatherAmount;
 
 const tStart = performance.now();
 const startupMs: Record<string, number> = {};
@@ -206,6 +209,7 @@ async function main() {
     duration: flight.duration,
   };
   renderer.details.setBlockers(adData.screens);
+  renderer.flareSources = city.flares;
   // Xenon searchlights from the tallest roofs, at least 350 m apart
   // (ART_BIBLE.md 15.5).
   for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
@@ -270,7 +274,7 @@ async function main() {
   renderer.transparentDrawers.unshift(p =>
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
-  rain.intensity = Number(params.get('rain') ?? 1) * weatherRain;
+  rain.intensity = Number(params.get('rain') ?? 1) * weatherParticles;
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
   renderer.transparentDrawers.push(p =>
     rain.render(p, renderer.sceneBindGroup),
@@ -397,7 +401,7 @@ async function main() {
       case 'rain':
         // The theme's weather scales the rain (other weather has its own
         // particles; it isn't rain, so nothing gets wet).
-        rain.intensity = ui.rain * weatherRain;
+        rain.intensity = ui.rain * weatherParticles;
         settings.rain = ui.rain * weatherRain;
         settings.wetness = Math.min(1, ui.rain * weatherRain * 2);
         break;
@@ -601,9 +605,11 @@ async function main() {
     } else if (inspect === 'horizon') {
       // Looking out from 500 m up at azimuth n x 45 degrees (landscape).
       const a = (inspectN * Math.PI) / 4;
+      // (high=1: from 3 km up, above every building, at the horizon.)
+      const hy = params.get('high') === '1' ? 3000 : 500;
       camera.camToWorld = lookAtCamera(
-        [0, 500, 0],
-        [Math.cos(a) * 1000, 470, Math.sin(a) * 1000],
+        [0, hy, 0],
+        [Math.cos(a) * 1000, hy - 30, Math.sin(a) * 1000],
       );
       camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'facade') {

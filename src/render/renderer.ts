@@ -79,6 +79,24 @@ export class Renderer {
   private compositePipeline!: GPURenderPipeline;
   private compositeLayout: GPUBindGroupLayout;
   private districtTex!: GPUTexture;
+  private flareBuf!: GPUBuffer;
+  /** Refinery flare stack tops (world space). */
+  flareSources: [number, number, number][] = [];
+
+  /** Uploads the 16 flare stacks nearest the camera. */
+  private updateFlares(cam: [number, number, number]) {
+    const data = new Float32Array(64).fill(0);
+    for (let k = 0; k < 16; k++) data[k * 4 + 3] = -1;
+    this.flareSources
+      .map((f, i) => ({f, i, d: Math.hypot(f[0] - cam[0], f[2] - cam[2])}))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 16)
+      .forEach(({f, i}, k) => {
+        const h = Math.sin(i * 12.9898) * 43758.5453;
+        data.set([f[0], f[1], f[2], h - Math.floor(h)], k * 4);
+      });
+    this.gpu.device.queue.writeBuffer(this.flareBuf, 0, data);
+  }
   private compositeBindGroup!: GPUBindGroup;
   private tonemapPipeline!: GPURenderPipeline;
   private tonemapLayout: GPUBindGroupLayout;
@@ -124,6 +142,7 @@ export class Renderer {
       ['f', 'tex-float-3d'],
       ['f', 'sampler'],
       ['f', 'tex-uint'],
+      ['f', 'uniform'],
       ['f', 'uniform'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
@@ -197,6 +216,11 @@ export class Renderer {
   async initScene(scene: SceneData) {
     const device = this.gpu.device;
     const t = Renderer.track;
+    this.flareBuf = device.createBuffer({
+      label: 'composite/flares',
+      size: 256,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
     // Superblock district map for the composite's district-tinted haze.
     const dn = scene.districts.n * 2;
     this.districtTex = device.createTexture({
@@ -267,6 +291,7 @@ export class Renderer {
         this.volSampler,
         this.districtTex.createView({label: 'composite/districts/view'}),
         {buffer: this.volume.beamBuf},
+        {buffer: this.flareBuf},
       ],
     );
     this.targetsVersion = this.targets.version;
@@ -308,6 +333,7 @@ export class Renderer {
       cityGlow: s.cityGlow,
     });
 
+    if (this.flareSources.length) this.updateFlares(camera.position);
     const encoder = device.createCommandEncoder({label: 'frame'});
     this.timer.beginFrame();
     setActiveTimer(this.timer);

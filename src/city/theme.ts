@@ -189,6 +189,7 @@ export const THEMES: Theme[] = [
     skyHorizon: [0.2, 0.08, 0.02],
     fogDensity: 2.2,
     weather: 'dust',
+    weatherAmount: 2,
     mountains: true,
   }),
   // The sea came in: streets are canals 4.5 m deep, shopfronts drowned,

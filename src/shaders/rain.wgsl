@@ -16,13 +16,32 @@ struct RainParams {
 // Read-only view of the drops for the render pipeline.
 @group(1) @binding(2) var<storage, read> dropsRO: array<Drop>;
 
+// Weather other than rain (frame.weather: 1 snow, 2 ash, 3 dust) falls
+// slowly and drifts, drawn as soft round flakes instead of streaks.
+fn flakes() -> bool { return frame.weather >= 1u && frame.weather <= 3u; }
+
+fn particle_vel(d: Drop) -> vec3f {
+  if (!flakes()) {
+    return vec3f(R.wind.x, -R.fallSpeed * (0.85 + 0.3 * d.seed), R.wind.z);
+  }
+  let t = frame.time;
+  let ph = d.seed * 40.0;
+  // Dust blows sideways; snow and ash flutter down.
+  let fall = select(select(1.1, 0.7, frame.weather == 2u), 0.25, frame.weather == 3u);
+  let side = select(0.7, 5.0, frame.weather == 3u);
+  return vec3f(
+    side * (0.6 + sin(t * 0.7 + ph)) + R.wind.x * 0.3,
+    -fall * (0.7 + 0.6 * d.seed) + 0.3 * sin(t * 1.3 + ph * 1.7),
+    0.6 * cos(t * 0.9 + ph * 1.3) + R.wind.z * 0.3,
+  );
+}
+
 @compute @workgroup_size(64)
 fn cs_update(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= R.count) { return; }
   var d = drops[i];
-  let vel = vec3f(R.wind.x, -R.fallSpeed * (0.85 + 0.3 * d.seed), R.wind.z);
-  var p = d.pos + vel * frame.dt;
+  var p = d.pos + particle_vel(d) * frame.dt;
   // Wrap into the box around the camera.
   let lo = R.boxCenter - R.boxSize * 0.5;
   p = lo + ((p - lo) % R.boxSize + R.boxSize) % R.boxSize;
@@ -63,6 +82,7 @@ struct VOut {
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut {
   let d = dropsRO[ii];
+  if (flakes()) { return flake_vertex(vi, d); }
   let vel = vec3f(R.wind.x, -R.fallSpeed * (0.85 + 0.3 * d.seed), R.wind.z) - R.camVel;
   let a = d.pos;
   let b = d.pos - vel * R.streak;
@@ -97,8 +117,37 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut 
   return o;
 }
 
+// A camera-facing round flake (snow 5 mm, ash 8 mm, dust 2 mm), at least
+// 1.5 px wide (energy spread instead), lit like the rain plus the haze.
+fn flake_vertex(vi: u32, d: Drop) -> VOut {
+  var o: VOut;
+  let c = frame.viewProj * vec4f(d.pos, 1.0);
+  if (c.w < 0.3) {
+    o.pos = vec4f(0.0, 0.0, -1.0, 1.0);
+    return o;
+  }
+  let size = select(select(0.005, 0.008, frame.weather == 2u), 0.002, frame.weather == 3u);
+  let px = size * frame.resolution.y / (2.0 * frame.tanHalfFov.y * c.w);
+  let rpx = max(px, 1.5);
+  let corner = array<vec2f, 6>(vec2f(-1, -1), vec2f(1, -1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, 1), vec2f(-1, 1))[vi];
+  o.pos = vec4f(c.xy + corner * rpx * 2.0 * frame.invResolution * c.w, c.z, c.w);
+  // Snow is white, ash grey, dust ochre: the haze-lit base plus lights.
+  let tint = select(select(vec3f(1.0), vec3f(0.55), frame.weather == 2u), vec3f(1.0, 0.7, 0.4), frame.weather == 3u);
+  let lit = d.color + frame.fogHigh * 1.5 + frame.skyHorizon * 0.8;
+  let distFade = smoothstep(0.5, 2.0, c.w) * (1.0 - smoothstep(30.0, 55.0, c.w));
+  let bright = select(3.0, 9.0, frame.weather == 3u);
+  o.color = lit * tint * (px * px) / (rpx * rpx) * distFade * R.intensity * bright;
+  o.side = corner.x;
+  o.along = corner.y;
+  return o;
+}
+
 @fragment
 fn fs(i: VOut) -> @location(0) vec4f {
+  if (flakes()) {
+    let r = length(vec2f(i.side, i.along));
+    return vec4f(i.color * smoothstep(1.0, 0.3, r), 0.0);
+  }
   let edge = 1.0 - abs(i.side);
   let taper = sin(i.along * PI);
   return vec4f(i.color * edge * taper, 0.0);

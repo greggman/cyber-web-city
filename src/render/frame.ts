@@ -10,7 +10,7 @@ import {
   type Vec3,
 } from '../math/vec';
 
-export const FRAME_UNIFORM_SIZE = 800;
+export const FRAME_UNIFORM_SIZE = 816;
 
 export interface CameraState {
   camToWorld: Mat4;
@@ -130,6 +130,7 @@ export class FrameUniforms {
     f[197] = waterLevel();
     f[198] = th.water === 'flooded' ? 1 : 0;
     f[199] = th.warp;
+    f[200] = th.flares ? 1 : 0;
     this.device.queue.writeBuffer(this.buffer, 0, this.data);
     this.prevViewProj = vpNJ;
     this.prevCarToWorld = p.carToWorld.slice() as Mat4;
