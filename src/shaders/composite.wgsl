@@ -33,22 +33,22 @@ fn flare_light(ro: vec3f, rd: vec3f, maxT: f32) -> vec3f {
     let flick = 0.7 + 0.3 * sin(t * 13.0 + f.w * 40.0) * sin(t * 5.1 + f.w * 9.0);
     // Flame: a column from the top, 40 m idle, up to 260 m in a burst
     // (Hades: visible from across the city).
-    let hgt = 40.0 + 220.0 * burst;
+    let hgt = 90.0 + 420.0 * burst;
     let ctr = f.xyz + vec3f(0.0, hgt * 0.5, 0.0);
     let tc = max(dot(ctr - ro, rd), 0.0);
     let p = ro + rd * tc;
     let q = p - f.xyz;
     let y = clamp(q.y / hgt, 0.0, 1.0);
     let r = length(q.xz);
-    let w = (8.0 + 60.0 * burst * y) * (0.85 + 0.3 * flick);
+    let w = (18.0 + 140.0 * burst * y) * (0.85 + 0.3 * flick);
     // The core is hidden by buildings in front of it; its glow in the
     // smoke is not.
     let visible = step(tc, maxT + 40.0);
     let core = exp(-(r * r) / (w * w)) * smoothstep(1.0, 0.55, y) * step(-5.0, q.y) * visible;
     let col = mix(vec3f(1.0, 0.75, 0.35), vec3f(1.0, 0.25, 0.03), y);
-    c += col * core * (3.0 + 25.0 * burst) * flick;
+    c += col * core * (5.0 + 40.0 * burst) * flick;
     let dist = length(p - ctr);
-    c += vec3f(1.0, 0.32, 0.05) * exp(-dist / (250.0 + 700.0 * burst)) * (0.04 + 0.35 * burst);
+    c += vec3f(1.0, 0.32, 0.05) * exp(-dist / (500.0 + 1500.0 * burst)) * (0.08 + 0.6 * burst);
   }
   return c * frame.cityGlow;
 }

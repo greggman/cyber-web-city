@@ -264,7 +264,6 @@ const KEYS: Partial<Record<string, [RGB, number][]>> = {
   // Ash LA 2049: cold white with the odd red; colour is for holograms.
   grey: [
     [NEON_WHITE, 3],
-    [ICE_BLUE, 1],
     [RED, 0.8],
   ],
   // Drowned City: green and teal fluorescents.

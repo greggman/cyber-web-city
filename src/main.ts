@@ -363,6 +363,7 @@ async function main() {
   let roofList: Segment[] | undefined;
   let facadeList: typeof city.slots | undefined;
   let waterList: Segment[] | undefined;
+  let horizonEye: [number, number, number] | undefined;
   let time = Number(params.get('t') ?? 0);
   // anim=S offsets animation time only (camera stays put): for flicker tests.
   const animOffset =
@@ -611,11 +612,33 @@ async function main() {
       // Looking out from 500 m up at azimuth n x 45 degrees (landscape).
       const a = (inspectN * Math.PI) / 4;
       // (high=1: from 3 km up, above every building, at the horizon.)
-      const hy = params.get('high') === '1' ? 3000 : 500;
-      camera.camToWorld = lookAtCamera(
-        [0, hy, 0],
-        [Math.cos(a) * 1000, hy - 30, Math.sin(a) * 1000],
-      );
+      // 900 m up clears every tower, so the landscape is in view.
+      const hy = params.get('high') === '1' ? 3000 : 900;
+      // Start from the first spot (spiralling out from the centre) with a
+      // clear 1.5 km line of sight, so no tower fills the frame.
+      horizonEye ??= (() => {
+        const clear = makeClearanceTest(city.segments);
+        const dx = Math.cos(a);
+        const dz = Math.sin(a);
+        for (let r = 0; r < 4000; r += 150) {
+          for (let k = 0; k < 8; k++) {
+            const ox = Math.cos(k * 0.785) * r;
+            const oz = Math.sin(k * 0.785) * r;
+            let ok = true;
+            for (let t = 0; t <= 1500 && ok; t += 100) {
+              ok = clear(ox + dx * t, oz + dz * t, 40, hy - 120, hy + 40);
+            }
+            if (ok) return [ox, hy, oz] as [number, number, number];
+          }
+        }
+        return [0, hy, 0] as [number, number, number];
+      })();
+      const e = horizonEye;
+      camera.camToWorld = lookAtCamera(e, [
+        e[0] + Math.cos(a) * 1000,
+        hy - 30,
+        e[2] + Math.sin(a) * 1000,
+      ]);
       camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'facade') {
       // A residential/slum facade from ~30 m, slightly off-axis and above.

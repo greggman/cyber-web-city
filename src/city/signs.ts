@@ -1,6 +1,6 @@
 // Neon signs on facades, and the static lights of the city (signs, street
 // lamps). Brands are invented: random syllables, kana and CJK characters.
-import {theme} from './theme';
+import {theme, waterAt} from './theme';
 import {Rng} from '../math/random';
 import {unwarp, warp3} from './warp';
 import type {LightDesc} from '../render/lightClusters';
@@ -398,16 +398,25 @@ export function generateSigns(
         const c: [number, number, number] = rng.chance(0.7)
           ? [5, 2.6, 1.0]
           : [2.2, 3.4, 5];
-        lights.push({
-          pos: warp3([a * SUPER + off, 9, s + rng.range(0, 20)]),
-          radius: 55,
-          color: c,
-        });
-        lights.push({
-          pos: warp3([s + rng.range(0, 20), 9, a * SUPER + off]),
-          radius: 55,
-          color: c,
-        });
+        const ra = rng.range(0, 20);
+        const rb = rng.range(0, 20);
+        // No lamps on open water (the lamp side's superblock).
+        const cell = side < 0 ? a - 1 : a;
+        const along = Math.floor(s / SUPER);
+        if (!waterAt(cell, along, seed)) {
+          lights.push({
+            pos: warp3([a * SUPER + off, 9, s + ra]),
+            radius: 55,
+            color: c,
+          });
+        }
+        if (!waterAt(along, cell, seed)) {
+          lights.push({
+            pos: warp3([s + rb, 9, a * SUPER + off]),
+            radius: 55,
+            color: c,
+          });
+        }
       }
     }
   }
