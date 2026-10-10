@@ -147,6 +147,10 @@ const CSS = `
 .ui-reset { margin: 4px 8px 4px; padding: 5px 10px; border-radius: 6px; cursor: pointer;
   background: none; border: 1px solid rgba(255, 120, 230, 0.5); color: #f9e; font: inherit; }
 .ui-reset:hover { background: rgba(255, 120, 230, 0.12); }
+.ui-city { padding: 2px 8px 6px; }
+.ui-city-name { color: #cff; }
+.ui-city a { color: #f9e; word-break: break-all; }
+.ui-city .ui-reset { margin: 6px 6px 0 0; }
 `;
 
 const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
@@ -246,6 +250,13 @@ export class Controls {
       save(this.state);
     });
     gearPanel.appendChild(reset);
+    gearPanel.appendChild(this.sep());
+    const h3 = document.createElement('h3');
+    h3.textContent = 'This city';
+    gearPanel.appendChild(h3);
+    this.cityBox = document.createElement('div');
+    this.cityBox.className = 'ui-city';
+    gearPanel.appendChild(this.cityBox);
 
     this.panels = [[gearBtn, gearPanel]];
     for (const [btn, panel] of this.panels) {
@@ -383,6 +394,34 @@ export class Controls {
       p.hidden = true;
       b.setAttribute('aria-expanded', 'false');
     }
+  }
+
+  private cityBox!: HTMLElement;
+
+  /**
+   * Shows the current city's theme and a link that reopens exactly this
+   * city (the page URL itself is never changed, so a reload gives a new
+   * city).
+   */
+  setCity(label: string, url: string) {
+    this.cityBox.replaceChildren();
+    const name = document.createElement('div');
+    name.className = 'ui-city-name';
+    name.textContent = label;
+    const link = document.createElement('a');
+    link.href = url;
+    link.textContent = url.replace(/^https?:\/\//, '');
+    link.id = 'ui-city-link';
+    const copy = document.createElement('button');
+    copy.className = 'ui-reset';
+    copy.textContent = 'Copy link';
+    copy.addEventListener('click', () => {
+      void navigator.clipboard?.writeText(url).then(() => {
+        copy.textContent = 'Copied';
+        setTimeout(() => (copy.textContent = 'Copy link'), 1500);
+      });
+    });
+    this.cityBox.append(name, link, copy);
   }
 
   /** Called when the sound button is clicked (main.ts toggles audio). */

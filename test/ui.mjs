@@ -183,4 +183,25 @@ await withPage('index.html?t=40&mute=1&size=640x360', async page => {
     `size=640x360 renders 640x360, centred (${JSON.stringify(r)})`,
   );
 });
+// Every load is a different city (nothing written to the URL); settings
+// shows a link that reopens exactly this one.
+{
+  const links = [];
+  for (let k = 0; k < 2; k++) {
+    await withPage(
+      'index.html?t=40&mute=1',
+      async page => {
+        await page.click('#ui-gear-btn');
+        await sleep(200);
+        links.push(await page.$eval('#ui-city-link', a => a.href));
+        check(!/seed=/.test(await page.evaluate(() => location.search)), 'URL is left alone');
+      },
+      {pin: false},
+    );
+  }
+  check(
+    links.every(l => /seed=\d+/.test(l) && /theme=\w+/.test(l)) && links[0] !== links[1],
+    `new city each load, link in settings (${links.join(' , ')})`,
+  );
+}
 process.exit(failed ? 1 : 0);

@@ -53,7 +53,14 @@ export async function withPage(pagePath, fn, opts = {}) {
           ctx.errors.push(`pageerror: ${e.message}`);
           console.log(`[pageerror] ${e.message}`);
         });
-        const url = `http://localhost:${server.port}/${pagePath}`;
+        // Tests are deterministic: a fixed city unless the test picks one.
+        let path = pagePath;
+        if (path.startsWith('index.html') && opts.pin !== false) {
+          const sep = path.includes('?') ? '&' : '?';
+          if (!/[?&]seed=/.test(path)) path += `${sep}seed=1`;
+          if (!/[?&]theme=/.test(path)) path += '&theme=kowloon';
+        }
+        const url = `http://localhost:${server.port}/${path}`;
         await page.goto(url);
         const t0 = Date.now();
         let status = '';

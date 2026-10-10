@@ -6,6 +6,7 @@ import {generateSigns, brandGlyphs, packSigns} from './city/signs';
 import {LIGHT_FLOATS, packLights} from './render/lightClusters';
 import type {PackedSigns} from './render/signRenderer';
 import {generateAds} from './city/ads';
+import {setTheme} from './city/theme';
 import {makeInsideTest} from './city/inside';
 import type {SegmentTransfer} from './city/segments';
 
@@ -21,8 +22,9 @@ export interface GeneratedCity {
   genMs: number;
 }
 
-self.onmessage = (e: MessageEvent<{seed: number}>) => {
+self.onmessage = (e: MessageEvent<{seed: number; theme: string}>) => {
   const {seed} = e.data;
+  setTheme(e.data.theme);
   const t0 = performance.now();
   const progress = (f: number) => postMessage({type: 'progress', f});
   const city = generateCity(seed, progress);

@@ -1,7 +1,8 @@
 // Entry point: boots WebGPU, generates the city and runs the main loop.
 //
 // URL params:
-//   seed=N        world seed
+//   seed=N        world seed (default: random every load)
+//   theme=NAME    city theme (kowloon, sodium, ash, chongqing, arcology, dust)
 //   t=SECONDS     start time along the flight path
 //   size=WxH      fixed canvas size in CSS px, centred (video capture)
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
@@ -11,6 +12,7 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
+import {setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
 import type {GeneratedCity} from './city-worker';
 import {initGpu, onGpuError} from './gpu/gpu';
@@ -56,7 +58,12 @@ function showError(msg: string) {
 }
 
 const params = new URLSearchParams(location.search);
-const seed = Number(params.get('seed') ?? 1);
+// A new city on every load unless ?seed (and ?theme) pin one; nothing is
+// written back to the URL (settings shows a link to the current city).
+const seed = params.has('seed')
+  ? Number(params.get('seed'))
+  : Math.floor(Math.random() * 0x7fffffff);
+const cityTheme = setTheme(params.get('theme') ?? themeForSeed(seed));
 
 const tStart = performance.now();
 const startupMs: Record<string, number> = {};
@@ -83,7 +90,7 @@ async function main() {
   const showProgress = () => {
     const g =
       genF < 1 ? `Generating city ${Math.round(genF * 100)}%` : 'City ready';
-    loadmsg.textContent = `${g}\nCompiling shaders ${shadersDone}/${shadersTotal}`;
+    loadmsg.textContent = `${cityTheme.label}\n${g}\nCompiling shaders ${shadersDone}/${shadersTotal}`;
   };
   const track = <T>(p: Promise<T>): Promise<T> => {
     shadersTotal++;
@@ -110,7 +117,7 @@ async function main() {
       }
     };
   });
-  worker.postMessage({seed});
+  worker.postMessage({seed, theme: cityTheme.name});
   // Everything that doesn't need the city compiles meanwhile.
   const lowQuality = params.get('quality') === 'low';
   const carEntry = MODELS.spinner;
@@ -407,6 +414,14 @@ async function main() {
     ] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
+  {
+    // Link to exactly this city (theme + seed).
+    const u = new URL(location.href);
+    u.search = '';
+    u.searchParams.set('theme', cityTheme.name);
+    u.searchParams.set('seed', String(seed));
+    controls.setCity(`${cityTheme.label} #${seed}`, u.href);
+  }
   controls.onSoundClick = () => {
     // Silent (not yet unlocked, or muted): turn it on; playing: off.
     ui.sound = !(ui.sound && audio.running);
