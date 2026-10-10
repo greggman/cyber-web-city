@@ -18,6 +18,7 @@ export const enum Style {
   NeonRing = 8,
   Bridge = 9,
   Ground = 10,
+  Water = 11,
 }
 
 export const enum SegFlags {

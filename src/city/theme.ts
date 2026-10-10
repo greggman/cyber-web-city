@@ -191,6 +191,25 @@ export const THEMES: Theme[] = [
     weather: 'dust',
     mountains: true,
   }),
+  // The sea came in: streets are canals 4.5 m deep, shopfronts drowned,
+  // markets and tenements lit by green and teal fluorescents, heavy rain.
+  t({
+    name: 'drowned',
+    label: 'Drowned City',
+    districts: [0.6, 1, 1.6, 1.8, 0.2],
+    height: 0.8,
+    gaudy: 0.7,
+    signs: 1.2,
+    scripts: [1.5, 0.5, 1.5],
+    accents: {magenta: 0.6, cyan: 1.6, green: 1.8, violet: 0.4},
+    windowsLit: 0.9,
+    fogLow: [0.035, 0.045, 0.042],
+    fogHigh: [0.045, 0.06, 0.065],
+    skyHorizon: [0.055, 0.07, 0.065],
+    fogDensity: 1.4,
+    weatherAmount: 1.6,
+    water: 'flooded',
+  }),
 ];
 
 let current: Theme = THEMES[0];
@@ -204,6 +223,27 @@ export function theme(): Theme {
 export function setTheme(name: string): Theme {
   current = THEMES.find(x => x.name === name) ?? THEMES[0];
   return current;
+}
+
+/**
+ * Is superblock (i, j) water? Harbour themes have a winding channel across
+ * the city (two rivers meeting for Chongqing). Grid space.
+ */
+export function waterAt(i: number, j: number, seed: number): boolean {
+  if (current.water !== 'harbour') return false;
+  const u = i + 0.5;
+  const v = j + 0.5;
+  const ph = hashFloat(seed, 991) * 6.28;
+  const off = (hashFloat(seed, 992) - 0.5) * 16;
+  const centre =
+    off + 4 * Math.sin(u * 0.16 + ph) + 1.5 * Math.sin(u * 0.41 + ph * 2);
+  if (Math.abs(v - centre) < 1.6) return true;
+  if (current.name === 'chongqing') {
+    // A second river joining the first.
+    const c2 = (hashFloat(seed, 993) - 0.5) * 14 + 3 * Math.sin(v * 0.2 + ph);
+    if (v > centre && Math.abs(u - c2) < 1.1) return true;
+  }
+  return false;
 }
 
 /** World height of the water surface (no water: far below the city). */

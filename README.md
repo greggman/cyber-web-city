@@ -61,7 +61,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 | Param | Meaning |
 |---|---|
 | `seed=N` | World seed (default: a new random city every load; Settings → This city has a link to the current one) |
-| `theme=NAME` | City theme: `kowloon`, `sodium`, `ash`, `chongqing`, `arcology`, `dust` (default: picked from the seed) |
+| `theme=NAME` | City theme: `kowloon`, `sodium`, `ash`, `chongqing`, `arcology`, `dust`, `drowned` (default: picked from the seed) |
 | `size=WxH` | Fixed canvas size in CSS pixels, centred in the page (for capturing video at an exact size) |
 | `t=S` | Start time on the flight path |
 | `cam=chase\|pov\|skyline\|map\|screen\|holo\|cable\|roof` | Camera. `map` is a top-down view. The inspection cameras `screen`, `holo`, `cable` and `roof` frame ad screen, hologram, street cable or exposed roof `n=K`. |

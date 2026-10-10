@@ -18,6 +18,7 @@ const ST_STRUCTURE = 7u;
 const ST_NEONRING = 8u;
 const ST_BRIDGE = 9u;
 const ST_GROUND = 10u;
+const ST_WATER = 11u;
 
 const F_EDGE = 1u;
 const F_BANDS = 2u;
@@ -866,6 +867,26 @@ fn shade_roof(c: Ctx, s: Segment, capUv: vec2f, sf: ptr<function, Surface>) {
 }
 
 // Ground: wet asphalt avenues with lane lines and ground-level traffic lights.
+// Open water (harbours, rivers, the drowned city): near-black and mirror
+// glossy, so SSR and the reflection environment draw the city in it, with
+// wind-blown wavelets and rain rings breaking the reflections up.
+fn shade_water(c: Ctx, sf: ptr<function, Surface>) {
+  let p = c.world.xz;
+  let t = c.time;
+  // Sum of drifting wave normals at a few scales (fading with distance).
+  let det = detail(vec2f(0.4), c.fw);
+  var g = vec2f(0.0);
+  g += (vec2f(vnoise2(p * 0.05 + vec2f(t * 0.05, 0.0)), vnoise2(p * 0.05 + vec2f(0.0, t * 0.04) + 9.0)) - 0.5) * 0.06;
+  g += (vec2f(vnoise2(p * 0.3 + vec2f(t * 0.3, t * 0.1)), vnoise2(p * 0.3 + vec2f(5.0, t * 0.25))) - 0.5) * 0.05 * det;
+  g += (vec2f(vnoise2(p * 1.6 - vec2f(t * 0.9, 0.0)), vnoise2(p * 1.6 + vec2f(3.0, t * 0.7))) - 0.5) * 0.04 * detail(vec2f(0.08), c.fw);
+  g += ripples(p, t) * frame.rain * 0.3 * detail(vec2f(0.05), c.fw);
+  (*sf).normal = normalize(vec3f(-g.x, 1.0, -g.y));
+  (*sf).albedo = vec3f(0.006, 0.009, 0.011);
+  (*sf).roughness = mix(0.12, 0.03, det);
+  (*sf).metallic = 0.0;
+  (*sf).reflectivity = 1.0;
+}
+
 fn shade_ground(c: Ctx, sf: ptr<function, Surface>) {
   let SUPERP = 300.0;
   let AVE = 64.0;
@@ -973,7 +994,10 @@ fn shade_facade(s: Segment, world: vec3f, n: vec3f, facade: vec2f, fw: vec2f, lo
   c.hRel = saturate(local.y / max(s.size.y, 1e-3));
   c.face = face;
   c.grads = grads;
-  if (s.style == ST_GROUND) {
+  if (s.style == ST_WATER) {
+    if (n.y > 0.5) { shade_water(c, &sf); }
+    else { sf.albedo = vec3f(0.02); }
+  } else if (s.style == ST_GROUND) {
     shade_ground(c, &sf);
     apply_wet(c, &sf, true);
   } else if (n.y > 0.7) {

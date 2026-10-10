@@ -56,7 +56,7 @@ struct Params {
   camPos: vec3f, segCount: u32,
   prevViewProj: mat4x4f,
   hizSize: vec2f, hizMips: u32, useHiz: u32,
-  distScale: f32, maxNear: u32, _p0: u32, _p1: u32,
+  distScale: f32, maxNear: u32, flooded: u32, _p1: u32,
 };
 
 struct TypeInfo { base: u32, cap: u32, _p0: u32, _p1: u32 };
@@ -609,7 +609,7 @@ fn cs_emit(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
         emit(T_CANOPY, spot(s, fc, X, sp.y), vec3f(sb * 0.9, 1.0, sp.x / 1.7), 0.0, rgba(darkMetal), rgba(vec3f(1.0, 0.85, 0.6)), select(IF_LIT, 0u, sp.w > 0.5), 1.0, false);
         // Market and slum streets: a stall in front of most open shops.
         let hs = hash3_u(s.seed ^ 0x51ed27u, bitcast<u32>(min(k, nS - 1 - k)), 3u);
-        if (market && sp.w < 0.5 && u2f(hs) < 0.7) {
+        if (market && sp.w < 0.5 && u2f(hs) < 0.7 && P.flooded == 0u) {
           let off = (u2f_rot(hs, 8u) - 0.5) * (sb - 2.4);
           emit(T_STALL, spot(s, fc, X + off, 0.0), vec3f(1.0), 0.0, rgba(mix(vec3f(0.35, 0.25, 0.18), vec3f(0.3, 0.3, 0.32), u2f_rot(hs, 12u))), neon_accent(hs >> 3u), IF_LIT, u2f_rot(hs, 16u), true);
         }

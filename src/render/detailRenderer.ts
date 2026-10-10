@@ -1,5 +1,6 @@
 // Facade detail ("kitbash") renderer: GPU-generated instances of small
 // meshes on the buildings near the camera (see details_emit.wgsl).
+import {theme} from '../city/theme';
 import {
   createBuffer,
   createBufferWithData,
@@ -384,6 +385,7 @@ export class DetailRenderer {
     u[43] = this.useHiz && this.hizMips > 1 ? 1 : 0;
     f[44] = this.distScale;
     u[45] = MAX_NEAR;
+    u[46] = theme().water === 'flooded' ? 1 : 0;
     const q = this.device.queue;
     q.writeBuffer(this.params, 0, p);
     q.writeBuffer(this.draws, 0, this.drawsInit);

@@ -2,7 +2,7 @@
 //
 // URL params:
 //   seed=N        world seed (default: random every load)
-//   theme=NAME    city theme (kowloon, sodium, ash, chongqing, arcology, dust)
+//   theme=NAME    city theme (kowloon, sodium, ash, chongqing, arcology, dust, drowned)
 //   t=SECONDS     start time along the flight path
 //   size=WxH      fixed canvas size in CSS px, centred (video capture)
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
@@ -346,12 +346,14 @@ async function main() {
     camParam === 'holo' ||
     camParam === 'roof' ||
     camParam === 'facade' ||
-    camParam === 'horizon'
+    camParam === 'horizon' ||
+    camParam === 'water'
       ? camParam
       : null;
   const inspectN = Number(params.get('n') ?? 0);
   let roofList: Segment[] | undefined;
   let facadeList: typeof city.slots | undefined;
+  let waterList: Segment[] | undefined;
   let time = Number(params.get('t') ?? 0);
   // anim=S offsets animation time only (camera stays put): for flicker tests.
   const animOffset =
@@ -575,6 +577,25 @@ async function main() {
       camera.camToWorld = lookAtCamera(
         [mid[0] - (dz / l) * 30, mid[1] + 4, mid[2] + (dx / l) * 30],
         mid,
+      );
+      camera.fovY = (60 * Math.PI) / 180;
+    } else if (inspect === 'water') {
+      // A harbour/river cell (n-th nearest the centre), seen from 150 m up
+      // on its shore. Falls back to the centre for a drowned city.
+      waterList ??= (() => {
+        const out: Segment[] = [];
+        for (let i = 0; i < city.segments.count; i++) {
+          const g = city.segments.get(i);
+          if (g.style === 11) out.push(g);
+        }
+        return out.sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
+      })();
+      const g = waterList[inspectN % Math.max(1, waterList.length)];
+      const c: [number, number, number] =
+        g && g.sx < 2000 ? [g.x, 0, g.z] : [0, 0, 0];
+      camera.camToWorld = lookAtCamera(
+        [c[0] - 260, 45, c[2] - 160],
+        [c[0] + 300, 20, c[2] + 200],
       );
       camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'horizon') {

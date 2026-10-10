@@ -16,7 +16,12 @@ export function makeInsideTest(
   const key = (cx: number, cz: number) => (cx + 8192) * 16384 + (cz + 8192);
   for (let i = 0; i < segs.count; i++) {
     const g = segs.get(i);
-    if (g.style === Style.Ground || g.shape > Shape.Oct) continue;
+    if (
+      g.style === Style.Ground ||
+      g.style === Style.Water ||
+      g.shape > Shape.Oct
+    )
+      continue;
     d.set(
       [
         g.x,

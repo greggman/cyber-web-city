@@ -1,5 +1,5 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
-import {theme} from './theme';
+import {theme, waterAt, waterLevel} from './theme';
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
@@ -146,6 +146,27 @@ export function generateCity(
       avenueSides: [false, false, false, false],
     };
     const size = CITY_HALF_SIZE * 2 + 120000;
+    // A drowned city: the whole ground is under water.
+    if (theme().water === 'flooded') {
+      segments.push({
+        x: 0,
+        y: -1,
+        z: 0,
+        rotY: 0,
+        sx: size,
+        sy: 1 + waterLevel(),
+        sz: size,
+        taper: 1,
+        twist: 0,
+        shape: Shape.Box,
+        style: Style.Water,
+        seed: 0,
+        colorA: 0,
+        colorB: 0,
+        flags: SegFlags.NoWindows,
+        floorH: 4,
+      });
+    }
     seg(ctx, {
       x: 0,
       z: 0,
@@ -162,6 +183,12 @@ export function generateCity(
     onProgress(((i + N) / (2 * N)) * 0.85);
     for (let j = -N; j < N; j++) {
       const rng = new Rng(seed, (i + 1000) * 4096 + (j + 1000));
+      // Water: the superblock (and half of each avenue around it) is open
+      // water; slightly oversized so warped neighbours overlap.
+      if (waterAt(i, j, seed)) {
+        addWaterCell(segments, i, j);
+        continue;
+      }
       const info = superblockInfo(i, j, seed);
       // Block palette by district (ART_BIBLE.md 15.2b, 15.3).
       setPalette(blockPalette(seed, i, j, info.district));
@@ -639,6 +666,10 @@ export function generateCity(
     for (let i = -R; i < R; i++) {
       for (let j = -R; j < R; j++) {
         if (i >= -N && i < N && j >= -N && j < N) continue;
+        if (waterAt(i, j, seed)) {
+          addWaterCell(segments, i, j);
+          continue;
+        }
         const info = superblockInfo(i, j, seed);
         const n = rng.int(2, 6);
         for (let k = 0; k < n; k++) {
@@ -687,7 +718,7 @@ export function generateCity(
     const key = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096);
     for (let i = 0; i < segments.count; i++) {
       const g = segments.get(i);
-      if (g.style === Style.Ground) continue;
+      if (isFlat(g.style)) continue;
       const r = Math.max(g.sx, g.sz) * 0.75 * Math.max(1, g.taper);
       for (
         let cx = Math.floor((g.x - r) / CELL);
@@ -709,7 +740,7 @@ export function generateCity(
     for (let i = 0; i < segments.count; i++) {
       const g = segments.get(i);
       if (
-        g.style === Style.Ground ||
+        isFlat(g.style) ||
         g.shape > 4 ||
         g.sx * g.sz * g.taper * g.taper < 150
       )
@@ -758,9 +789,12 @@ export function generateCity(
   for (let i = 0; i < segments.count; i++) {
     const g = segments.get(i);
     if (g.style === Style.Ground) continue;
+    // The flooded plane stays put like the ground; harbour cells warp.
+    if (g.style === Style.Water && g.sx > SUPER * 2) continue;
     const [x, z] = warp(g.x, g.z);
     const rot = g.rotY + warpAngle(g.x, g.z);
     segments.setPose(i, x, z, rot);
+    if (g.style === Style.Water) continue;
     // Pieces that are meant to be over an avenue (bridges) are exempt.
     if (aveDist(g.x) < CLEAR || aveDist(g.z) < CLEAR) continue;
     const grow = Math.max(1, g.taper);
@@ -871,7 +905,7 @@ export function generateCity(
   // Sort segments spatially for culling locality.
   const newIndex = segments.sortBy(k => {
     const s = segments.get(k);
-    if (s.style === Style.Ground) return -1;
+    if (isFlat(s.style)) return -1;
     const cx = Math.floor((s.x + CITY_HALF_SIZE) / 600);
     const cz = Math.floor((s.z + CITY_HALF_SIZE) / 600);
     return cx * 1000 + cz;
@@ -903,6 +937,32 @@ export function generateCity(
  * Builds a test for whether a vertical cylinder (center x,z, radius r,
  * heights y0..y1) is free of building segments (coarse AABB check).
  */
+/** Superblock (i, j) as open water (half of each avenue around it too),
+ * slightly oversized so warped neighbours overlap. */
+function addWaterCell(segments: SegmentList, i: number, j: number) {
+  segments.push({
+    x: (i + 0.5) * SUPER,
+    y: -2,
+    z: (j + 0.5) * SUPER,
+    rotY: 0,
+    sx: SUPER * 1.12,
+    sy: 2 + waterLevel(),
+    sz: SUPER * 1.12,
+    taper: 1,
+    twist: 0,
+    shape: Shape.Box,
+    style: Style.Water,
+    seed: 0,
+    colorA: 0,
+    colorB: 0,
+    flags: SegFlags.NoWindows,
+    floorH: 4,
+  });
+}
+
+/** Ground and water planes (not buildings). */
+const isFlat = (s: Style) => s === Style.Ground || s === Style.Water;
+
 export function makeClearanceTest(
   segments: SegmentList,
 ): (x: number, z: number, r: number, y0: number, y1: number) => boolean {
@@ -910,7 +970,7 @@ export function makeClearanceTest(
   const grid = new Map<string, number[]>();
   for (let i = 0; i < segments.count; i++) {
     const g = segments.get(i);
-    if (g.style === Style.Ground) continue;
+    if (isFlat(g.style)) continue;
     const hx = (Math.max(g.sx, g.sz) / 2) * Math.max(1, g.taper);
     for (
       let cx = Math.floor((g.x - hx) / CELL);
