@@ -126,7 +126,7 @@ fn flake_vertex(vi: u32, d: Drop) -> VOut {
     o.pos = vec4f(0.0, 0.0, -1.0, 1.0);
     return o;
   }
-  let size = select(select(0.005, 0.008, frame.weather == 2u), 0.002, frame.weather == 3u);
+  let size = select(select(0.018, 0.01, frame.weather == 2u), 0.003, frame.weather == 3u);
   let px = size * frame.resolution.y / (2.0 * frame.tanHalfFov.y * c.w);
   let rpx = max(px, 1.5);
   let corner = array<vec2f, 6>(vec2f(-1, -1), vec2f(1, -1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, 1), vec2f(-1, 1))[vi];
@@ -135,7 +135,7 @@ fn flake_vertex(vi: u32, d: Drop) -> VOut {
   let tint = select(select(vec3f(1.0), vec3f(0.55), frame.weather == 2u), vec3f(1.0, 0.7, 0.4), frame.weather == 3u);
   let lit = d.color + frame.fogHigh * 1.5 + frame.skyHorizon * 0.8;
   let distFade = smoothstep(0.5, 2.0, c.w) * (1.0 - smoothstep(30.0, 55.0, c.w));
-  let bright = select(3.0, 9.0, frame.weather == 3u);
+  let bright = select(select(5.0, 3.0, frame.weather == 2u), 9.0, frame.weather == 3u);
   o.color = lit * tint * (px * px) / (rpx * rpx) * distFade * R.intensity * bright;
   o.side = corner.x;
   o.along = corner.y;

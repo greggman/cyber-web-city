@@ -221,6 +221,11 @@ export class Renderer {
       size: 256,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    // No flares until there are sources (w < 0 = unused slot; a zeroed
+    // buffer drew a fireball at the world origin in every theme).
+    const none = new Float32Array(64);
+    for (let k = 0; k < 16; k++) none[k * 4 + 3] = -1;
+    device.queue.writeBuffer(this.flareBuf, 0, none);
     // Superblock district map for the composite's district-tinted haze.
     const dn = scene.districts.n * 2;
     this.districtTex = device.createTexture({

@@ -897,10 +897,16 @@ fn shade_ground(c: Ctx, sf: ptr<function, Surface>) {
   let inAveZ = abs(g.y) < AVE * 0.5;
   let road = inAveX || inAveZ;
   let n = vnoise2(p * 0.3) * 0.5 + vnoise2(p * 2.1) * 0.5;
-  let puddle = smoothstep(0.55, 0.7, vnoise2(p * 0.08 + 3.0));
+  // Puddles only when it rains; dry cities get matte, dusty asphalt.
+  let wet = saturate(frame.wetness);
+  let puddle = smoothstep(0.55, 0.7, vnoise2(p * 0.08 + 3.0)) * wet;
   (*sf).albedo = vec3f(0.035) * (0.7 + 0.6 * n);
-  (*sf).roughness = mix(0.35, 0.03, puddle);
-  (*sf).reflectivity = mix(0.6, 1.0, puddle);
+  (*sf).roughness = mix(mix(0.85, 0.35, wet), 0.03, puddle);
+  (*sf).reflectivity = mix(mix(0.15, 0.6, wet), 1.0, puddle);
+  if (frame.weather == 3u) {
+    // Dust drifts on the ground.
+    (*sf).albedo = mix((*sf).albedo, vec3f(0.16, 0.09, 0.04), 0.6 * smoothstep(0.3, 0.8, vnoise2(p * 0.15 + 7.0)));
+  }
   if (!road) {
     // Sidewalks and plazas: lit by shopfronts.
     (*sf).albedo = vec3f(0.05) * (0.8 + 0.4 * n);

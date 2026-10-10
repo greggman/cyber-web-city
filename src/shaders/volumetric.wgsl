@@ -57,6 +57,10 @@ fn cs_inject(@builtin(global_invocation_id) gid: vec3u) {
     if (d >= L.radius) { continue; }
     let l = toL / max(d, 1e-3);
     var att = light_falloff(d, L.radius);
+    // A light much smaller than this froxel can't be resolved: it would
+    // smear over the whole (far, deep) cell as a big glowing blob.
+    let cell = dist * 0.03;
+    att *= saturate(L.radius / max(cell, 1e-3) - 0.5);
     if (L.kind == LIGHT_SPOT) {
       att *= smoothstep(L.cosCone, mix(L.cosCone, 1.0, 0.3), dot(-l, L.dir));
     }

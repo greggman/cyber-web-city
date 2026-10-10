@@ -1,5 +1,6 @@
 // Placement of giant ad screens (on big avenue-facing facades) and
 // building-sized holograms (on landmark roofs and over plazas).
+import {theme} from './theme';
 import {Rng} from '../math/random';
 import type {Vec3} from '../math/vec';
 import type {FacadeSlot} from './buildings';
@@ -155,7 +156,11 @@ export function generateAds(
   for (const r of tall.slice(0, 40)) {
     if (!rng.chance(0.7)) continue;
     const scale = rng.range(50, 110);
-    if (placed.some(([x, z]) => Math.hypot(x - r[0], z - r[2]) < 1200))
+    if (
+      placed.some(
+        ([x, z]) => Math.hypot(x - r[0], z - r[2]) < 2400 / theme().holograms,
+      )
+    )
       continue;
     placed.push([r[0], r[2]]);
     // Keep clear of neighbouring towers (the roof itself is below y0).
@@ -184,7 +189,9 @@ export function generateAds(
   for (let i = 0; i < route.length; i++) {
     const [ix, iz] = route[i];
     if (i > 0) along += Math.hypot(ix - route[i - 1][0], iz - route[i - 1][1]);
-    if (along - lastGiant < rng.range(1500, 2500)) continue;
+    // Fewer, further apart in themes with a low hologram budget.
+    const gap = 4000 / Math.max(theme().holograms, 0.5);
+    if (along - lastGiant < rng.range(gap * 0.75, gap * 1.25)) continue;
     if (giants.some(([gx, gz]) => gx === ix && gz === iz)) continue;
     const scale = rng.range(150, 250);
     if (!isClear(ix, iz, 26, 0, scale * 2.3)) continue;
@@ -209,8 +216,8 @@ export function generateAds(
       Math.round(gu / SUPER) * SUPER,
       Math.round(gv / SUPER) * SUPER,
     );
-    if (giants.length >= routeGiants + 8) break;
-    if (giants.some(([gx, gz]) => Math.hypot(gx - ix, gz - iz) < 1500))
+    if (giants.length >= routeGiants + 4 * theme().holograms) break;
+    if (giants.some(([gx, gz]) => Math.hypot(gx - ix, gz - iz) < 2500))
       continue;
     giants.push([ix, iz]);
     const scale = rng.range(150, 260);

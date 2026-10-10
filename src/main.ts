@@ -12,6 +12,7 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
+import {hashCombine} from './math/random';
 import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
 import type {GeneratedCity} from './city-worker';
@@ -60,7 +61,7 @@ function showError(msg: string) {
 const params = new URLSearchParams(location.search);
 // A new city on every load unless ?seed (and ?theme) pin one; nothing is
 // written back to the URL (settings shows a link to the current city).
-const seed = params.has('seed')
+const userSeed = params.has('seed')
   ? Number(params.get('seed'))
   : Math.floor(Math.random() * 0x7fffffff);
 // T / the globe button switch to the next theme by reloading with it handed
@@ -75,8 +76,12 @@ const handedTheme = (() => {
   }
 })();
 const cityTheme = setTheme(
-  handedTheme ?? params.get('theme') ?? themeForSeed(seed),
+  handedTheme ?? params.get('theme') ?? themeForSeed(userSeed),
 );
+// The generation seed mixes in the theme: the same seed number gives a
+// different city per theme (otherwise blocks of the same district came
+// out identical across themes).
+const seed = hashCombine(userSeed, THEMES.indexOf(cityTheme) + 1) & 0x7fffffff;
 function nextTheme() {
   const i = THEMES.findIndex(x => x.name === cityTheme.name);
   try {
@@ -312,8 +317,8 @@ async function main() {
     fogColor: cityTheme.fogLow,
     fogDensity: 0.0009 * cityTheme.fogDensity,
     fogHeightFalloff: 0.0022,
-    rain: 1,
-    wetness: 1,
+    rain: weatherRain,
+    wetness: Math.min(1, weatherRain * 2),
     exposure: 1,
     cityGlow: 1,
     debugView: Number(params.get('debug') ?? 0),
@@ -454,8 +459,8 @@ async function main() {
     const u = new URL(location.href);
     u.search = '';
     u.searchParams.set('theme', cityTheme.name);
-    u.searchParams.set('seed', String(seed));
-    controls.setCity(`${cityTheme.label} #${seed}`, u.href);
+    u.searchParams.set('seed', String(userSeed));
+    controls.setCity(`${cityTheme.label} #${userSeed}`, u.href);
   }
   controls.onSoundClick = () => {
     // Silent (not yet unlocked, or muted): turn it on; playing: off.

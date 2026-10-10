@@ -44,6 +44,10 @@ export interface Theme {
   water: Water;
   /** Refinery flare stacks on the horizon (Blade Runner's Hades). */
   flares: boolean;
+  /** Colour key (palette.ts): which hues signs and buildings use. */
+  palette: 'full' | 'cool' | 'amber' | 'redwhite' | 'grey' | 'fluoro';
+  /** Hologram cap per view (and spacing). */
+  holograms: number;
 }
 
 const BASE: Theme = {
@@ -67,6 +71,8 @@ const BASE: Theme = {
   mountains: false,
   water: 'none',
   flares: false,
+  palette: 'full',
+  holograms: 2,
 };
 
 const t = (o: Partial<Theme> & {name: string; label: string}): Theme => ({
@@ -98,6 +104,8 @@ export const THEMES: Theme[] = [
   // white neon, thick amber smoke, many searchlights, Hades flare stacks.
   t({
     name: 'sodium',
+    palette: 'redwhite',
+    holograms: 1,
     label: 'Sodium LA 2019',
     districts: [0.8, 1.2, 0.6, 0.8, 6],
     height: 0.7,
@@ -117,6 +125,8 @@ export const THEMES: Theme[] = [
   // signs but huge pink/blue holograms, snow, the sea wall.
   t({
     name: 'ash',
+    palette: 'grey',
+    holograms: 3,
     label: 'Ash LA 2049',
     districts: [0.5, 3, 0.5, 0.5, 1],
     height: 1.1,
@@ -156,6 +166,8 @@ export const THEMES: Theme[] = [
   // and supertalls, cool white and blue, kana signs, little slum.
   t({
     name: 'arcology',
+    palette: 'cool',
+    holograms: 1,
     label: 'Corporate Arcology',
     districts: [2.5, 0.6, 0.15, 0.6, 3],
     height: 1.4,
@@ -176,6 +188,8 @@ export const THEMES: Theme[] = [
   // blocks, sparse light, desert mountains.
   t({
     name: 'dust',
+    palette: 'amber',
+    holograms: 1,
     label: 'Dust City',
     districts: [0.8, 1.5, 1.2, 0.5, 1],
     height: 0.9,
@@ -196,6 +210,8 @@ export const THEMES: Theme[] = [
   // markets and tenements lit by green and teal fluorescents, heavy rain.
   t({
     name: 'drowned',
+    palette: 'fluoro',
+    holograms: 2,
     label: 'Drowned City',
     districts: [0.6, 1, 1.6, 1.8, 0.2],
     height: 0.8,

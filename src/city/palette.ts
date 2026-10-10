@@ -50,6 +50,18 @@ export function blockPalette(
   d: District,
 ): BlockPalette {
   const h = (k: number) => hashFloat(seed, i, j, 900 + k);
+  // Themes with a colour key override the district rules.
+  const key = KEYS[theme().palette];
+  if (key) {
+    const dom = pick(h(4), key);
+    const rest = key.filter(([c]) => c !== dom);
+    return {
+      dominant: dom,
+      secondary: rest.length ? pick(h(3), rest) : dom,
+      accent: theme().palette === 'fluoro' ? TEAL : null,
+      magenta: false,
+    };
+  }
   const warm: [RGB, number][] = [
     [RED, 0.5],
     [AMBER, 0.3],
@@ -156,6 +168,8 @@ export function ownerColor(
   d: District,
 ): RGB {
   if (h < 0.3) return block.dominant;
+  const key = KEYS[theme().palette];
+  if (key) return pick(h2, key);
   const taste: [RGB, number][] =
     d === District.Market
       ? [
@@ -222,3 +236,43 @@ export function ownerColor(
   ]);
   return pick(h2, scaled);
 }
+
+/** Theme colour keys (theme.palette): the hues signs and building lights
+ * may use, weighted. 'full' uses the district rules instead. */
+const KEYS: Partial<Record<string, [RGB, number][]>> = {
+  // Corporate Arcology: clean white and blue xenon.
+  cool: [
+    [NEON_WHITE, 2],
+    [ICE_BLUE, 2],
+    [CYAN, 1.2],
+    [DEEP_BLUE, 0.8],
+    [RED, 0.25],
+  ],
+  // Dust City: orange monochrome.
+  amber: [
+    [AMBER, 3],
+    [GOLD, 2],
+    [NEON_WHITE, 0.6],
+    [RED, 0.5],
+  ],
+  // Sodium LA 2019: red and warm white only.
+  redwhite: [
+    [RED, 3],
+    [NEON_WHITE, 2],
+    [AMBER, 0.8],
+  ],
+  // Ash LA 2049: cold white with the odd red; colour is for holograms.
+  grey: [
+    [NEON_WHITE, 3],
+    [ICE_BLUE, 1],
+    [RED, 0.8],
+  ],
+  // Drowned City: green and teal fluorescents.
+  fluoro: [
+    [TEAL, 2.5],
+    [ACID_GREEN, 1.5],
+    [NEON_WHITE, 1.5],
+    [CYAN, 1],
+    [RED, 0.5],
+  ],
+};
