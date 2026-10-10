@@ -7,6 +7,7 @@
 // right angles. Everything that knows about the grid (buildings, signs,
 // lamps, traffic lanes, the flight path, ground road markings) applies the
 // same warp. Must match src/shaders/warp.wgsl.
+import {theme} from './theme';
 import type {Vec3} from '../math/vec';
 
 const TAU = Math.PI * 2;
@@ -31,19 +32,22 @@ const AZF = flat(AZ);
 
 function wave(t: number, terms: [number, number, number][]): number {
   const f = terms === AX ? AXF : AZF;
+  // The theme bends the streets more or less (frame.warpScale in WGSL).
   return (
-    f[0] * Math.sin(t * f[1] + f[2]) +
-    f[3] * Math.sin(t * f[4] + f[5]) +
-    f[6] * Math.sin(t * f[7] + f[8])
+    theme().warp *
+    (f[0] * Math.sin(t * f[1] + f[2]) +
+      f[3] * Math.sin(t * f[4] + f[5]) +
+      f[6] * Math.sin(t * f[7] + f[8]))
   );
 }
 
 function dwave(t: number, terms: [number, number, number][]): number {
   const f = terms === AX ? AXF : AZF;
   return (
-    f[0] * f[1] * Math.cos(t * f[1] + f[2]) +
-    f[3] * f[4] * Math.cos(t * f[4] + f[5]) +
-    f[6] * f[7] * Math.cos(t * f[7] + f[8])
+    theme().warp *
+    (f[0] * f[1] * Math.cos(t * f[1] + f[2]) +
+      f[3] * f[4] * Math.cos(t * f[4] + f[5]) +
+      f[6] * f[7] * Math.cos(t * f[7] + f[8]))
   );
 }
 
@@ -84,7 +88,7 @@ export function warpAngle(u: number, v: number): number {
 export function unwarp(x: number, z: number): [number, number] {
   let u = x;
   let v = z;
-  for (let k = 0; k < 8; k++) {
+  for (let k = 0; k < 14; k++) {
     u = x - wave(v, AX);
     v = z - wave(u, AZ);
   }
@@ -95,7 +99,7 @@ export function unwarp(x: number, z: number): [number, number] {
 export function maxSlope(): number {
   const m = (t: [number, number, number][]) =>
     t.reduce((s, [a, l]) => s + (a * TAU) / l, 0);
-  return Math.max(m(AX), m(AZ));
+  return theme().warp * Math.max(m(AX), m(AZ));
 }
 
 /** WGSL constants generated from the same tables (see warp.wgsl). */

@@ -1,4 +1,5 @@
 // City generator: superblocks -> blocks -> lots -> building archetypes.
+import {theme} from './theme';
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
@@ -303,6 +304,7 @@ export function generateCity(
             // floor bands, a lit crown, sometimes an LED skin.
             const gaudyP =
               [0.18, 0.08, 0.06, 0.25, 0.12][info.district] *
+              theme().gaudy *
               (ctx.avenueSides.some(Boolean) ? 1.4 : 0.6);
             if (top > 60 && hb(52) < gaudyP) {
               const ledSkin = hb(53) < 0.3;

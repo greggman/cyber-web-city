@@ -1,4 +1,5 @@
 // CPU side of the Frame uniform struct (src/shaders/frame.wgsl).
+import {theme, waterLevel} from '../city/theme';
 import {createBuffer} from '../gpu/gpu';
 import {
   invert,
@@ -9,7 +10,7 @@ import {
   type Vec3,
 } from '../math/vec';
 
-export const FRAME_UNIFORM_SIZE = 752;
+export const FRAME_UNIFORM_SIZE = 800;
 
 export interface CameraState {
   camToWorld: Mat4;
@@ -120,6 +121,15 @@ export class FrameUniforms {
     this.u32[184] = p.debugView;
     this.u32[185] = p.quality;
     f[186] = p.cityGlow;
+    const th = theme();
+    f.set(th.fogHigh, 188);
+    f[191] = th.windowsLit;
+    f.set(th.skyHorizon, 192);
+    this.u32[195] = ['rain', 'snow', 'ash', 'dust', 'none'].indexOf(th.weather);
+    f[196] = th.mountains ? 1 : 0;
+    f[197] = waterLevel();
+    f[198] = th.water === 'flooded' ? 1 : 0;
+    f[199] = th.warp;
     this.device.queue.writeBuffer(this.buffer, 0, this.data);
     this.prevViewProj = vpNJ;
     this.prevCarToWorld = p.carToWorld.slice() as Mat4;

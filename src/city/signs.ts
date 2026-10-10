@@ -1,5 +1,6 @@
 // Neon signs on facades, and the static lights of the city (signs, street
 // lamps). Brands are invented: random syllables, kana and CJK characters.
+import {theme} from './theme';
 import {Rng} from '../math/random';
 import {unwarp, warp3} from './warp';
 import type {LightDesc} from '../render/lightClusters';
@@ -40,7 +41,9 @@ export interface Sign {
 
 export function brandGlyphs(rng: Rng, vertical: boolean): number[] {
   const n = vertical ? rng.int(2, 6) : rng.int(3, 8);
-  const script = rng.weighted(vertical ? [1, 2, 5] : [4, 2, 3]);
+  const sw = theme().scripts;
+  const base = vertical ? [1, 2, 5] : [4, 2, 3];
+  const script = rng.weighted(base.map((w, i) => w * sw[i]));
   const out: number[] = [];
   if (script === 0) {
     // Pronounceable fake brand: consonant-vowel syllables.
@@ -197,7 +200,9 @@ export function generateSigns(
   seedForPalette = seed;
   const signs: Sign[] = [];
   const lights: LightDesc[] = [];
-  const density = [0.5, 0.6, 0.95, 0.95, 0.3];
+  const density = [0.5, 0.6, 0.95, 0.95, 0.3].map(d =>
+    Math.min(1, d * theme().signs),
+  );
   for (const slot of slots) {
     if (slot.height < 8 || slot.width < 8) continue;
     const p = density[slot.district] * (slot.avenue ? 1 : 0.06);

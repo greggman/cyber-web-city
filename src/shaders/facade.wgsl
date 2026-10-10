@@ -279,8 +279,8 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   let hRoom = hash3_u(c.seed, u_of(roomId), floorId);
   // Floors/zones tend to be lit together (offices) with per-room variation.
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
-  var lit = step(u2f(hRoom), ws.litFrac * (0.4 + 1.2 * zone));
-  var litAvg = ws.litFrac;
+  var lit = step(u2f(hRoom), ws.litFrac * frame.windowsLit * (0.4 + 1.2 * zone));
+  var litAvg = ws.litFrac * frame.windowsLit;
   if (kind == ST_GLASS) {
     // Offices light up in whole-floor runs of 2-6 floors (ART_BIBLE C1),
     // with the odd dark bay inside a lit run.

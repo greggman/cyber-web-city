@@ -1,6 +1,7 @@
 // City layout: a grid of superblocks separated by wide avenues (the sky
 // lanes the camera flies along), each split by a narrow street into 2x2
 // blocks. Districts are chosen per superblock from low-frequency noise.
+import {theme} from './theme';
 import {hashFloat} from '../math/random';
 
 /** Distance between avenue centerlines. */
@@ -67,20 +68,34 @@ export function superblockInfo(
       Math.exp(-((cx - hx) ** 2 + (cz - hz) ** 2) / (2 * 1100 ** 2)),
     );
   }
-  const heightScale = 0.55 + 0.9 * hub + 0.35 * n2 - 0.25 * r;
+  const th = theme();
+  const [wCore, wMega, wSlum, wMarket, wCorp] = th.districts;
+  const heightScale = (0.55 + 0.9 * hub + 0.35 * n2 - 0.25 * r) * th.height;
   let district: District;
-  if (hashFloat(seed, i, j, 7) < 0.012 && hub < 0.6) {
+  // Theme weights reshape the default mix (slum 30%, market 25%,
+  // megablock 20%, core/market 25%, corporate ~1%, core at the hubs).
+  const ws = [
+    0.3 * wSlum,
+    0.25 * wMarket,
+    0.2 * wMega,
+    (0.25 * (wCore + wMarket)) / 2,
+  ];
+  const sum = ws.reduce((a, b) => a + b, 0) || 1;
+  const c1 = ws[0] / sum;
+  const c2 = c1 + ws[1] / sum;
+  const c3 = c2 + ws[2] / sum;
+  if (hashFloat(seed, i, j, 7) < 0.012 * wCorp && hub < 0.6) {
     district = District.Corporate;
-  } else if (hub > 0.55) {
+  } else if (hub > 0.55 && wCore > 0) {
     district = District.Core;
-  } else if (n1 < 0.3) {
+  } else if (n1 < c1) {
     district = District.Slum;
-  } else if (n1 < 0.55) {
+  } else if (n1 < c2) {
     district = District.Market;
-  } else if (n1 < 0.75) {
+  } else if (n1 < c3) {
     district = District.Megablock;
   } else {
-    district = n2 > 0.5 ? District.Core : District.Market;
+    district = n2 > 0.5 && wCore > 0 ? District.Core : District.Market;
   }
   return {district, heightScale: Math.max(0.35, heightScale)};
 }

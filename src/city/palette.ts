@@ -1,6 +1,7 @@
 // The city's colour script (ART_BIBLE.md 15): one shared palette that signs,
 // building accents, ads and holograms all draw from. Colour is chosen per
 // block with intent, not rolled per sign.
+import {theme} from './theme';
 import {Rng, hashFloat} from '../math/random';
 import {District} from './layout';
 
@@ -64,7 +65,7 @@ export function blockPalette(
       // Magenta blocks come in contiguous 3x3-superblock patches so the
       // signature reads as a quarter of town, not a sprinkle.
       const patch = hashFloat(seed, Math.floor(i / 3), Math.floor(j / 3), 901);
-      if (patch < 1 / 3) {
+      if (patch < theme().accents.magenta / 3) {
         return {
           dominant: MAGENTA,
           secondary: CYAN,
@@ -205,5 +206,19 @@ export function ownerColor(
                 [ICE_BLUE, 1],
                 [RED, 0.6],
               ];
-  return pick(h2, taste);
+  const ac = theme().accents;
+  const scaled = taste.map(([c, w]): [RGB, number] => [
+    c,
+    w *
+      (c === MAGENTA || c === PINK
+        ? ac.magenta
+        : c === CYAN || c === ICE_BLUE || c === TEAL
+          ? ac.cyan
+          : c === ACID_GREEN
+            ? ac.green
+            : c === ULTRAVIOLET || c === DEEP_BLUE
+              ? ac.violet
+              : 1),
+  ]);
+  return pick(h2, scaled);
 }

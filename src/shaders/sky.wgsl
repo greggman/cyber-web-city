@@ -6,7 +6,7 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
   let up = d.y;
   // Base gradient (ART_BIBLE.md 15.5): smog amber at the horizon, through
   // umber, to a soot zenith.
-  let horizon = vec3f(0.10, 0.06, 0.035);
+  let horizon = frame.skyHorizon;
   let mid = vec3f(0.024, 0.027, 0.032); // steel by ~30 degrees up
   let zenith = vec3f(0.004, 0.005, 0.007);
   var c = mix(horizon, mid, smoothstep(0.0, 0.18, up));
@@ -19,7 +19,7 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
     let n2 = fbm2(p * 3.1 + vec2f(5.2, 1.3), 4);
     let cloud = smoothstep(0.35, 0.85, n * 0.75 + n2 * 0.35);
     // Cloud underside: sodium-lit amber low, rain steel overhead.
-    let glow = mix(vec3f(0.20, 0.11, 0.05), vec3f(0.045, 0.048, 0.055), smoothstep(0.0, 0.5, up));
+    let glow = mix(frame.skyHorizon * 2.0, frame.fogHigh * 0.7, smoothstep(0.0, 0.5, up));
     let fade = smoothstep(0.0, 0.08, up) * exp(-t * 0.00006);
     c = mix(c, glow * (0.35 + 0.65 * n2), cloud * fade * 0.7);
   } else {
@@ -54,7 +54,7 @@ fn fog_color(dir: vec3f, worldY: f32, dist: f32) -> vec3f {
   let horizonSky = sky_color(vec3f(d.x, max(d.y, 0.0) + 0.012, d.z), frame.time);
   let low = mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
   // Warm (sodium-lit) low, cooler rain steel high up.
-  let steel = vec3f(0.061, 0.080, 0.102) * 0.9 * frame.cityGlow;
+  let steel = frame.fogHigh * 0.9 * frame.cityGlow;
   // Rain steel high up and far away (ART_BIBLE.md 15.5).
   // Distance steel only for rays at or above the horizon: looking down
   // into the canyons the haze stays sodium-lit amber however far.

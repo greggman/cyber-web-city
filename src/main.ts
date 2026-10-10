@@ -64,6 +64,8 @@ const seed = params.has('seed')
   ? Number(params.get('seed'))
   : Math.floor(Math.random() * 0x7fffffff);
 const cityTheme = setTheme(params.get('theme') ?? themeForSeed(seed));
+/** How much of the theme's weather is rain (snow/ash/dust have their own). */
+const weatherRain = cityTheme.weather === 'rain' ? cityTheme.weatherAmount : 0;
 
 const tStart = performance.now();
 const startupMs: Record<string, number> = {};
@@ -187,7 +189,8 @@ async function main() {
   for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
     if (r[1] < 280) break;
     const src = renderer.volume.beamSources;
-    if (src.some(q => Math.hypot(q[0] - r[0], q[2] - r[2]) < 350)) continue;
+    const gap = 350 / Math.sqrt(cityTheme.beams);
+    if (src.some(q => Math.hypot(q[0] - r[0], q[2] - r[2]) < gap)) continue;
     src.push([r[0], r[1] + 2, r[2]]);
   }
   const ads = new AdSystem(
@@ -245,7 +248,7 @@ async function main() {
   renderer.transparentDrawers.unshift(p =>
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
-  rain.intensity = Number(params.get('rain') ?? 1);
+  rain.intensity = Number(params.get('rain') ?? 1) * weatherRain;
   renderer.computeHooks.push(e => rain.compute(e, renderer.sceneBindGroup));
   renderer.transparentDrawers.push(p =>
     rain.render(p, renderer.sceneBindGroup),
@@ -280,8 +283,8 @@ async function main() {
     () => camera.position;
   if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
   const settings: RenderSettings = {
-    fogColor: [0.05, 0.035, 0.022], // Smog Amber (ART_BIBLE.md 15.5)
-    fogDensity: 0.0009,
+    fogColor: cityTheme.fogLow,
+    fogDensity: 0.0009 * cityTheme.fogDensity,
     fogHeightFalloff: 0.0022,
     rain: 1,
     wetness: 1,
@@ -367,12 +370,14 @@ async function main() {
         audio.setVolume(ui.volume);
         break;
       case 'rain':
-        rain.intensity = ui.rain;
-        settings.rain = ui.rain;
-        settings.wetness = Math.min(1, ui.rain * 2);
+        // The theme's weather scales the rain (other weather has its own
+        // particles; it isn't rain, so nothing gets wet).
+        rain.intensity = ui.rain * weatherRain;
+        settings.rain = ui.rain * weatherRain;
+        settings.wetness = Math.min(1, ui.rain * weatherRain * 2);
         break;
       case 'haze':
-        settings.fogDensity = 0.0009 * ui.haze;
+        settings.fogDensity = 0.0009 * cityTheme.fogDensity * ui.haze;
         break;
       case 'exposure':
         settings.exposure = ui.exposure;
