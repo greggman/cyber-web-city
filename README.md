@@ -48,6 +48,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 | Key | Action |
 |---|---|
 | C | Cycle camera: chase, cockpit, skyline |
+| T (or the globe button) | Next city theme (reloads into a new city of that theme) |
 | Drag / pinch / wheel | Orbit and zoom around the car; the auto camera takes over 6 s after the last input |
 | 1–5 | Pick a chase framing (classic, low, high wide, side, front three-quarter) |
 | 0 | Cycle framings automatically |

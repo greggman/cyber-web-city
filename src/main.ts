@@ -12,7 +12,7 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
-import {setTheme, themeForSeed} from './city/theme';
+import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
 import type {GeneratedCity} from './city-worker';
 import {initGpu, onGpuError} from './gpu/gpu';
@@ -63,7 +63,29 @@ const params = new URLSearchParams(location.search);
 const seed = params.has('seed')
   ? Number(params.get('seed'))
   : Math.floor(Math.random() * 0x7fffffff);
-const cityTheme = setTheme(params.get('theme') ?? themeForSeed(seed));
+// T / the globe button switch to the next theme by reloading with it handed
+// over in sessionStorage (used once, so a later refresh is random again).
+const handedTheme = (() => {
+  try {
+    const v = sessionStorage.getItem('nextTheme');
+    sessionStorage.removeItem('nextTheme');
+    return v;
+  } catch {
+    return null;
+  }
+})();
+const cityTheme = setTheme(
+  handedTheme ?? params.get('theme') ?? themeForSeed(seed),
+);
+function nextTheme() {
+  const i = THEMES.findIndex(x => x.name === cityTheme.name);
+  try {
+    sessionStorage.setItem('nextTheme', THEMES[(i + 1) % THEMES.length].name);
+  } catch {
+    // No storage: the reload just picks a random theme.
+  }
+  location.reload();
+}
 /** How much of the theme's weather is rain (snow/ash/dust have their own). */
 const weatherRain = cityTheme.weather === 'rain' ? cityTheme.weatherAmount : 0;
 
@@ -419,6 +441,7 @@ async function main() {
     ] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
+  controls.onThemeClick = nextTheme;
   {
     // Link to exactly this city (theme + seed).
     const u = new URL(location.href);
@@ -453,7 +476,9 @@ async function main() {
     } else {
       startAudio();
     }
-    if (e.key === 'c' || e.key === 'C') {
+    if (e.key === 't' || e.key === 'T') {
+      nextTheme();
+    } else if (e.key === 'c' || e.key === 'C') {
       // Exactly what the camera button does.
       controls.closeAll();
       controls.cycleCamera();

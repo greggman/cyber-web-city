@@ -204,4 +204,24 @@ await withPage('index.html?t=40&mute=1&size=640x360', async page => {
     `new city each load, link in settings (${links.join(' , ')})`,
   );
 }
+// The globe button and T cycle to the next theme (reloading the page).
+await withPage('index.html?t=40&mute=1', async page => {
+  const themeNow = async () => {
+    await page.waitForFunction(() => window.__ready, {timeout: 120000});
+    await page.click('#ui-gear-btn');
+    await sleep(150);
+    const href = await page.$eval('#ui-city-link', a => a.href);
+    await page.click('#ui-gear-btn');
+    return new URL(href).searchParams.get('theme');
+  };
+  const a = await themeNow();
+  await Promise.all([page.waitForNavigation(), page.click('#ui-theme-btn')]);
+  const b = await themeNow();
+  await Promise.all([page.waitForNavigation(), page.keyboard.press('t')]);
+  const c = await themeNow();
+  check(
+    a === 'kowloon' && b === 'sodium' && c === 'ash',
+    `globe and T cycle themes (${a} -> ${b} -> ${c})`,
+  );
+});
 process.exit(failed ? 1 : 0);

@@ -93,6 +93,8 @@ const CAMERA_ICON =
 const GEAR_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8l1.6 2.4 2.8-.7.7 2.8 2.4 1.6-1.2 2.6 1.2 2.6-2.4 1.6-.7 2.8-2.8-.7L12 21.2l-1.6-2.4-2.8.7-.7-2.8-2.4-1.6 1.2-2.6-1.2-2.6 2.4-1.6.7-2.8 2.8.7z"/></svg>';
 
+const GLOBE_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.6 2.4 3.8 5.3 3.8 8.6s-1.2 6.2-3.8 8.6M12 3.4C9.4 5.8 8.2 8.7 8.2 12s1.2 6.2 3.8 8.6"/></svg>';
 const SOUND_ON_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18 6.5a7.6 7.6 0 0 1 0 11"/></svg>';
 const SOUND_OFF_ICON =
@@ -113,6 +115,7 @@ const CSS = `
 .ui-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 #ui-cam-btn { left: 10px; }
 #ui-gear-btn { right: 10px; }
+#ui-theme-btn { left: 56px; }
 #ui-sound-btn { right: 56px; }
 /* Invite a click while silent. */
 #ui-sound-btn.off { color: #f9f; border-color: rgba(255, 120, 255, 0.55); animation: ui-pulse 2.4s ease-in-out infinite; }
@@ -212,6 +215,20 @@ export class Controls {
     this.toast.id = 'ui-toast';
     this.toast.setAttribute('role', 'status');
     document.body.appendChild(this.toast);
+
+    // Theme button: switches to the next city theme (also T).
+    this.themeBtn = this.button(
+      'ui-theme-btn',
+      'Next city theme (T)',
+      GLOBE_ICON,
+    );
+    this.themeBtn.removeAttribute('aria-expanded');
+    this.themeBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    this.themeBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      this.closeAll();
+      this.onThemeClick();
+    });
 
     // Sound button: shows whether sound is actually playing (it starts off
     // until a gesture unlocks audio); a click turns it on or off.
@@ -424,6 +441,10 @@ export class Controls {
     this.cityBox.append(name, link, copy);
   }
 
+  /** Called when the theme button is clicked (main.ts reloads). */
+  onThemeClick: () => void = () => {};
+  private themeBtn: HTMLButtonElement;
+
   /** Called when the sound button is clicked (main.ts toggles audio). */
   onSoundClick: () => void = () => {};
   private soundBtn: HTMLButtonElement;
@@ -457,6 +478,7 @@ export class Controls {
   setVisible(v: boolean) {
     this.camBtn.style.display = v ? '' : 'none';
     this.soundBtn.style.display = v ? '' : 'none';
+    this.themeBtn.style.display = v ? '' : 'none';
     for (const [b, p] of this.panels) {
       b.style.display = v ? '' : 'none';
       if (!v) p.hidden = true;
