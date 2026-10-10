@@ -48,6 +48,9 @@ export interface Theme {
   palette: 'full' | 'cool' | 'amber' | 'redwhite' | 'grey' | 'fluoro';
   /** Hologram cap per view (and spacing). */
   holograms: number;
+  /** Final colour grade: tint multiplier and saturation (display space). */
+  grade: RGB;
+  saturation: number;
 }
 
 const BASE: Theme = {
@@ -73,6 +76,8 @@ const BASE: Theme = {
   flares: false,
   palette: 'full',
   holograms: 2,
+  grade: [1, 1, 1],
+  saturation: 1,
 };
 
 const t = (o: Partial<Theme> & {name: string; label: string}): Theme => ({
@@ -85,18 +90,20 @@ export const THEMES: Theme[] = [
   // red and magenta neon, heavy rain, a harbour and hills.
   t({
     name: 'kowloon',
+    saturation: 1.15,
+    grade: [1.08, 0.93, 0.96],
     holograms: 1,
     gaudy: 0.3,
     label: 'Neo-Kowloon',
-    districts: [0.6, 1.4, 2, 1.4, 0.3],
-    height: 0.9,
+    districts: [0.3, 1.5, 3, 1.4, 0.2],
+    height: 0.5,
     signs: 1.4,
     scripts: [0.4, 0.3, 2.5],
     accents: {magenta: 1.4, cyan: 0.8, green: 1.2, violet: 0.5},
     windowsLit: 1.15,
-    fogLow: [0.055, 0.035, 0.028],
-    fogHigh: [0.055, 0.068, 0.085],
-    skyHorizon: [0.11, 0.06, 0.042],
+    fogLow: [0.11, 0.022, 0.03],
+    fogHigh: [0.07, 0.025, 0.045],
+    skyHorizon: [0.2, 0.035, 0.05],
     fogDensity: 1.2,
     weatherAmount: 1.3,
     mountains: true,
@@ -106,6 +113,8 @@ export const THEMES: Theme[] = [
   // white neon, thick amber smoke, many searchlights, Hades flare stacks.
   t({
     name: 'sodium',
+    saturation: 1,
+    grade: [1.1, 0.97, 0.82],
     palette: 'redwhite',
     holograms: 1,
     label: 'Sodium LA 2019',
@@ -127,6 +136,8 @@ export const THEMES: Theme[] = [
   // signs but huge pink/blue holograms, snow, the sea wall.
   t({
     name: 'ash',
+    saturation: 0.35,
+    grade: [0.97, 1.0, 1.04],
     palette: 'grey',
     holograms: 3,
     label: 'Ash LA 2049',
@@ -137,10 +148,10 @@ export const THEMES: Theme[] = [
     scripts: [1, 1.5, 0.6],
     accents: {magenta: 1.2, cyan: 0.4, green: 0.1, violet: 0.3},
     windowsLit: 0.6,
-    fogLow: [0.04, 0.045, 0.048],
-    fogHigh: [0.055, 0.062, 0.068],
-    skyHorizon: [0.06, 0.065, 0.07],
-    fogDensity: 1.6,
+    fogLow: [0.085, 0.09, 0.095],
+    fogHigh: [0.1, 0.105, 0.11],
+    skyHorizon: [0.12, 0.125, 0.13],
+    fogDensity: 1.8,
     weather: 'snow',
     water: 'harbour',
   }),
@@ -148,6 +159,8 @@ export const THEMES: Theme[] = [
   // every neon colour, river fog, mountains, a riverfront.
   t({
     name: 'chongqing',
+    saturation: 1.25,
+    grade: [1.02, 0.93, 1.09],
     label: 'Neon Chongqing',
     districts: [1.4, 0.8, 1, 1.6, 0.3],
     height: 1.25,
@@ -156,9 +169,9 @@ export const THEMES: Theme[] = [
     signs: 1.2,
     scripts: [0.4, 0.2, 3],
     accents: {magenta: 1.5, cyan: 1.5, green: 1.2, violet: 1.2},
-    fogLow: [0.045, 0.035, 0.035],
-    fogHigh: [0.05, 0.06, 0.075],
-    skyHorizon: [0.08, 0.055, 0.06],
+    fogLow: [0.07, 0.022, 0.095],
+    fogHigh: [0.05, 0.03, 0.1],
+    skyHorizon: [0.14, 0.035, 0.17],
     fogDensity: 1.3,
     weatherAmount: 0.4,
     mountains: true,
@@ -168,21 +181,23 @@ export const THEMES: Theme[] = [
   // and supertalls, cool white and blue, kana signs, little slum.
   t({
     name: 'arcology',
+    saturation: 0.9,
+    grade: [0.92, 0.98, 1.1],
     palette: 'cool',
     holograms: 1,
     label: 'Corporate Arcology',
     districts: [2.5, 0.6, 0.15, 0.6, 3],
-    height: 1.4,
+    height: 1.7,
     gaudy: 0.12,
     warp: 0.25,
     signs: 0.6,
     scripts: [0.8, 3, 0.3],
     accents: {magenta: 0.3, cyan: 2, green: 0.2, violet: 0.6},
     windowsLit: 1.2,
-    fogLow: [0.03, 0.035, 0.045],
-    fogHigh: [0.05, 0.065, 0.09],
-    skyHorizon: [0.05, 0.06, 0.085],
-    fogDensity: 0.8,
+    fogLow: [0.012, 0.02, 0.045],
+    fogHigh: [0.015, 0.03, 0.075],
+    skyHorizon: [0.03, 0.065, 0.15],
+    fogDensity: 0.35,
     weatherAmount: 0.3,
     beams: 1.5,
   }),
@@ -190,6 +205,8 @@ export const THEMES: Theme[] = [
   // blocks, sparse light, desert mountains.
   t({
     name: 'dust',
+    saturation: 0.75,
+    grade: [1.12, 0.94, 0.76],
     palette: 'amber',
     holograms: 1,
     label: 'Dust City',
@@ -200,10 +217,10 @@ export const THEMES: Theme[] = [
     scripts: [2, 0.5, 0.5],
     accents: {magenta: 0.2, cyan: 0.2, green: 0.2, violet: 0.2},
     windowsLit: 0.2,
-    fogLow: [0.12, 0.05, 0.012],
-    fogHigh: [0.1, 0.055, 0.02],
-    skyHorizon: [0.2, 0.08, 0.02],
-    fogDensity: 2.2,
+    fogLow: [0.17, 0.06, 0.014],
+    fogHigh: [0.15, 0.07, 0.022],
+    skyHorizon: [0.26, 0.09, 0.018],
+    fogDensity: 2.6,
     weather: 'dust',
     weatherAmount: 2,
     mountains: true,
@@ -212,6 +229,8 @@ export const THEMES: Theme[] = [
   // markets and tenements lit by green and teal fluorescents, heavy rain.
   t({
     name: 'drowned',
+    saturation: 0.9,
+    grade: [0.88, 1.07, 1.0],
     palette: 'fluoro',
     holograms: 1,
     label: 'Drowned City',
@@ -222,9 +241,9 @@ export const THEMES: Theme[] = [
     scripts: [1.5, 0.5, 1.5],
     accents: {magenta: 0.6, cyan: 1.6, green: 1.8, violet: 0.4},
     windowsLit: 0.9,
-    fogLow: [0.035, 0.045, 0.042],
-    fogHigh: [0.045, 0.06, 0.065],
-    skyHorizon: [0.055, 0.07, 0.065],
+    fogLow: [0.02, 0.08, 0.06],
+    fogHigh: [0.03, 0.07, 0.07],
+    skyHorizon: [0.04, 0.12, 0.095],
     fogDensity: 1.4,
     weatherAmount: 1.6,
     water: 'flooded',

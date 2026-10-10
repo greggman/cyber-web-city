@@ -21,5 +21,6 @@ struct Frame {
   fogHigh: vec3f, windowsLit: f32,
   skyHorizon: vec3f, weather: u32,   // 0 rain, 1 snow, 2 ash, 3 dust, 4 none
   mountains: f32, waterLevel: f32, flooded: f32, warpScale: f32,
-  flares: f32, _pad1: f32, _pad2: f32, _pad3: f32,
+  flares: f32, saturation: f32, _pad2: f32, _pad3: f32,
+  grade: vec3f, _pad4: f32,
 };

@@ -25,7 +25,9 @@ fn grade(c_in: vec3f, uv: vec2f) -> vec3f {
   c *= mix(shadows, highs, smoothstep(0.05, 0.6, l));
   // Saturation: a little overall, and bright cores roll off toward white
   // the way film does.
-  let sat = 0.88 * mix(1.0, 0.45, smoothstep(0.75, 1.0, l));
+  // The city theme's grade: a tint and its own saturation.
+  c *= frame.grade;
+  let sat = 0.88 * frame.saturation * mix(1.0, 0.45, smoothstep(0.75, 1.0, l));
   c = mix(vec3f(luminance(c)), c, sat);
   // Gentle S-curve on luminance.
   let l2 = luminance(c);
