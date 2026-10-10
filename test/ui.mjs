@@ -204,24 +204,31 @@ await withPage('index.html?t=40&mute=1&size=640x360', async page => {
     `new city each load, link in settings (${links.join(' , ')})`,
   );
 }
-// The globe button and T cycle to the next theme (reloading the page).
-await withPage('index.html?t=40&mute=1', async page => {
-  const themeNow = async () => {
-    await page.waitForFunction(() => window.__ready, {timeout: 120000});
-    await page.click('#ui-gear-btn');
-    await sleep(150);
+// The globe button and T cycle to the next theme in place: no reload, and
+// the music keeps playing.
+await withPage('index.html?t=40', async (page, ctx) => {
+  const theme = async () => {
     const href = await page.$eval('#ui-city-link', a => a.href);
-    await page.click('#ui-gear-btn');
     return new URL(href).searchParams.get('theme');
   };
-  const a = await themeNow();
-  await Promise.all([page.waitForNavigation(), page.click('#ui-theme-btn')]);
-  const b = await themeNow();
-  await Promise.all([page.waitForNavigation(), page.keyboard.press('t')]);
-  const c = await themeNow();
+  await page.click('#ui-sound-btn');
+  await sleep(400);
+  const nav = [];
+  page.on('framenavigated', () => nav.push(1));
+  const a = await theme();
+  await page.click('#ui-theme-btn');
+  await page.waitForFunction(() => /sodium/.test(document.getElementById('ui-city-link').href), {timeout: 120000});
+  const b = await theme();
+  await page.keyboard.press('t');
+  await page.waitForFunction(() => /theme=ash/.test(document.getElementById('ui-city-link').href), {timeout: 120000});
+  const c = await theme();
+  await sleep(1500);
+  const playing = await page.evaluate(() => window.__debug.audioRunning());
   check(
-    a === 'kowloon' && b === 'sodium' && c === 'ash',
-    `globe and T cycle themes (${a} -> ${b} -> ${c})`,
+    a === 'kowloon' && b === 'sodium' && c === 'ash' && nav.length === 0,
+    `globe and T switch themes without reloading (${a} -> ${b} -> ${c}, reloads ${nav.length})`,
   );
+  check(playing, 'music keeps playing across theme switches');
+  check(ctx.errors.length === 0, `no WebGPU errors while switching (${ctx.errors.slice(0, 2).join(' | ')})`);
 });
 process.exit(failed ? 1 : 0);

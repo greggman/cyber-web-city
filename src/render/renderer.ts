@@ -9,7 +9,12 @@
 //  7. TAA                      jittered history resolve
 //  8. bloom + streaks
 //  9. tonemap + grade          to the swap chain
-import {bindGroup, type Gpu, flushDeferredDestroys} from '../gpu/gpu';
+import {
+  bindGroup,
+  type Gpu,
+  flushDeferredDestroys,
+  deferDestroy,
+} from '../gpu/gpu';
 import {bgl} from '../gpu/layout';
 import type {Camera} from '../camera/camera';
 import type {SegmentList} from '../city/segments';
@@ -226,6 +231,7 @@ export class Renderer {
     const none = new Float32Array(64);
     for (let k = 0; k < 16; k++) none[k * 4 + 3] = -1;
     device.queue.writeBuffer(this.flareBuf, 0, none);
+    deferDestroy(this.districtTex); // the previous city's (theme switch)
     // Superblock district map for the composite's district-tinted haze.
     const dn = scene.districts.n * 2;
     this.districtTex = device.createTexture({
@@ -245,7 +251,15 @@ export class Renderer {
       {bytesPerRow: padded},
       [dn, dn],
     );
+    if (this.lights) {
+      // Rebuilding for a new city: release the old one's static lights.
+      deferDestroy(this.lights.lightBuffer);
+    }
     this.lights = new LightClusters(device, scene.lights, DYNAMIC_LIGHTS);
+    // Screen bind groups reference the district map: rebuild next frame.
+    this.targetsVersion = -1;
+    this.volume.beamSources = [];
+    this.flareSources = [];
     this.sceneBindGroup = bindGroup(device, 'scene', this.sceneLayout, [
       {buffer: this.frame.buffer},
       {buffer: this.lights.lightBuffer},

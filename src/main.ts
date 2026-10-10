@@ -64,38 +64,24 @@ const params = new URLSearchParams(location.search);
 const userSeed = params.has('seed')
   ? Number(params.get('seed'))
   : Math.floor(Math.random() * 0x7fffffff);
-// T / the globe button switch to the next theme by reloading with it handed
-// over in sessionStorage (used once, so a later refresh is random again).
-const handedTheme = (() => {
-  try {
-    const v = sessionStorage.getItem('nextTheme');
-    sessionStorage.removeItem('nextTheme');
-    return v;
-  } catch {
-    return null;
-  }
-})();
-const cityTheme = setTheme(
-  handedTheme ?? params.get('theme') ?? themeForSeed(userSeed),
-);
+let cityTheme = setTheme(params.get('theme') ?? themeForSeed(userSeed));
 // The generation seed mixes in the theme: the same seed number gives a
 // different city per theme (otherwise blocks of the same district came
 // out identical across themes).
-const seed = hashCombine(userSeed, THEMES.indexOf(cityTheme) + 1) & 0x7fffffff;
-function nextTheme() {
-  const i = THEMES.findIndex(x => x.name === cityTheme.name);
-  try {
-    sessionStorage.setItem('nextTheme', THEMES[(i + 1) % THEMES.length].name);
-  } catch {
-    // No storage: the reload just picks a random theme.
-  }
-  location.reload();
-}
+const citySeed = () =>
+  hashCombine(userSeed, THEMES.indexOf(cityTheme) + 1) & 0x7fffffff;
+let seed = citySeed();
 /** How much of the theme's weather is rain (snow/ash/dust have their own). */
-const weatherRain = cityTheme.weather === 'rain' ? cityTheme.weatherAmount : 0;
+let weatherRain = 0;
 /** Particle amount for the theme's weather (rain, snow, ash or dust). */
-const weatherParticles =
-  cityTheme.weather === 'none' ? 0 : cityTheme.weatherAmount;
+let weatherParticles = 0;
+function updateWeather() {
+  weatherRain = cityTheme.weather === 'rain' ? cityTheme.weatherAmount : 0;
+  weatherParticles = cityTheme.weather === 'none' ? 0 : cityTheme.weatherAmount;
+}
+updateWeather();
+/** Switches to the next theme in place (set up in main()). */
+let nextTheme: () => void = () => {};
 
 const tStart = performance.now();
 const startupMs: Record<string, number> = {};
@@ -134,22 +120,30 @@ async function main() {
     });
   };
   Renderer.track = track;
-  const worker = new Worker('city-worker.js', {type: 'module'});
-  const generated = new Promise<GeneratedCity>((resolve, reject) => {
-    worker.onerror = e => reject(new Error(`city worker: ${e.message}`));
-    worker.onmessage = (e: MessageEvent) => {
-      if (e.data.type === 'progress') {
-        genF = e.data.f;
-        showProgress();
-      } else {
-        genF = 1;
-        showProgress();
-        resolve(e.data as GeneratedCity);
-        worker.terminate();
-      }
-    };
+  // Generates a city in a worker (the main thread keeps rendering).
+  const generate = (
+    genSeed: number,
+    themeName: string,
+    onProgress: (f: number) => void,
+  ) =>
+    new Promise<GeneratedCity>((resolve, reject) => {
+      const worker = new Worker('city-worker.js', {type: 'module'});
+      worker.onerror = e => reject(new Error(`city worker: ${e.message}`));
+      worker.onmessage = (e: MessageEvent) => {
+        if (e.data.type === 'progress') {
+          onProgress(e.data.f);
+        } else {
+          onProgress(1);
+          resolve(e.data as GeneratedCity);
+          worker.terminate();
+        }
+      };
+      worker.postMessage({seed: genSeed, theme: themeName});
+    });
+  const generated = generate(seed, cityTheme.name, f => {
+    genF = f;
+    showProgress();
   });
-  worker.postMessage({seed, theme: cityTheme.name});
   // Everything that doesn't need the city compiles meanwhile.
   const lowQuality = params.get('quality') === 'low';
   const carEntry = MODELS.spinner;
@@ -164,21 +158,99 @@ async function main() {
     track(canopy.init()),
   ]);
   void staticReady.then(() => (startupMs.static = performance.now() - tStart));
+  // The city and everything built from it. Rebuilt in place on a theme
+  // switch; the draw hooks below read these variables each frame.
+  const toCity = (g: GeneratedCity) => ({
+    ...g.city,
+    segments: SegmentList.fromTransfer(g.city.segments),
+  });
+  let city!: ReturnType<typeof toCity>;
+  let signs!: GeneratedCity['signs'];
+  let genMs = 0;
+  let flight!: FlightPath;
+  let adData!: GeneratedCity['ads'];
+  let cableRenderer!: CableRenderer;
+  let ads!: AdSystem;
+  let traffic!: Traffic;
+  const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
+  void DYNAMIC_LIGHTS;
+  const adState = {time: 0, camVel: [0, 0, 0] as [number, number, number]};
+  // Traffic: a coarse tessellation of the hero car stands in for traffic.
+  const trafficMesh = buildModelMesh(carEntry.build(), 3);
+
+  async function buildWorld(gen: GeneratedCity) {
+    city = toCity(gen);
+    signs = gen.signs;
+    genMs = gen.genMs;
+    flight = new FlightPath(seed, city.obstacles);
+    adData = gen.ads;
+    await renderer.initScene({
+      segments: city.segments,
+      signs: gen.signs,
+      lights: gen.lights,
+      districts: city.districts,
+    });
+    // Exposed for test scripts (hologram visibility along the route, etc.).
+    const dbg = (window as unknown as {__debug?: Record<string, unknown>})
+      .__debug;
+    (window as unknown as {__debug: unknown}).__debug = {
+      ...dbg,
+      holograms: adData.holograms,
+      pose: (t: number) => flight.pose(t),
+      unwarp,
+      track: (t: number) => flight.trackPoint(t),
+      isClear: makeClearanceTest(city.segments),
+      duration: flight.duration,
+    };
+    renderer.details.setBlockers(adData.screens);
+    renderer.flareSources = city.flares;
+    // Xenon searchlights from the tallest roofs, apart by the theme's
+    // density (ART_BIBLE.md 15.5).
+    for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
+      if (r[1] < 280) break;
+      const src = renderer.volume.beamSources;
+      const gap = 350 / Math.sqrt(cityTheme.beams);
+      if (src.some(q => Math.hypot(q[0] - r[0], q[2] - r[2]) < gap)) continue;
+      src.push([r[0], r[1] + 2, r[2]]);
+    }
+    // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
+    // 1024+ traffic (GPU).
+    const cr = new CableRenderer(gpu.device, city.cables);
+    const ad = new AdSystem(
+      gpu.device,
+      adData.tiles,
+      adData.screens,
+      adData.holograms,
+      renderer.lights.staticCount + SCREEN_LIGHT_SLOT,
+      SCREEN_LIGHT_SLOTS,
+    );
+    const tr = new Traffic(gpu.device, generateTraffic(seed), 1024, 1024);
+    await Promise.all([
+      track(cr.init(renderer.sceneLayout)),
+      track(
+        ad.init(
+          renderer.sceneLayout,
+          renderer.signs.glyphAtlas,
+          renderer.lights.lightBuffer,
+        ),
+      ),
+      track(
+        tr.init(
+          renderer.frameLayout,
+          renderer.sceneLayout,
+          renderer.lights.lightBuffer,
+          trafficMesh,
+        ),
+      ),
+    ]);
+    cableRenderer = cr;
+    ads = ad;
+    traffic = tr;
+  }
+
   const gen = await generated;
   startupMs.cityArrived = performance.now() - tStart;
-  const city = {
-    ...gen.city,
-    segments: SegmentList.fromTransfer(gen.city.segments),
-  };
-  const {signs, lights} = gen;
-  const genMs = gen.genMs;
-  const flight = new FlightPath(seed, city.obstacles);
-  await renderer.initScene({
-    segments: city.segments,
-    signs,
-    lights,
-    districts: city.districts,
-  });
+  await buildWorld(gen);
   startupMs.scene = performance.now() - tStart;
   // Quality preset: low drops SSR and thins the rain.
   renderer.ssr.enabled =
@@ -192,68 +264,8 @@ async function main() {
   renderer.transparentDrawers.push(pass =>
     car.drawGlow(pass, renderer.sceneBindGroup, renderer.targets),
   );
-  // Dynamic light slots: 0-15 the car (CPU), 16-1023 ad screens (GPU),
-  // 1024+ traffic (GPU).
-  const cableRenderer = new CableRenderer(gpu.device, city.cables);
-  const lateInits: Promise<unknown>[] = [
-    track(cableRenderer.init(renderer.sceneLayout)),
-  ];
   renderer.opaqueDrawers.push(p =>
     cableRenderer.draw(p, renderer.sceneBindGroup),
-  );
-  const dynamicLights = new Float32Array(16 * LIGHT_FLOATS);
-  void DYNAMIC_LIGHTS;
-  const adData = gen.ads;
-  // Exposed for test scripts (hologram visibility along the route, etc.).
-  (window as unknown as {__debug: unknown}).__debug = {
-    holograms: adData.holograms,
-    pose: (t: number) => flight.pose(t),
-    unwarp,
-    track: (t: number) => flight.trackPoint(t),
-    isClear: makeClearanceTest(city.segments),
-    duration: flight.duration,
-  };
-  renderer.details.setBlockers(adData.screens);
-  renderer.flareSources = city.flares;
-  // Xenon searchlights from the tallest roofs, at least 350 m apart
-  // (ART_BIBLE.md 15.5).
-  for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
-    if (r[1] < 280) break;
-    const src = renderer.volume.beamSources;
-    const gap = 350 / Math.sqrt(cityTheme.beams);
-    if (src.some(q => Math.hypot(q[0] - r[0], q[2] - r[2]) < gap)) continue;
-    src.push([r[0], r[1] + 2, r[2]]);
-  }
-  const ads = new AdSystem(
-    gpu.device,
-    adData.tiles,
-    adData.screens,
-    adData.holograms,
-    renderer.lights.staticCount + SCREEN_LIGHT_SLOT,
-    SCREEN_LIGHT_SLOTS,
-  );
-  lateInits.push(
-    track(
-      ads.init(
-        renderer.sceneLayout,
-        renderer.signs.glyphAtlas,
-        renderer.lights.lightBuffer,
-      ),
-    ),
-  );
-  const adState = {time: 0, camVel: [0, 0, 0] as [number, number, number]};
-  // Traffic: a coarse tessellation of the hero car stands in for traffic.
-  const trafficMesh = buildModelMesh(carEntry.build(), 3);
-  const traffic = new Traffic(gpu.device, generateTraffic(seed), 1024, 1024);
-  lateInits.push(
-    track(
-      traffic.init(
-        renderer.frameLayout,
-        renderer.sceneLayout,
-        renderer.lights.lightBuffer,
-        trafficMesh,
-      ),
-    ),
   );
   renderer.preLightHooks.push(e =>
     traffic.update(
@@ -284,7 +296,7 @@ async function main() {
   renderer.transparentDrawers.push(p =>
     rain.render(p, renderer.sceneBindGroup),
   );
-  await Promise.all([staticReady, ...lateInits]);
+  await staticReady;
   startupMs.late = performance.now() - tStart;
   car.setCanopyFx(canopy.fxView);
   const canopyState = {dt: 0, time: 0, speed: 0, pov: false};
@@ -360,6 +372,7 @@ async function main() {
       ? camParam
       : null;
   const inspectN = Number(params.get('n') ?? 0);
+  let renderBlocked = false;
   let roofList: Segment[] | undefined;
   let facadeList: typeof city.slots | undefined;
   let waterList: Segment[] | undefined;
@@ -454,15 +467,50 @@ async function main() {
     ] as const
   ).forEach(apply);
   const controls = new Controls(ui, apply);
-  controls.onThemeClick = nextTheme;
-  {
+  const showCityLink = () => {
     // Link to exactly this city (theme + seed).
     const u = new URL(location.href);
     u.search = '';
     u.searchParams.set('theme', cityTheme.name);
     u.searchParams.set('seed', String(userSeed));
     controls.setCity(`${cityTheme.label} #${userSeed}`, u.href);
-  }
+  };
+  showCityLink();
+  // T / the globe: the next theme's city is generated in the worker while
+  // this one keeps flying (and the music keeps playing); then the GPU data
+  // is swapped in during a short pause in drawing. No page reload.
+  let switching = false;
+  nextTheme = () => {
+    if (switching) return;
+    switching = true;
+    const next = THEMES[(THEMES.indexOf(cityTheme) + 1) % THEMES.length];
+    const nextSeed =
+      hashCombine(userSeed, THEMES.indexOf(next) + 1) & 0x7fffffff;
+    controls.showToast(`Building ${next.label}…`);
+    void generate(nextSeed, next.name, () => {})
+      .then(async g => {
+        renderBlocked = true;
+        cityTheme = setTheme(next.name);
+        seed = nextSeed;
+        updateWeather();
+        await buildWorld(g);
+        roofList = undefined;
+        facadeList = undefined;
+        waterList = undefined;
+        horizonEye = undefined;
+        settings.fogColor = cityTheme.fogLow;
+        apply('rain');
+        apply('haze');
+        showCityLink();
+        controls.showToast(cityTheme.label);
+      })
+      .catch(e => showError(String(e)))
+      .finally(() => {
+        renderBlocked = false;
+        switching = false;
+      });
+  };
+  controls.onThemeClick = () => nextTheme();
   controls.onSoundClick = () => {
     // Silent (not yet unlocked, or muted): turn it on; playing: off.
     ui.sound = !(ui.sound && audio.running);
@@ -517,6 +565,12 @@ async function main() {
   let fpsFrames = 0;
   let fps = 0;
   function frame(now: number) {
+    if (renderBlocked) {
+      // Swapping in a new city: keep the last frame, keep the music going.
+      audio.update();
+      requestAnimationFrame(frame);
+      return;
+    }
     // rAF timestamps can precede the performance.now() taken at startup.
     const realDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;

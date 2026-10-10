@@ -12,6 +12,7 @@ import {
   createShaderModule,
   bindGroup,
   createTexture,
+  deferDestroy,
 } from '../gpu/gpu';
 import {bgl, pipelineLayout} from '../gpu/layout';
 import {
@@ -70,6 +71,16 @@ export class CityRenderer {
     sceneLayout: GPUBindGroupLayout,
     aoLayout: GPUBindGroupLayout,
   ) {
+    // Re-entrant (theme switches rebuild the city): drop the old city's
+    // buckets and buffers.
+    this.buckets = [];
+    for (const b of [
+      this.segmentBuffer,
+      this.visibleBuffer,
+      this.vertexBuffer,
+      this.indexBuffer,
+    ])
+      deferDestroy(b);
     const device = this.device;
     const lib = buildShapeLibrary();
     const vertices: number[] = [];

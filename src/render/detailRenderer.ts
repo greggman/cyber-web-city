@@ -8,6 +8,7 @@ import {
   createRenderPipeline,
   createShaderModule,
   createTexture,
+  deferDestroy,
 } from '../gpu/gpu';
 import {tw} from '../gpu/timer';
 import {bgl, pipelineLayout} from '../gpu/layout';
@@ -339,8 +340,8 @@ export class DetailRenderer {
         i * 12,
       );
     });
-    this.segRange?.destroy();
-    this.blockers?.destroy();
+    deferDestroy(this.segRange);
+    deferDestroy(this.blockers);
     const U = GPUBufferUsage.STORAGE;
     this.segRange = createBufferWithData(
       this.device,
