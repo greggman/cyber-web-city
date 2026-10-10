@@ -345,7 +345,8 @@ async function main() {
     camParam === 'screen' ||
     camParam === 'holo' ||
     camParam === 'roof' ||
-    camParam === 'facade'
+    camParam === 'facade' ||
+    camParam === 'horizon'
       ? camParam
       : null;
   const inspectN = Number(params.get('n') ?? 0);
@@ -574,6 +575,14 @@ async function main() {
       camera.camToWorld = lookAtCamera(
         [mid[0] - (dz / l) * 30, mid[1] + 4, mid[2] + (dx / l) * 30],
         mid,
+      );
+      camera.fovY = (60 * Math.PI) / 180;
+    } else if (inspect === 'horizon') {
+      // Looking out from 500 m up at azimuth n x 45 degrees (landscape).
+      const a = (inspectN * Math.PI) / 4;
+      camera.camToWorld = lookAtCamera(
+        [0, 500, 0],
+        [Math.cos(a) * 1000, 470, Math.sin(a) * 1000],
       );
       camera.fovY = (60 * Math.PI) / 180;
     } else if (inspect === 'facade') {

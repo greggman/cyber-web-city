@@ -26,7 +26,47 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
     // Below the horizon (rarely seen): dark haze lit from the streets.
     c = mix(horizon, vec3f(0.14, 0.06, 0.04), saturate(-up * 4.0));
   }
+  // Mountain ranges on part of the horizon (themes near mountains).
+  if (frame.mountains > 0.0) {
+    c = mountains(d, c);
+  }
   return c * frame.cityGlow;
+}
+
+// Ridge elevation (radians above the horizon) at azimuth a for a range,
+// periodic in a so there's no seam.
+fn ridge(a: f32, k: f32) -> f32 {
+  var h = 0.0;
+  var amp = 1.0;
+  var f = 3.0;
+  for (var o = 0; o < 6; o++) {
+    h += amp * (0.5 + 0.5 * sin(a * f + k * 1.7 + f32(o) * 2.3) * cos(a * f * 0.53 + k));
+    amp *= 0.5;
+    f *= 2.1;
+  }
+  return h / 1.97;
+}
+
+// Two ranges, the near one higher and darker, the far one paler in the
+// haze, over about 60% of the horizon, faintly lit from below by the city.
+fn mountains(d: vec3f, sky: vec3f) -> vec3f {
+  let a = atan2(d.z, d.x);
+  let arc = smoothstep(-0.2, 0.35, sin(a + 0.8));
+  if (arc <= 0.0) { return sky; }
+  var c = sky;
+  for (var r = 0; r < 2; r++) {
+    let near = f32(r);
+    let top = arc * (0.05 + mix(0.07, 0.17, near) * ridge(a, 3.0 + near * 5.0));
+    let m = smoothstep(top + 0.0012, top - 0.0012, d.y);
+    if (m <= 0.0) { continue; }
+    // Lit from below by the city's glow; the far range is lost in haze.
+    let below = saturate(1.0 - d.y / max(top, 1e-3));
+    // Dark silhouettes against the glowing haze, the near range darkest;
+    // the city's glow lights their lower slopes a little.
+    let rock = frame.skyHorizon * mix(0.38, 0.1, near) + frame.skyHorizon * 0.35 * below * below * below;
+    c = mix(c, rock, m);
+  }
+  return c;
 }
 
 // Exponential height fog, integrated analytically along the view ray.
