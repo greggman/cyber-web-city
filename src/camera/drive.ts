@@ -43,6 +43,9 @@ const TURN_LAG = 0.35; // s for the turn rate to follow the wheel
 // rate: s from centre to full, and back to centre when released.
 const WHEEL_IN = 1.2;
 const WHEEL_OUT = 0.7;
+// Counter-steering (opposite key while still turning the other way) swings
+// the wheel quickly, both back through centre and out the other side.
+const WHEEL_REVERSE = 0.3;
 const LIFT_IN = 0.8;
 const LIFT_OUT = 0.6;
 const BANK_LAG = 0.45; // s
@@ -204,14 +207,19 @@ export class DriveControl {
     dt = Math.min(dt, 0.05);
     // Steer and climb move the wheel and lever toward the input steadily,
     // so a key press turns in gently instead of jumping.
-    this.wheel = ramp(this.wheel, input.steer, dt, WHEEL_IN, WHEEL_OUT);
+    // (turn is + to the left, steer + to the right: same sign = reversing.)
+    const reversing = input.steer * this.turn > 0.02;
+    this.wheel = reversing
+      ? ramp(this.wheel, input.steer, dt, WHEEL_REVERSE, WHEEL_REVERSE)
+      : ramp(this.wheel, input.steer, dt, WHEEL_IN, WHEEL_OUT);
     this.lift = ramp(this.lift, input.climb, dt, LIFT_IN, LIFT_OUT);
     // Heading.
     const speed = Math.hypot(this.vel[0], this.vel[2]);
     // The turn rate follows the stick with a little lag, like a body with
     // momentum, so turns roll in and out instead of starting dead.
     const turnT = -this.wheel * TURN_RATE * Math.min(1, 0.35 + speed / 40);
-    this.turn += (turnT - this.turn) * (1 - Math.exp(-dt / TURN_LAG));
+    this.turn +=
+      (turnT - this.turn) * (1 - Math.exp(-dt / (reversing ? 0.2 : TURN_LAG)));
     this.yaw += this.turn * dt;
     const f: Vec3 = [-Math.sin(this.yaw), 0, -Math.cos(this.yaw)];
     const r: Vec3 = [Math.cos(this.yaw), 0, -Math.sin(this.yaw)];

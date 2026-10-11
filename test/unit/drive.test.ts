@@ -185,3 +185,47 @@ test('steering keys turn the car in and out smoothly', () => {
   // Back to straight after letting go.
   assert.ok(rates[rates.length - 1] < max * 0.05, 'still turning');
 });
+
+// Pressing the opposite key while turning swings across quickly.
+test('counter-steering reverses the turn quickly', () => {
+  const drive = new DriveControl();
+  const start = {
+    position: [0, 150, 0] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+    up: [0, 1, 0] as [number, number, number],
+    right: [1, 0, 0] as [number, number, number],
+    speed: 38,
+    matrix: mat4(),
+  };
+  drive.enter(start);
+  const dt = 1 / 60;
+  const yaw = (p: {forward: number[]}) =>
+    Math.atan2(p.forward[0], p.forward[2]);
+  let p = start;
+  // Full right turn for 3 s.
+  for (let i = 0; i < 180; i++) {
+    p = drive.update(dt, {steer: 1, climb: 0, speed: 0}, start);
+  }
+  // Then hard left: count frames until the car turns left.
+  let prev = yaw(p);
+  let frames = 0;
+  let maxJump = 0;
+  let prevRate = 0;
+  for (; frames < 240; frames++) {
+    p = drive.update(dt, {steer: -1, climb: 0, speed: 0}, start);
+    const y = yaw(p);
+    const rate = Math.atan2(Math.sin(y - prev), Math.cos(y - prev)) / dt;
+    if (frames > 0) maxJump = Math.max(maxJump, Math.abs(rate - prevRate));
+    prevRate = rate;
+    prev = y;
+    if (rate > 0.3) break;
+  }
+  assert.ok(
+    frames < 60,
+    `took ${(frames / 60).toFixed(2)} s to turn the other way`,
+  );
+  assert.ok(
+    maxJump < 0.06,
+    `turn rate jumped ${maxJump.toFixed(3)} rad/s in a frame`,
+  );
+});
