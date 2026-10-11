@@ -224,10 +224,12 @@ export class DriveControl {
     if (this.pos[1] > CEILING) v[1] -= (this.pos[1] - CEILING) * 4 * dt;
     this.vel = v;
     this.pos = add(this.pos, scale(v, dt));
-    // Body attitude: bank into turns, nose follows climb a little.
+    // Body attitude: bank into turns (positive bank leans left, as in
+    // flight.ts; steer is positive to the right), nose follows climb a
+    // little.
     const bankT = Math.max(
       -0.5,
-      Math.min(0.5, input.steer * (speed / TOP_SPEED) * 0.6),
+      Math.min(0.5, -input.steer * (speed / TOP_SPEED) * 0.6),
     );
     this.bank += (bankT - this.bank) * Math.min(1, 3 * dt);
     const pitchT = Math.atan2(v[1], Math.max(speed, 10)) * 0.5;
