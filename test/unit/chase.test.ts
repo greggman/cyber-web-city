@@ -21,28 +21,38 @@ test('chase camera offset is independent of frame timing', () => {
     cam.fixedShot = 0;
     let t = 10;
     const offsets: Vec3[] = [];
+    const steps: number[] = [];
     for (let i = 0; i < 600; i++) {
-      t += dts[i % dts.length];
+      const dt = dts[i % dts.length];
+      t += dt;
       const p = poseAt(t);
-      const c = cam.update(p, t, dts[i % dts.length]);
+      const c = cam.update(p, t, dt);
       offsets.push([
         c.eye[0] - p.position[0],
         c.eye[1] - p.position[1],
         c.eye[2] - p.position[2],
       ]);
+      steps.push(dt);
     }
-    return offsets;
+    return {offsets, steps};
   };
   for (const dts of [[1 / 60], [1 / 120], [1 / 120, 1 / 60, 1 / 90, 1 / 40]]) {
-    const o = run(dts);
+    const {offsets: o, steps} = run(dts);
+    // The offset drifts slowly on purpose (the chase car wanders), so check
+    // its velocity: slow, and smooth from frame to frame whatever the frame
+    // times (frame-time jitter would show up as velocity jumps).
+    const vel = (i: number): Vec3 => [
+      (o[i][0] - o[i - 1][0]) / steps[i],
+      (o[i][1] - o[i - 1][1]) / steps[i],
+      (o[i][2] - o[i - 1][2]) / steps[i],
+    ];
     for (let i = 300; i < o.length; i++) {
-      const d = Math.hypot(
-        o[i][0] - o[i - 1][0],
-        o[i][1] - o[i - 1][1],
-        o[i][2] - o[i - 1][2],
-      );
-      // Only the slow framing sway may move it: well under a centimeter.
-      assert.ok(d < 0.01, `offset moved ${d.toFixed(3)} m between frames`);
+      const v = vel(i);
+      const w = vel(i - 1);
+      const speed = Math.hypot(...v);
+      const jump = Math.hypot(v[0] - w[0], v[1] - w[1], v[2] - w[2]);
+      assert.ok(speed < 3, `offset moving ${speed.toFixed(2)} m/s`);
+      assert.ok(jump < 0.2, `offset velocity jumped ${jump.toFixed(3)} m/s`);
     }
   }
 });

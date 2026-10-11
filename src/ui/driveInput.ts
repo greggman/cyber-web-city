@@ -19,6 +19,8 @@ const CSS = `
   background: rgba(120, 255, 255, 0.25); border: 1px solid #6ff;
   pointer-events: none;
 }
+/* (display: flex would otherwise override the hidden attribute) */
+#ui-drive-stick[hidden], #ui-drive-speed[hidden] { display: none; }
 #ui-drive-speed { right: 24px; display: flex; flex-direction: column; gap: 14px; }
 #ui-drive-speed button {
   width: 58px; height: 58px; border-radius: 50%; font: 22px ui-monospace, monospace;

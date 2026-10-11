@@ -496,6 +496,8 @@ export class ChaseCamera {
   }
 
   private resumedAt = -1e9;
+  /** The chase car's own heading (yaw), trailing the car's. */
+  private yaw: number | null = null;
 
   update(
     pose: CarPose,
@@ -504,13 +506,34 @@ export class ChaseCamera {
   ): {eye: Vec3; target: Vec3; up: Vec3} {
     const shot = shotAt(time, this.fixedShot);
     this.fov = shot.fov;
-    const fwd = normalize([pose.forward[0], 0, pose.forward[2]]);
+    // Like a chase car rather than a camera on a rod: it turns after the
+    // car (swinging wide through turns, showing the car's flank) and
+    // drifts slowly around its framing, sideways most, never quite in sync.
+    const carYaw = Math.atan2(pose.forward[0], pose.forward[2]);
+    const reset = Math.abs(time - this.lastTime) > 1;
+    if (this.yaw === null || reset) this.yaw = carYaw;
+    else {
+      const d = Math.atan2(
+        Math.sin(carYaw - this.yaw),
+        Math.cos(carYaw - this.yaw),
+      );
+      this.yaw += d * (1 - Math.exp(-dt / 0.9));
+    }
+    const fwd: Vec3 = [Math.sin(this.yaw), 0, Math.cos(this.yaw)];
     const right: Vec3 = [-fwd[2], 0, fwd[0]];
+    const reach = 1.5 + Math.abs(shot.back) * 0.3;
+    const wander = (a: number, b: number, c: number) =>
+      0.65 * Math.sin(time * a + c) + 0.35 * Math.sin(time * b + c * 2.3);
+    const side = shot.side + reach * wander(0.21, 0.57, 1);
+    const rise =
+      shot.up + (0.3 + Math.abs(shot.back) * 0.05) * wander(0.29, 0.71, 2);
+    const backD =
+      shot.back + Math.abs(shot.back) * 0.15 * wander(0.16, 0.43, 3);
     const sway = Math.sin(time * 0.07) * 0.08;
     const back = rotateAround(scale(fwd, -1), [0, 1, 0], sway);
     const desiredEye = add(
-      add(add(pose.position, scale(back, shot.back)), scale(right, shot.side)),
-      [0, shot.up, 0],
+      add(add(pose.position, scale(back, backD)), scale(right, side)),
+      [0, rise, 0],
     );
     const desiredTarget = add(
       add(pose.position, scale(pose.forward, shot.lookAhead)),
