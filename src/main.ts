@@ -518,16 +518,16 @@ async function main() {
     u.searchParams.set('theme', cityTheme.name);
     u.searchParams.set('seed', String(userSeed));
     controls.setCity(`${cityTheme.label} #${userSeed}`, u.href);
+    controls.setCities(THEMES, cityTheme.name);
   };
   showCityLink();
   // T / the globe: the next theme's city is generated in the worker while
   // this one keeps flying (and the music keeps playing); then the GPU data
   // is swapped in during a short pause in drawing. No page reload.
   let switching = false;
-  nextTheme = () => {
-    if (switching) return;
+  const switchTo = (next: (typeof THEMES)[number]) => {
+    if (switching || next === cityTheme) return;
     switching = true;
-    const next = THEMES[(THEMES.indexOf(cityTheme) + 1) % THEMES.length];
     const nextSeed =
       hashCombine(userSeed, THEMES.indexOf(next) + 1) & 0x7fffffff;
     // Stays up until the new city is on screen.
@@ -558,7 +558,13 @@ async function main() {
         );
       });
   };
+  nextTheme = () =>
+    switchTo(THEMES[(THEMES.indexOf(cityTheme) + 1) % THEMES.length]);
   controls.onThemeClick = () => nextTheme();
+  controls.onCityPick = name => {
+    const t = THEMES.find(x => x.name === name);
+    if (t) switchTo(t);
+  };
   const setDriving = (on: boolean) => {
     if (on === drive.active) return;
     if (on && lastPose) {

@@ -158,6 +158,13 @@ const CSS = `
 .ui-city-name { color: #cff; }
 .ui-city a { color: #f9e; word-break: break-all; }
 .ui-city .ui-reset { margin: 6px 6px 0 0; }
+.ui-cities { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 2px 8px 8px; }
+.ui-cities button {
+  padding: 5px 6px; border-radius: 6px; cursor: pointer; text-align: left; font: inherit;
+  background: none; border: 1px solid rgba(120, 255, 255, 0.25); color: #cfe;
+}
+.ui-cities button:hover { background: rgba(120, 255, 255, 0.1); }
+.ui-cities button[aria-pressed=true] { color: #f9f; border-color: rgba(255, 120, 255, 0.7); }
 `;
 
 const CAMERA_NAMES = ['Chase', 'Cockpit', 'Skyline', 'Map'];
@@ -286,6 +293,14 @@ export class Controls {
     });
     gearPanel.appendChild(reset);
     gearPanel.appendChild(this.sep());
+    const hc = document.createElement('h3');
+    hc.textContent = 'City';
+    gearPanel.appendChild(hc);
+    this.cityList = document.createElement('div');
+    this.cityList.className = 'ui-cities';
+    this.cityList.setAttribute('role', 'group');
+    this.cityList.setAttribute('aria-label', 'City');
+    gearPanel.appendChild(this.cityList);
     const h3 = document.createElement('h3');
     h3.textContent = 'This city';
     gearPanel.appendChild(h3);
@@ -434,6 +449,27 @@ export class Controls {
   }
 
   private cityBox!: HTMLElement;
+  private cityList!: HTMLElement;
+
+  /**
+   * Lists the cities (themes) to pick from, `current` highlighted. Picking
+   * one calls onCityPick (the globe button / T still cycle from there).
+   */
+  setCities(cities: {name: string; label: string}[], current: string) {
+    this.cityList.replaceChildren(
+      ...cities.map(c => {
+        const b = document.createElement('button');
+        b.textContent = c.label;
+        b.dataset.city = c.name;
+        b.setAttribute('aria-pressed', String(c.name === current));
+        b.addEventListener('click', () => this.onCityPick(c.name));
+        return b;
+      }),
+    );
+  }
+
+  /** Called with a city (theme) name picked in the settings. */
+  onCityPick: (name: string) => void = () => {};
 
   /**
    * Shows the current city's theme and a link that reopens exactly this

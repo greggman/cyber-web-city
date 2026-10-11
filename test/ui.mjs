@@ -279,6 +279,26 @@ await withPage('index.html?t=40', async (page, ctx) => {
   check(playing, 'music keeps playing across theme switches');
   check(ctx.errors.length === 0, `no WebGPU errors while switching (${ctx.errors.slice(0, 2).join(' | ')})`);
 });
+// Settings lists the cities; picking one switches to it in place, and the
+// globe button then carries on from there.
+await withPage('index.html?t=40&mute=1', async (page, ctx) => {
+  await page.click('#ui-gear-btn');
+  await page.click('.ui-cities button[data-city=arcology]');
+  await page.waitForFunction(() => /theme=arcology/.test(document.getElementById('ui-city-link').href), {timeout: 120000});
+  const pressed = await page.evaluate(() =>
+    [...document.querySelectorAll('.ui-cities button[aria-pressed=true]')].map(b => b.dataset.city),
+  );
+  const open = await page.evaluate(() => !document.getElementById('ui-gear-panel').hidden);
+  check(
+    pressed.length === 1 && pressed[0] === 'arcology' && open,
+    `settings picks a city (${pressed.join(',')} highlighted, panel open ${open})`,
+  );
+  await page.click('#ui-theme-btn');
+  await page.waitForFunction(() => !/theme=arcology/.test(document.getElementById('ui-city-link').href), {timeout: 120000});
+  const after = await page.evaluate(() => new URL(document.getElementById('ui-city-link').href).searchParams.get('theme'));
+  check(after === 'dust', `the globe button carries on from the picked city (arcology -> ${after})`);
+  check(ctx.errors.length === 0, 'no errors picking cities');
+});
 // F hands the car to the user; it cruises on by itself, steers and climbs,
 // stays out of buildings, and F gives it back: it flies itself (through
 // open air, no jumps) to a new tour nearby.
