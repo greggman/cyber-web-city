@@ -62,10 +62,16 @@ fn cs_inject(@builtin(global_invocation_id) gid: vec3u) {
     let cell = dist * 0.03;
     att *= saturate(L.radius / max(cell, 1e-3) - 0.5);
     if (L.kind == LIGHT_SPOT) {
-      att *= smoothstep(L.cosCone, mix(L.cosCone, 1.0, 0.3), dot(-l, L.dir));
+      // Soft edge: a hard cone edge seen end-on (looking along your own
+      // headlights) reads as a disc drawn in front of the camera.
+      att *= smoothstep(L.cosCone, mix(L.cosCone, 1.0, 0.7), dot(-l, L.dir));
     }
+    // Scattering angle between the light's travel (-l) and the way to the
+    // viewer (-dir): forward scattering makes lights shining toward the
+    // camera halo strongly, while beams shining away (the car's own
+    // headlights, seen from behind or inside) are only a faint glow.
     // Cap each light so beams aimed at the camera don't white out.
-    light += min(L.color * att * phase_hg(dot(-dir, l), 0.3) * 4.0 * PI, vec3f(2.5));
+    light += min(L.color * att * phase_hg(dot(l, dir), 0.3) * 4.0 * PI, vec3f(2.5));
   }
   // Fade out right in front of the camera (no glowing disk around the
   // viewer's own headlights).
