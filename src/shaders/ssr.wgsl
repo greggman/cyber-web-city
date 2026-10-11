@@ -49,11 +49,13 @@ fn fs(i: FsOut) -> @location(0) vec4f {
     return vec4f(0.0, 0.0, 0.0, -1.0);
   }
   let v = normalize(world - frame.camPos);
-  // Roughness jitters the ray a little (filtered by TAA).
-  let h = hash31(u32(i.pos.x), u32(i.pos.y), frame.frameIndex);
-  let h2 = hash31(u32(i.pos.y), u32(i.pos.x), frame.frameIndex + 17u);
-  var r = reflect(v, n);
-  r = normalize(r + (vec3f(h, h2, fract(h + h2)) - 0.5) * rough * 0.35);
+  // No per-frame jitter: random rays meant for TAA to average sparkled
+  // badly in motion (each hit/miss flip is a bright speck, a 4x4 blotch on
+  // coarse texels, too big for TAA's clamp to remove). Roughness blurs via
+  // the coarse trace and upsample instead. The start offset only dithers
+  // the march spatially (fixed per pixel), hiding step banding.
+  let h = hash31(u32(i.pos.x), u32(i.pos.y), 0u);
+  let r = reflect(v, n);
   let fres = 0.04 + 0.96 * pow(1.0 - saturate(dot(-v, n)), 5.0);
   let dist0 = length(world - frame.camPos);
   var t = 0.3 + dist0 * 0.004 * (0.5 + h);
@@ -111,7 +113,9 @@ fn fs(i: FsOut) -> @location(0) vec4f {
       }
     }
   }
-  col = min(col, vec3f(40.0));
+  // Tame very bright sources (holograms, lamps) so one ray landing on one
+  // can't make a firefly.
+  col = col * (6.0 / max(6.0, max(col.r, max(col.g, col.b))));
   return vec4f(col * conf * fres * strength, conf);
 }
 
