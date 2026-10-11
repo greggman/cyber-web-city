@@ -2,6 +2,18 @@
 // city's sodium and neon glow, brighter toward the horizon.
 
 fn sky_color(dir: vec3f, time: f32) -> vec3f {
+  var c = sky_base(dir, time);
+  // Mountain ranges on part of the horizon (themes near mountains).
+  if (frame.mountains > 0.0) {
+    c = mountains(normalize(dir), c / frame.cityGlow) * frame.cityGlow;
+  }
+  return c;
+}
+
+// The sky without the mountains: also the colour of the haze in front of
+// them (fog_color), so distant city fogs to haze, not to rock (which drew a
+// dark wall down from wherever the ranges began and ended).
+fn sky_base(dir: vec3f, time: f32) -> vec3f {
   let d = normalize(dir);
   let up = d.y;
   // Base gradient (ART_BIBLE.md 15.5): smog amber at the horizon, through
@@ -26,11 +38,6 @@ fn sky_color(dir: vec3f, time: f32) -> vec3f {
     // Below the horizon (rarely seen): dark haze lit from the streets.
     c = mix(horizon, vec3f(0.14, 0.06, 0.04), saturate(-up * 4.0));
   }
-  // Mountain ranges on part of the horizon (themes near mountains).
-  if (frame.mountains > 0.0) {
-    c = mountains(d, c);
-  }
-
   return c * frame.cityGlow;
 }
 
@@ -92,7 +99,7 @@ fn fog_color(dir: vec3f, worldY: f32, dist: f32) -> vec3f {
   // Match the sky at the horizon so distant geometry dissolves seamlessly;
   // darker looking down into the canyons.
   let d = normalize(dir);
-  let horizonSky = sky_color(vec3f(d.x, max(d.y, 0.0) + 0.012, d.z), frame.time);
+  let horizonSky = sky_base(vec3f(d.x, max(d.y, 0.0) + 0.012, d.z), frame.time);
   let low = mix(horizonSky, frame.fogColor * 0.6 * frame.cityGlow, saturate(-d.y * 1.5));
   // Warm (sodium-lit) low, cooler rain steel high up.
   let steel = frame.fogHigh * 0.9 * frame.cityGlow;
