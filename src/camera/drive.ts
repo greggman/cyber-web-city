@@ -37,18 +37,33 @@ const ACCEL = 28; // m/s^2, towards the cruise speed
 const TOP_SPEED = 80; // m/s
 const SPEED_RATE = 25; // m/s per second of holding faster/slower
 const LATERAL_DRAG = 1.1; // sideways slip dies away (a little drift)
-const TURN_RATE = 0.85; // rad/s at full lock
-const TURN_LAG = 0.35; // s for the turn rate to follow the wheel
-// Keys (on/off) drive a virtual wheel and lift lever that move at a steady
-// rate: s from centre to full, and back to centre when released.
-const WHEEL_IN = 1.2;
-const WHEEL_OUT = 0.7;
-// Counter-steering (opposite key while still turning the other way) swings
-// the wheel quickly, both back through centre and out the other side.
-const WHEEL_REVERSE = 0.3;
-const LIFT_IN = 0.8;
-const LIFT_OUT = 0.6;
-const BANK_LAG = 0.45; // s
+/**
+ * Handling feel, live-tunable (?tune=1 shows sliders: ui/tuning.ts). Keys
+ * are on/off, so they drive a virtual wheel and lift lever that move at a
+ * steady rate (seconds from centre to full, and back when released); the
+ * car's turn rate then follows the wheel with a short lag. Pressing the
+ * opposite key while still turning snaps the wheel to centre and drops the
+ * old turn quickly, so the car answers at once.
+ */
+export const tuning = {
+  /** rad/s at full lock */
+  turnRate: 0.85,
+  /** s for the turn rate to follow the wheel */
+  turnLag: 0.35,
+  /** s for the old turn to die away when counter-steering */
+  reverseLag: 0.08,
+  /** s from centre to full lock */
+  wheelIn: 1.2,
+  /** s back to centre when released */
+  wheelOut: 0.7,
+  /** s from centre to full lock after counter-steering */
+  counterIn: 0.5,
+  /** s from level to full climb, and back */
+  liftIn: 0.8,
+  liftOut: 0.6,
+  /** s for the lean to follow the turn */
+  bankLag: 0.45,
+};
 const CLIMB_LAG = 0.6; // s
 const CLIMB_SPEED = 22; // m/s
 const FLOOR = 10;
@@ -69,6 +84,8 @@ export class DriveControl {
   private turn = 0;
   /** Virtual steering wheel and lift lever, in [-1, 1]. */
   private wheel = 0;
+  /** Swinging the other way after a counter-steer (faster turn-in). */
+  private countering = false;
   private lift = 0;
   private idle = 0;
   /** Cruise speed (m/s) the car holds along its heading. */
@@ -209,17 +226,28 @@ export class DriveControl {
     // so a key press turns in gently instead of jumping.
     // (turn is + to the left, steer + to the right: same sign = reversing.)
     const reversing = input.steer * this.turn > 0.02;
-    this.wheel = reversing
-      ? ramp(this.wheel, input.steer, dt, WHEEL_REVERSE, WHEEL_REVERSE)
-      : ramp(this.wheel, input.steer, dt, WHEEL_IN, WHEEL_OUT);
-    this.lift = ramp(this.lift, input.climb, dt, LIFT_IN, LIFT_OUT);
+    if (input.steer * this.wheel < 0) {
+      this.wheel = 0;
+      this.countering = true;
+    }
+    if (input.steer === 0) this.countering = false;
+    this.wheel = ramp(
+      this.wheel,
+      input.steer,
+      dt,
+      this.countering ? tuning.counterIn : tuning.wheelIn,
+      tuning.wheelOut,
+    );
+    this.lift = ramp(this.lift, input.climb, dt, tuning.liftIn, tuning.liftOut);
     // Heading.
     const speed = Math.hypot(this.vel[0], this.vel[2]);
     // The turn rate follows the stick with a little lag, like a body with
     // momentum, so turns roll in and out instead of starting dead.
-    const turnT = -this.wheel * TURN_RATE * Math.min(1, 0.35 + speed / 40);
+    const turnT =
+      -this.wheel * tuning.turnRate * Math.min(1, 0.35 + speed / 40);
     this.turn +=
-      (turnT - this.turn) * (1 - Math.exp(-dt / (reversing ? 0.2 : TURN_LAG)));
+      (turnT - this.turn) *
+      (1 - Math.exp(-dt / (reversing ? tuning.reverseLag : tuning.turnLag)));
     this.yaw += this.turn * dt;
     const f: Vec3 = [-Math.sin(this.yaw), 0, -Math.cos(this.yaw)];
     const r: Vec3 = [Math.cos(this.yaw), 0, -Math.sin(this.yaw)];
@@ -269,7 +297,7 @@ export class DriveControl {
       -0.6,
       Math.min(0.6, Math.atan((speed * this.turn) / 9.81) * 0.9),
     );
-    this.bank += (bankT - this.bank) * (1 - Math.exp(-dt / BANK_LAG));
+    this.bank += (bankT - this.bank) * (1 - Math.exp(-dt / tuning.bankLag));
     const pitchT = Math.atan2(v[1], Math.max(speed, 10)) * 0.7;
     this.pitch += (pitchT - this.pitch) * (1 - Math.exp(-dt / 0.4));
     return this.makePose();

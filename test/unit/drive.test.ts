@@ -186,7 +186,7 @@ test('steering keys turn the car in and out smoothly', () => {
   assert.ok(rates[rates.length - 1] < max * 0.05, 'still turning');
 });
 
-// Pressing the opposite key while turning swings across quickly.
+// Pressing the opposite key while turning answers at once (about 0.1 s).
 test('counter-steering reverses the turn quickly', () => {
   const drive = new DriveControl();
   const start = {
@@ -218,14 +218,14 @@ test('counter-steering reverses the turn quickly', () => {
     if (frames > 0) maxJump = Math.max(maxJump, Math.abs(rate - prevRate));
     prevRate = rate;
     prev = y;
-    if (rate > 0.3) break;
+    if (rate > 0.02) break;
   }
   assert.ok(
-    frames < 60,
+    frames < 20,
     `took ${(frames / 60).toFixed(2)} s to turn the other way`,
   );
   assert.ok(
-    maxJump < 0.06,
+    maxJump < 0.3, // quick, but not an instant flip
     `turn rate jumped ${maxJump.toFixed(3)} rad/s in a frame`,
   );
 });

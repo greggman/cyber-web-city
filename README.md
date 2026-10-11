@@ -75,6 +75,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 | `details=0`, `ao=0` | Turn off GPU facade kitbash or SSAO |
 | `taa=0`, `occlusion=0`, `ssr=0`, `rain=0`, `mute=1` | Turn individual features off |
 | `ui=0` | Hide the on-screen controls (also hidden with `paused=1`) |
+| `tune=1` | Sliders for the flying feel (steering, climb, lean); remembered in this browser, Copy puts the values on the clipboard |
 
 The car preview page is
 `car-preview.html?view=three-quarter|side|front|rear|rear-three-quarter|top|low|under|interior|pov&env=studio|city`.

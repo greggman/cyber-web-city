@@ -8,6 +8,7 @@
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
 //   cam=facade&n=K[&d=D]  inspect a building face (optionally of district D)
 //   cam=round&n=K  inspect a round tower (cylinder, hex, oct; tallest first)
+//   tune=1        sliders for the flying feel (steering, lean)
 //   paused=1      freeze time (deterministic screenshots)
 //   anim=S        animation time S with the camera at t (flicker tests)
 //   hud=1         show stats
@@ -15,7 +16,8 @@
 //   quality=low|high
 import {makeRepelField} from './city/inside';
 import {DriveInputs} from './ui/driveInput';
-import {DriveControl, type Guide} from './camera/drive';
+import {DriveControl, tuning, type Guide} from './camera/drive';
+import {showTuning} from './ui/tuning';
 import {hashCombine} from './math/random';
 import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
@@ -190,6 +192,8 @@ async function main() {
 
   // The user can take the controls (steering wheel button / F).
   const drive = new DriveControl();
+  // ?tune=1: live sliders for the handling feel.
+  if (params.get('tune') === '1') showTuning(tuning);
   const driveInputs = new DriveInputs();
   let lastPose: ReturnType<FlightPath['pose']> | null = null;
   // The autopilot's tour and when it began (a new one starts near the car
