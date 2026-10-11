@@ -36,8 +36,11 @@ export type Guide = (pos: Vec3) => Vec3 | null;
 const ACCEL = 28; // m/s^2, towards the cruise speed
 const TOP_SPEED = 80; // m/s
 const SPEED_RATE = 25; // m/s per second of holding faster/slower
-const LATERAL_DRAG = 2.5; // sideways slip dies quickly
+const LATERAL_DRAG = 1.1; // sideways slip dies away (a little drift)
 const TURN_RATE = 1.1; // rad/s at full steer
+const TURN_LAG = 0.35; // s for the turn rate to follow the stick
+const BANK_LAG = 0.45; // s
+const CLIMB_LAG = 0.6; // s
 const CLIMB_SPEED = 22; // m/s
 const FLOOR = 10;
 const CEILING = 650;
@@ -53,6 +56,8 @@ export class DriveControl {
   private yaw = 0;
   private bank = 0;
   private pitch = 0;
+  /** Current turn rate (rad/s, + is left), easing after the input. */
+  private turn = 0;
   private idle = 0;
   /** Cruise speed (m/s) the car holds along its heading. */
   private cruise = 0;
@@ -82,6 +87,7 @@ export class DriveControl {
     this.yaw = Math.atan2(-f[0], -f[2]);
     this.pitch = 0;
     this.bank = 0;
+    this.turn = 0;
   }
 
   /**
@@ -187,7 +193,11 @@ export class DriveControl {
     dt = Math.min(dt, 0.05);
     // Heading.
     const speed = Math.hypot(this.vel[0], this.vel[2]);
-    this.yaw -= input.steer * TURN_RATE * Math.min(1, 0.35 + speed / 40) * dt;
+    // The turn rate follows the stick with a little lag, like a body with
+    // momentum, so turns roll in and out instead of starting dead.
+    const turnT = -input.steer * TURN_RATE * Math.min(1, 0.35 + speed / 40);
+    this.turn += (turnT - this.turn) * (1 - Math.exp(-dt / TURN_LAG));
+    this.yaw += this.turn * dt;
     const f: Vec3 = [-Math.sin(this.yaw), 0, -Math.cos(this.yaw)];
     const r: Vec3 = [Math.cos(this.yaw), 0, -Math.sin(this.yaw)];
     // Speed along the heading eases to the cruise speed; sideways slip is
@@ -198,7 +208,7 @@ export class DriveControl {
     v = sub(v, scale(r, dot(v, r) * Math.min(1, LATERAL_DRAG * dt)));
     // Climb towards a target vertical speed; hover when released.
     const vyT = input.climb * CLIMB_SPEED;
-    v[1] += (vyT - v[1]) * Math.min(1, 3 * dt);
+    v[1] += (vyT - v[1]) * (1 - Math.exp(-dt / CLIMB_LAG));
     // Soft walls: buildings push away, and motion into a close wall is
     // damped so the car slides along it instead of stopping dead.
     if (this.repel) {
@@ -219,21 +229,26 @@ export class DriveControl {
         );
       }
     }
-    // Floor and ceiling (soft).
-    if (this.pos[1] < FLOOR) v[1] += (FLOOR - this.pos[1]) * 4 * dt;
-    if (this.pos[1] > CEILING) v[1] -= (this.pos[1] - CEILING) * 4 * dt;
+    // Floor and ceiling: the closer the car gets, the slower it may sink
+    // (or rise) toward them, so it levels off smoothly and never passes
+    // through; if it's ever past one (a new city), it eases back.
+    const y = this.pos[1];
+    v[1] = Math.max(v[1], -Math.max(0, y - FLOOR) * 1.5);
+    v[1] = Math.min(v[1], Math.max(0, CEILING - y) * 1.5);
+    if (y < FLOOR) v[1] = Math.max(v[1], (FLOOR - y) * 2);
+    if (y > CEILING) v[1] = Math.min(v[1], (CEILING - y) * 2);
     this.vel = v;
     this.pos = add(this.pos, scale(v, dt));
-    // Body attitude: bank into turns (positive bank leans left, as in
-    // flight.ts; steer is positive to the right), nose follows climb a
-    // little.
+    // Body attitude: bank into turns like a coordinated turn (as in
+    // flight.ts; positive bank and turn are to the left), so faster and
+    // tighter turns lean more; the nose follows climbs and dives.
     const bankT = Math.max(
-      -0.5,
-      Math.min(0.5, -input.steer * (speed / TOP_SPEED) * 0.6),
+      -0.6,
+      Math.min(0.6, Math.atan((speed * this.turn) / 9.81) * 0.9),
     );
-    this.bank += (bankT - this.bank) * Math.min(1, 3 * dt);
-    const pitchT = Math.atan2(v[1], Math.max(speed, 10)) * 0.5;
-    this.pitch += (pitchT - this.pitch) * Math.min(1, 3 * dt);
+    this.bank += (bankT - this.bank) * (1 - Math.exp(-dt / BANK_LAG));
+    const pitchT = Math.atan2(v[1], Math.max(speed, 10)) * 0.7;
+    this.pitch += (pitchT - this.pitch) * (1 - Math.exp(-dt / 0.4));
     return this.makePose();
   }
 

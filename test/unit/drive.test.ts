@@ -123,3 +123,23 @@ test('the user-flown car banks into turns', () => {
     assert.ok(lean * steer > 0.05, `steer ${steer}: lean ${lean.toFixed(3)}`);
   }
 });
+
+// Diving flat out never takes the car below the floor: it levels off.
+test('the user-flown car cannot fly into the ground', () => {
+  const drive = new DriveControl();
+  const start = {
+    position: [0, 200, 0] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+    up: [0, 1, 0] as [number, number, number],
+    right: [1, 0, 0] as [number, number, number],
+    speed: 80,
+    matrix: mat4(),
+  };
+  drive.enter(start);
+  let minY = Infinity;
+  for (let i = 0; i < 60 * 30; i++) {
+    const p = drive.update(1 / 60, {steer: 0, climb: -1, speed: 1}, start);
+    minY = Math.min(minY, p.position[1]);
+  }
+  assert.ok(minY > 9, `got down to ${minY.toFixed(2)} m`);
+});
