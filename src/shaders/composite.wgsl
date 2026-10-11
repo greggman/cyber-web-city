@@ -17,6 +17,9 @@ struct Beam { origin: vec3f, len: f32, dir: vec3f, intensity: f32 };
 
 // Refinery flares (Hades): the 16 nearest stack tops, xyz + phase in w.
 @group(1) @binding(6) var<uniform> flares: array<vec4f, 16>;
+// Beams and flares, rendered at half resolution by fs_glow (soft light,
+// so half resolution looks the same at a quarter of the cost).
+@group(1) @binding(7) var glowTex: texture_2d<f32>;
 
 // Fireballs bursting from flare stacks at irregular intervals, drawn
 // analytically along the view ray (clipped by scene depth), lighting the
@@ -148,6 +151,24 @@ fn rain_sheets(uv: vec2f, linDepth: f32, bg: vec3f) -> vec3f {
   return acc * fade * (bg * 0.25 + frame.fogColor * 0.08) * frame.rain;
 }
 
+fn glow_at(uv: vec2f) -> vec3f {
+  return textureSampleLevel(glowTex, volSampler, uv, 0.0).rgb;
+}
+
+// Half-resolution pass: searchlight beams and refinery flares along the
+// view ray, clipped by the scene depth at this half-res pixel.
+@fragment
+fn fs_glow(i: FsOut) -> @location(0) vec4f {
+  if (frame.beamCount + frame.flareCount == 0u) { return vec4f(0.0); }
+  let dims = vec2f(textureDimensions(depthTex));
+  let p = vec2i(i.uv * dims);
+  let depth = textureLoad(depthTex, p, 0);
+  let world = world_from_depth(i.uv, max(depth, 1e-7), frame.invViewProj);
+  let dir = normalize(world - frame.camPos);
+  let rayLen = select(1e5, distance(world, frame.camPos), depth > 0.0);
+  return vec4f(beam_light(frame.camPos, dir, rayLen) + flare_light(frame.camPos, dir, rayLen), 1.0);
+}
+
 @fragment
 fn fs(i: FsOut) -> @location(0) vec4f {
   let p = vec2i(i.pos.xy);
@@ -167,7 +188,7 @@ fn fs(i: FsOut) -> @location(0) vec4f {
     let skyFog = 1.0 - exp(-integral);
     let tintFar = mix(vec3f(1.0), haze_tint(frame.camPos.xz + dir.xz * 3000.0), 0.6);
     sky = mix(sky, fog_color(dir, frame.camPos.y + dir.y * skyDist, skyDist) * tintFar, skyFog);
-    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + beam_light(frame.camPos, dir, 1e5) + flare_light(frame.camPos, dir, 1e5), 1.0);
+    return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + glow_at(i.uv), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;
   var fog = fog_amount(frame.camPos, world);
@@ -179,5 +200,5 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let fogged = mix(c, fog_color(dir, world.y, distance(world, frame.camPos)) * mix(vec3f(1.0), haze_tint(world.xz), tintK), fog);
   let lin = linear_depth(depth, frame.near);
   let rayLen = distance(world, frame.camPos);
-  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin) + beam_light(frame.camPos, dir, rayLen) + flare_light(frame.camPos, dir, rayLen), 1.0);
+  return vec4f(fogged + rain_sheets(i.uv, lin, fogged) + volume_light(i.uv, lin) + glow_at(i.uv), 1.0);
 }

@@ -103,6 +103,10 @@ export class Renderer {
     this.gpu.device.queue.writeBuffer(this.flareBuf, 0, data);
   }
   private compositeBindGroup!: GPUBindGroup;
+  private glowPipeline!: GPURenderPipeline;
+  private glowBindGroup!: GPUBindGroup;
+  private glowTex: GPUTexture | null = null;
+  private glowDummy: GPUTexture | null = null;
   private tonemapPipeline!: GPURenderPipeline;
   private tonemapLayout: GPUBindGroupLayout;
   private tonemapBindGroup: GPUBindGroup | null = null;
@@ -152,6 +156,7 @@ export class Renderer {
       ['f', 'tex-uint'],
       ['f', 'uniform'],
       ['f', 'uniform'],
+      ['f', 'tex-float'],
     ]);
     this.tonemapLayout = bgl(device, 'tonemap/layout', [
       ['f', 'tex-float'],
@@ -184,7 +189,7 @@ export class Renderer {
     this.frameBindGroup = bindGroup(device, 'frame', this.frameLayout, [
       {buffer: this.frame.buffer},
     ]);
-    const [composite, tonemap] = await Promise.all([
+    const [composite, glow, tonemap] = await Promise.all([
       t(
         fullscreenPipeline(
           device,
@@ -192,6 +197,16 @@ export class Renderer {
           compositeWgsl,
           [this.frameLayout, this.compositeLayout],
           [{format: HDR_FORMAT}],
+        ),
+      ),
+      t(
+        fullscreenPipeline(
+          device,
+          'composite/glow',
+          compositeWgsl,
+          [this.frameLayout, this.compositeLayout],
+          [{format: 'rgba16float'}],
+          'fs_glow',
         ),
       ),
       t(
@@ -217,6 +232,7 @@ export class Renderer {
       t(Promise.resolve().then(() => this.signs.prepareAtlas())),
     ]);
     this.compositePipeline = composite;
+    this.glowPipeline = glow;
     this.tonemapPipeline = tonemap;
   }
 
@@ -302,19 +318,45 @@ export class Renderer {
       addressModeV: 'clamp-to-edge',
       addressModeW: 'clamp-to-edge',
     });
+    deferDestroy(this.glowTex);
+    this.glowTex = device.createTexture({
+      label: 'composite/glow',
+      size: [
+        Math.max(1, this.targets.width >> 1),
+        Math.max(1, this.targets.height >> 1),
+      ],
+      format: 'rgba16float',
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    this.glowDummy ??= device.createTexture({
+      label: 'composite/glowDummy',
+      size: [1, 1],
+      format: 'rgba16float',
+      usage: GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const entries = (glow: GPUTextureView) => [
+      v.color,
+      v.depth,
+      this.volume.view,
+      this.volSampler!,
+      this.districtTex.createView({label: 'composite/districts/view'}),
+      {buffer: this.volume.beamBuf},
+      {buffer: this.flareBuf},
+      glow,
+    ];
     this.compositeBindGroup = bindGroup(
       device,
       'composite',
       this.compositeLayout,
-      [
-        v.color,
-        v.depth,
-        this.volume.view,
-        this.volSampler,
-        this.districtTex.createView({label: 'composite/districts/view'}),
-        {buffer: this.volume.beamBuf},
-        {buffer: this.flareBuf},
-      ],
+      entries(this.glowTex.createView({label: 'composite/glow/view'})),
+    );
+    // The glow pass can't sample the texture it renders: a dummy there.
+    this.glowBindGroup = bindGroup(
+      device,
+      'composite/glowPass',
+      this.compositeLayout,
+      entries(this.glowDummy.createView({label: 'composite/glowDummy/view'})),
     );
     this.targetsVersion = this.targets.version;
     this.tonemapKey = '';
@@ -458,6 +500,13 @@ export class Renderer {
     for (const d of this.opaqueDrawers) d(opaque);
     opaque.end();
 
+    runFullscreen(
+      encoder,
+      'composite/glow',
+      this.glowTex!.createView({label: 'composite/glow/rt'}),
+      this.glowPipeline,
+      [this.frameBindGroup, this.glowBindGroup],
+    );
     runFullscreen(encoder, 'composite', v.lit, this.compositePipeline, [
       this.frameBindGroup,
       this.compositeBindGroup,
