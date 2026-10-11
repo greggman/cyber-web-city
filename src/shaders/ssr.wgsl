@@ -40,6 +40,14 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   if (strength < 0.08) { return vec4f(0.0); }
   let n = decode_normal(nr.xy);
   let world = world_from_depth(uv, d, frame.invViewProj);
+  // Rough surfaces have blurry, low-detail reflections: trace
+  // only one pixel per 2x2 block there (fs_apply fills in the others).
+  // Smooth surfaces (water, glass, wet streets) trace every pixel.
+  // (Distance doesn't qualify: far mirror-smooth water showed blocks.)
+  let coarse = rough > 0.15;
+  if (coarse && ((u32(i.pos.x) | u32(i.pos.y)) & 1u) != 0u) {
+    return vec4f(0.0, 0.0, 0.0, -1.0);
+  }
   let v = normalize(world - frame.camPos);
   // Roughness jitters the ray a little (filtered by TAA).
   let h = hash31(u32(i.pos.x), u32(i.pos.y), frame.frameIndex);
@@ -111,7 +119,23 @@ fn fs(i: FsOut) -> @location(0) vec4f {
 @group(1) @binding(0) var ssrTex: texture_2d<f32>;
 @group(1) @binding(1) var applySampler: sampler;
 
+// A half-res texel; a skipped one (alpha < 0) takes its 2x2 block's leader.
+fn ssr_texel(q: vec2i) -> vec3f {
+  let dims = vec2i(textureDimensions(ssrTex));
+  let c = clamp(q, vec2i(0), dims - 1);
+  let t = textureLoad(ssrTex, c, 0);
+  if (t.a >= 0.0) { return t.rgb; }
+  return textureLoad(ssrTex, c & vec2i(-2), 0).rgb;
+}
+
 @fragment
 fn fs_apply(i: FsOut) -> @location(0) vec4f {
-  return vec4f(textureSampleLevel(ssrTex, applySampler, i.uv, 0.0).rgb, 0.0);
+  // Manual bilinear upsample (so skipped texels can be substituted).
+  let dims = vec2f(textureDimensions(ssrTex));
+  let x = i.uv * dims - 0.5;
+  let b = vec2i(floor(x));
+  let f = fract(x);
+  let a0 = mix(ssr_texel(b), ssr_texel(b + vec2i(1, 0)), f.x);
+  let a1 = mix(ssr_texel(b + vec2i(0, 1)), ssr_texel(b + vec2i(1, 1)), f.x);
+  return vec4f(mix(a0, a1, f.y), 0.0);
 }
