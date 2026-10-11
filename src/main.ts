@@ -625,6 +625,16 @@ async function main() {
     }
     if (e.key === 'f' || e.key === 'F') {
       setDriving(!drive.active);
+    } else if (
+      DRIVE_KEYS.has(e.key.toLowerCase()) &&
+      !e.repeat &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey
+    ) {
+      // Steering, climbing or speed keys take the controls by themselves
+      // (no need to press F first).
+      if (!drive.active) setDriving(true);
     } else if (e.key === 't' || e.key === 'T') {
       nextTheme();
     } else if (e.key === 'c' || e.key === 'C') {
@@ -1042,6 +1052,20 @@ function exposedRoofs(segs: SegmentList): Segment[] {
  * Leads a car to the start of a tour: onto the line running into the start
  * along its first leg, then along it. Done when close enough to blend.
  */
+/** Keys that fly the car (and take the controls when pressed). */
+const DRIVE_KEYS = new Set([
+  'w',
+  'a',
+  's',
+  'd',
+  'e',
+  'q',
+  'arrowup',
+  'arrowdown',
+  'arrowleft',
+  'arrowright',
+]);
+
 function approach(route: FlightPath): Guide {
   const S = route.pointAt(0);
   const t = route.tangentAt(1);

@@ -299,12 +299,11 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   check(after === 'dust', `the globe button carries on from the picked city (arcology -> ${after})`);
   check(ctx.errors.length === 0, 'no errors picking cities');
 });
-// F hands the car to the user; it cruises on by itself, steers and climbs,
-// stays out of buildings, and F gives it back: it flies itself (through
-// open air, no jumps) to a new tour nearby.
+// Pressing a flying key (no F needed) hands the car to the user; it cruises
+// on by itself, steers and climbs, stays out of buildings, and F gives it
+// back: it flies itself (through open air, no jumps) to a new tour nearby.
 await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   const pos = () => page.evaluate(() => window.__debug.carPos);
-  await page.keyboard.press('f');
   const p0 = await pos();
   await page.keyboard.down('d');
   await sleep(1200);
@@ -322,7 +321,7 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   const on = await page.evaluate(() => document.getElementById('ui-drive-btn').classList.contains('on'));
   check(
     on && moved > 150 && off > 30 && p1[1] > p0[1] + 10,
-    `F takes control; the car cruises, steers and climbs (moved ${moved.toFixed(0)} m, ` +
+    `D takes control; the car cruises, steers and climbs (moved ${moved.toFixed(0)} m, ` +
       `${off.toFixed(0)} m off the route, climbed ${(p1[1] - p0[1]).toFixed(0)} m)`,
   );
   check(clear, `the user-flown car isn't inside a building (${p1.map(v => v.toFixed(0)).join(',')})`);
