@@ -3,6 +3,7 @@ import {theme, waterAt, waterLevel} from './theme';
 import {Rng, hashFloat} from '../math/random';
 import {unwarp, warp, warpAngle} from './warp';
 import {addRooftopMassing} from './rooftops';
+import {makeInsideTest} from './inside';
 import {CYAN, blockPalette, ownerColor} from './palette';
 import {Shape} from './meshes';
 import {SegFlags, SegmentList, Style, packColor} from './segments';
@@ -876,6 +877,55 @@ export function generateCity(
     }
   }
   addRooftopMassing(segments, seed);
+  // Remove pieces left hanging in the air: attached stacks and collars
+  // whose host was shrunk for the flight corridors (or snapped to bays)
+  // touch nothing any more. Raised pieces must touch some other segment
+  // (side, below or above) within 0.5 m.
+  {
+    const dead = new Set<number>();
+    // Repeat: removing a piece can leave another hanging.
+    for (let pass = 0, removed = -1; pass < 4 && removed !== 0; pass++) {
+      const inside = makeInsideTest(segments);
+      removed = 0;
+      for (let i = 0; i < segments.count; i++) {
+        if (dead.has(i)) continue;
+        const g = segments.get(i);
+        if (g.y < 3 || isFlat(g.style) || g.style === Style.Bridge) continue;
+        const c = Math.cos(g.rotY);
+        const sn = Math.sin(g.rotY);
+        let touches = false;
+        for (const yy of [g.y - 1, g.y + g.sy * 0.5, g.y + g.sy + 1]) {
+          for (const [ox, oz] of [
+            [0.5, 0],
+            [-0.5, 0],
+            [0, 0.5],
+            [0, -0.5],
+            [0, 0],
+          ]) {
+            const lx = ox * (g.sx * g.taper + 2);
+            const lz = oz * (g.sz * g.taper + 2);
+            const k = inside(
+              g.x + c * lx - sn * lz,
+              yy,
+              g.z + sn * lx + c * lz,
+              0.5,
+            );
+            if (k >= 0 && k !== i && !dead.has(k)) {
+              touches = true;
+              break;
+            }
+          }
+          if (touches) break;
+        }
+        if (!touches) {
+          dead.add(i);
+          removed++;
+        }
+      }
+      for (const i of dead) segments.setSize(i, 0.001, 0.001);
+    }
+    for (const sl of slots) if (dead.has(sl.seg)) sl.width = 0;
+  }
   for (const sl of slots) {
     const a = warpAngle(sl.x, sl.z);
     [sl.x, sl.z] = warp(sl.x, sl.z);

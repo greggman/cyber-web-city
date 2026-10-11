@@ -167,6 +167,8 @@ export class LightClusters {
       MAX_VISIBLE,
     ]);
     new Float32Array(info, 8, 1)[0] = maxDistance;
+    // The car's lights (the first 16 dynamic slots) get reserved places.
+    new Uint32Array(info, 12, 1)[0] = this.staticCount;
     this.device.queue.writeBuffer(this.info, 0, info);
     const pass = encoder.beginComputePass({
       label: 'lights/cull',

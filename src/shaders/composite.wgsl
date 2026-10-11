@@ -153,7 +153,18 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   let world = world_from_depth(i.uv, max(depth, 1e-7), frame.invViewProj);
   let dir = normalize(world - frame.camPos);
   if (depth <= 0.0) {
-    let sky = sky_color(dir, frame.time);
+    var sky = sky_color(dir, frame.time);
+    // The same height fog the far city gets, integrated out along the view
+    // ray (no distance floor), so the horizon, and the mountains on it,
+    // haze out with the buildings instead of staying artificially clear.
+    let skyDist = 16000.0;
+    let f = frame.fogHeightFalloff;
+    let k = f * dir.y * skyDist;
+    let base = frame.fogDensity * exp(-f * frame.camPos.y);
+    let integral = select(base * skyDist, base * skyDist * (1.0 - exp(-k)) / k, abs(k) > 1e-4);
+    let skyFog = 1.0 - exp(-integral);
+    let tintFar = mix(vec3f(1.0), haze_tint(frame.camPos.xz + dir.xz * 3000.0), 0.6);
+    sky = mix(sky, fog_color(dir, frame.camPos.y + dir.y * skyDist, skyDist) * tintFar, skyFog);
     return vec4f(sky + rain_sheets(i.uv, 1e5, sky) + volume_light(i.uv, 1e5) + beam_light(frame.camPos, dir, 1e5) + flare_light(frame.camPos, dir, 1e5), 1.0);
   }
   let c = textureLoad(colorTex, p, 0).rgb;

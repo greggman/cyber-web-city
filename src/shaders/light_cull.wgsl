@@ -9,7 +9,8 @@ struct CullInfo {
   lightCount: u32,
   maxVisible: u32,
   maxDistance: f32,
-  _p: u32,
+  // Index of the first of 16 priority lights (the player's car).
+  priorityBase: u32,
 };
 
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -28,6 +29,11 @@ fn view_pos(p: vec3f) -> vec3f {
 fn cs_visible(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= info.lightCount) { return; }
+  // Priority lights (the car) own visible slots 0-15, which cs_cluster
+  // processes in its first round, so they are never the ones dropped when
+  // a list overflows (overflow order is nondeterministic: they flickered).
+  let pri = i >= info.priorityBase && i < info.priorityBase + 16u;
+  if (pri) { visible[i - info.priorityBase] = 0xffffffffu; }
   let L = lights[i];
   if (L.radius <= 0.0) { return; }
   let vp = view_pos(L.pos);
@@ -42,6 +48,10 @@ fn cs_visible(@builtin(global_invocation_id) gid: vec3u) {
   if (ny.x * abs(vp.y) - ny.y * z > L.radius) { return; }
   // Skip lights too small to matter at this distance.
   if (L.radius / max(z, 1.0) < 0.004) { return; }
+  if (pri) {
+    visible[i - info.priorityBase] = i;
+    return;
+  }
   let slot = atomicAdd(&visibleCount, 1u);
   if (slot < info.maxVisible) {
     visible[slot] = i;
@@ -81,6 +91,7 @@ fn cs_cluster(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index)
   let n = min(atomicLoad(&visibleCount), info.maxVisible);
   for (var k = li; k < n; k += 64u) {
     let idx = visible[k];
+    if (idx == 0xffffffffu) { continue; }
     let L = lights[idx];
     let vp = view_pos(L.pos);
     var inside = true;
@@ -106,5 +117,6 @@ fn cs_cluster(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index)
 
 @compute @workgroup_size(1)
 fn cs_reset() {
-  atomicStore(&visibleCount, 0u);
+  // Slots 0-15 are reserved for the priority lights.
+  atomicStore(&visibleCount, 16u);
 }
