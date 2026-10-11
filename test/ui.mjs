@@ -290,8 +290,8 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   );
   const open = await page.evaluate(() => !document.getElementById('ui-gear-panel').hidden);
   check(
-    pressed.length === 1 && pressed[0] === 'arcology' && open,
-    `settings picks a city (${pressed.join(',')} highlighted, panel open ${open})`,
+    pressed.length === 1 && pressed[0] === 'arcology' && !open,
+    `settings picks a city and closes (${pressed.join(',')} highlighted, panel open ${open})`,
   );
   await page.click('#ui-theme-btn');
   await page.waitForFunction(() => !/theme=arcology/.test(document.getElementById('ui-city-link').href), {timeout: 120000});

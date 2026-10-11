@@ -453,7 +453,8 @@ export class Controls {
 
   /**
    * Lists the cities (themes) to pick from, `current` highlighted. Picking
-   * one calls onCityPick (the globe button / T still cycle from there).
+   * one closes the settings and calls onCityPick (the globe button / T
+   * still cycle from there).
    */
   setCities(cities: {name: string; label: string}[], current: string) {
     this.cityList.replaceChildren(
@@ -462,7 +463,10 @@ export class Controls {
         b.textContent = c.label;
         b.dataset.city = c.name;
         b.setAttribute('aria-pressed', String(c.name === current));
-        b.addEventListener('click', () => this.onCityPick(c.name));
+        b.addEventListener('click', () => {
+          this.closeAll();
+          this.onCityPick(c.name);
+        });
         return b;
       }),
     );
