@@ -37,6 +37,9 @@ export interface FrameParams {
   debugView: number;
   quality: number;
   cityGlow: number;
+  /** Active searchlight beams / flare stacks (loop bounds in the composite). */
+  beamCount: number;
+  flareCount: number;
 }
 
 export class FrameUniforms {
@@ -132,6 +135,8 @@ export class FrameUniforms {
     f[199] = th.warp;
     f[200] = th.flares ? 1 : 0;
     f[201] = th.saturation;
+    this.u32[202] = p.beamCount;
+    this.u32[203] = p.flareCount;
     f.set(th.grade, 204);
     this.device.queue.writeBuffer(this.buffer, 0, this.data);
     this.prevViewProj = vpNJ;

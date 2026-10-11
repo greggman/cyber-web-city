@@ -20,6 +20,8 @@ const BEAMS = 16;
 export class Volumetrics {
   /** Searchlight beams (16 x {origin, len, dir, intensity}). */
   beamBuf!: GPUBuffer;
+  /** Beams uploaded this frame (slots 0..beamCount-1). */
+  beamCount = 0;
   private inject: GPUTexture;
   private integrated: GPUTexture;
   private injectPipe!: GPUComputePipeline;
@@ -177,6 +179,7 @@ export class Volumetrics {
         k * 8,
       );
     });
+    this.beamCount = near.length;
     this.device.queue.writeBuffer(this.beamBuf, 0, data);
   }
 

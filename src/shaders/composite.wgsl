@@ -24,7 +24,7 @@ struct Beam { origin: vec3f, len: f32, dir: vec3f, intensity: f32 };
 fn flare_light(ro: vec3f, rd: vec3f, maxT: f32) -> vec3f {
   var c = vec3f(0.0);
   let t = frame.time;
-  for (var i = 0u; i < 16u; i++) {
+  for (var i = 0u; i < frame.flareCount; i++) {
     let f = flares[i];
     if (f.w < 0.0) { continue; }
     let period = 9.0 + 9.0 * fract(f.w * 7.31);
@@ -59,7 +59,7 @@ const XENON = vec3f(0.716, 0.807, 1.0);
 // limited by the scene depth along the ray.
 fn beam_light(ro: vec3f, rd: vec3f, maxT: f32) -> vec3f {
   var c = vec3f(0.0);
-  for (var i = 0u; i < 16u; i++) {
+  for (var i = 0u; i < frame.beamCount; i++) {
     let b = beams[i];
     if (b.intensity <= 0.0) { continue; }
     let w0 = ro - b.origin;
@@ -108,7 +108,9 @@ fn tint_at(i: vec2i, n: i32) -> vec3f {
 // Bilinear blend of the four nearest superblocks' tints at a world xz
 // (unwarped to the grid; SUPER = 300 and AVENUE_W = 64 as in layout.ts).
 fn haze_tint(xz: vec2f) -> vec3f {
-  let g = unwarp2(xz);
+  // A rough unwarp is plenty for a haze tint blended across superblocks
+  // (the full 10-iteration inverse cost ~6 ms per 4K frame).
+  let g = xz - vec2f(warp_ax(xz.y), warp_az(xz.x));
   let n = i32(textureDimensions(districtTex).x);
   let q = (g - 32.0) / 300.0 - 0.5 + f32(n / 2);
   let i = vec2i(floor(q));

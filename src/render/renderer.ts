@@ -353,6 +353,8 @@ export class Renderer {
       debugView: s.debugView,
       quality: s.quality,
       cityGlow: s.cityGlow,
+      beamCount: this.volume.beamCount,
+      flareCount: Math.min(16, this.flareSources.length),
     });
 
     if (this.flareSources.length) this.updateFlares(camera.position);
