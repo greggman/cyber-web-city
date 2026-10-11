@@ -12,6 +12,9 @@
 //   hud=1         show stats
 //   debug=N       debug view (see renderer)
 //   quality=low|high
+import {makeRepelField} from './city/inside';
+import {DriveInputs} from './ui/driveInput';
+import {DriveControl} from './camera/drive';
 import {hashCombine} from './math/random';
 import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
@@ -178,6 +181,11 @@ async function main() {
   // Traffic: a coarse tessellation of the hero car stands in for traffic.
   const trafficMesh = buildModelMesh(carEntry.build(), 3);
 
+  // The user can take the controls (steering wheel button / F).
+  const drive = new DriveControl();
+  const driveInputs = new DriveInputs();
+  let lastAutoPose: ReturnType<FlightPath['pose']> | null = null;
+
   async function buildWorld(gen: GeneratedCity) {
     city = toCity(gen);
     signs = gen.signs;
@@ -204,6 +212,8 @@ async function main() {
     };
     renderer.details.setBlockers(adData.screens);
     renderer.flareSources = city.flares;
+    // Soft walls for the user-flown car.
+    drive.repel = makeRepelField(city.segments);
     // Xenon searchlights from the tallest roofs, apart by the theme's
     // density (ART_BIBLE.md 15.5).
     for (const r of [...city.roofs].sort((a, b) => b[1] - a[1])) {
@@ -516,6 +526,28 @@ async function main() {
       });
   };
   controls.onThemeClick = () => nextTheme();
+  const setDriving = (on: boolean) => {
+    if (on === drive.active) return;
+    if (on && lastAutoPose) {
+      drive.enter(lastAutoPose);
+      controls.showToast(
+        matchMedia('(pointer: coarse)').matches
+          ? 'Stick to fly, ▲▼ to climb'
+          : 'WASD / arrows to fly, E / Q to climb, F for autopilot',
+      );
+    } else {
+      drive.exit();
+      controls.showToast('Autopilot');
+    }
+    controls.setDriving(drive.active);
+    driveInputs.setVisible(drive.active);
+  };
+  drive.onAutoExit = () => {
+    controls.setDriving(false);
+    driveInputs.setVisible(false);
+    controls.showToast('Autopilot');
+  };
+  controls.onDriveClick = () => setDriving(!drive.active);
   controls.onSoundClick = () => {
     // Silent (not yet unlocked, or muted): turn it on; playing: off.
     ui.sound = !(ui.sound && audio.running);
@@ -542,7 +574,9 @@ async function main() {
     } else {
       startAudio();
     }
-    if (e.key === 't' || e.key === 'T') {
+    if (e.key === 'f' || e.key === 'F') {
+      setDriving(!drive.active);
+    } else if (e.key === 't' || e.key === 'T') {
       nextTheme();
     } else if (e.key === 'c' || e.key === 'C') {
       // Exactly what the camera button does.
@@ -588,7 +622,11 @@ async function main() {
     }
     const dt = ui.paused ? 0 : realDt * ui.timeScale;
     time += dt;
-    const pose = flight.pose(time);
+    const autoPose = flight.pose(time);
+    lastAutoPose = autoPose;
+    const pose = drive.update(dt, driveInputs.read(), autoPose);
+    (window as unknown as {__debug: Record<string, unknown>}).__debug.carPos =
+      pose.position;
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = ui.camera;
     const orbitOn = orbit.active && ui.camera !== CameraMode.Map;
@@ -597,7 +635,8 @@ async function main() {
     const inside =
       ui.camera === CameraMode.Chase &&
       chase.fixedShot === undefined &&
-      !orbitOn
+      !orbitOn &&
+      !drive.active
         ? insideAt(time)
         : -1;
     const inCockpit =

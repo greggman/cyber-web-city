@@ -243,4 +243,59 @@ await withPage('index.html?t=40', async (page, ctx) => {
   check(playing, 'music keeps playing across theme switches');
   check(ctx.errors.length === 0, `no WebGPU errors while switching (${ctx.errors.slice(0, 2).join(' | ')})`);
 });
+// F hands the car to the user; it flies, stays out of buildings, and F
+// gives it back.
+await withPage('index.html?t=40&mute=1', async (page, ctx) => {
+  const pos = () => page.evaluate(() => window.__debug.carPos);
+  await page.keyboard.press('f');
+  const p0 = await pos();
+  await page.keyboard.down('w');
+  await page.keyboard.down('d');
+  await sleep(1200);
+  await page.keyboard.up('d');
+  await sleep(4000);
+  await page.keyboard.up('w');
+  const p1 = await pos();
+  const moved = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
+  const route = await page.evaluate(() => window.__debug.pose(window.__stats.time).position);
+  const off = Math.hypot(p1[0] - route[0], p1[2] - route[2]);
+  const clear = await page.evaluate(p => window.__debug.isClear(p[0], p[2], 1, p[1] - 1, p[1] + 1), p1);
+  const on = await page.evaluate(() => document.getElementById('ui-drive-btn').classList.contains('on'));
+  check(on && moved > 150 && off > 30, `F takes control and the car flies (moved ${moved.toFixed(0)} m, ${off.toFixed(0)} m off the route)`);
+  check(clear, `the user-flown car isn't inside a building (${p1.map(v => v.toFixed(0)).join(',')})`);
+  await page.keyboard.press('f');
+  await sleep(4000);
+  const p2 = await pos();
+  const route2 = await page.evaluate(() => window.__debug.pose(window.__stats.time).position);
+  check(Math.hypot(p2[0] - route2[0], p2[2] - route2[2]) < 1, 'F again eases back onto the autopilot route');
+  check(ctx.errors.length === 0, 'no errors while flying');
+});
+// On a phone the wheel shows a touch stick; pushing it up flies forward.
+await withPage('index.html?t=40&mute=1', async (page, ctx) => {
+  await page.setViewport({width: 390, height: 844, isMobile: true, hasTouch: true});
+  await page.waitForFunction(() => window.__ready && document.getElementById('ui-drive-btn'), {timeout: 120000});
+  await sleep(1500);
+  await page.tap('#ui-drive-btn');
+  await sleep(300);
+  const shown = await page.evaluate(() => !document.getElementById('ui-drive-stick').hidden);
+  const p0 = await page.evaluate(() => window.__debug.carPos);
+  const [x, y] = await page.evaluate(() => {
+    const r = document.getElementById('ui-drive-stick').getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+  });
+  const cdp = await page.createCDPSession();
+  const touch = (type, dy) =>
+    cdp.send('Input.dispatchTouchEvent', {type, touchPoints: type === 'touchEnd' ? [] : [{x, y: y - dy}]});
+  await touch('touchStart', 0);
+  for (let k = 1; k <= 5; k++) {
+    await touch('touchMove', k * 12);
+    await sleep(30);
+  }
+  await sleep(3000);
+  await touch('touchEnd');
+  const p1 = await page.evaluate(() => window.__debug.carPos);
+  const moved = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
+  check(shown && moved > 80, `touch stick flies the car on a phone (stick shown ${shown}, moved ${moved.toFixed(0)} m)`);
+  check(ctx.errors.length === 0, 'no errors flying by touch');
+});
 process.exit(failed ? 1 : 0);

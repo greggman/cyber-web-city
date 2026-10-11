@@ -1,11 +1,11 @@
-# Cyber Web City in 180k
+# Cyber Web City in 183k
 
-A relaxing night flight through an enormous, rain-soaked, procedurally
-generated cyberpunk megacity. It is inspired by Blade Runner, Dredd, The Fifth
+A relaxing night flight through several enormous, rain-soaked, procedurally
+generated cyberpunk megacities inspired by Blade Runner, Dredd, The Fifth
 Element and Cyberpunk 2077, and by the gaudy lighting of Chongqing, Shenzhen
 and Shanghai. Everything is rendered with raw **WebGPU** and uses **no runtime
 libraries**. The city, the signage, the ads, the holograms, the traffic and the
-NURBS flying car are all generated procedurally.
+NURBS based flying car are all generated procedurally.
 
 [Live](https://greggman.github.io/cyber-web-city/)
 
@@ -48,6 +48,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 | Key | Action |
 |---|---|
 | C | Cycle camera: chase, cockpit, skyline |
+| F (or the steering wheel button) | Fly the car yourself: WASD / arrows, E / Q to climb and descend (touch: on-screen stick and ▲▼). Buildings push you away softly. F again, or 30 s without input, hands back to the autopilot |
 | T (or the globe button) | Next city theme (reloads into a new city of that theme) |
 | Drag / pinch / wheel | Orbit and zoom around the car; the auto camera takes over 6 s after the last input |
 | 1–5 | Pick a chase framing (classic, low, high wide, side, front three-quarter) |
