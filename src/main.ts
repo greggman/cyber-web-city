@@ -288,7 +288,8 @@ async function main() {
     ads.writeLights(e);
   });
   renderer.opaqueDrawers.push(p => ads.drawScreens(p, renderer.sceneBindGroup));
-  renderer.transparentDrawers.unshift(p =>
+  // Before SSR so holograms reflect in wet streets and water.
+  renderer.preReflectionDrawers.push(p =>
     ads.drawHolograms(p, renderer.sceneBindGroup, renderer.targets),
   );
   rain.intensity = Number(params.get('rain') ?? 1) * weatherParticles;

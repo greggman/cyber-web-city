@@ -114,6 +114,9 @@ export class Renderer {
   /** Extra opaque/transparent drawers registered by other systems. */
   opaqueDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   transparentDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
+  /** Additive emitters drawn after the composite but before SSR, so they
+   * show up in reflections (holograms). */
+  preReflectionDrawers: ((pass: GPURenderPassEncoder) => void)[] = [];
   computeHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
   /** Run before light culling (e.g. GPU-written dynamic lights). */
   preLightHooks: ((encoder: GPUCommandEncoder) => void)[] = [];
@@ -458,6 +461,15 @@ export class Renderer {
       this.compositeBindGroup,
     ]);
 
+    if (this.preReflectionDrawers.length) {
+      const rp = encoder.beginRenderPass({
+        label: 'preReflection',
+        colorAttachments: [{view: v.lit, loadOp: 'load', storeOp: 'store'}],
+        depthStencilAttachment: {view: v.depth, depthReadOnly: true},
+      });
+      for (const d of this.preReflectionDrawers) d(rp);
+      rp.end();
+    }
     this.ssr.run(encoder, this.targets, this.frameBindGroup);
     for (const hook of this.postOpaqueHooks) hook(encoder);
 

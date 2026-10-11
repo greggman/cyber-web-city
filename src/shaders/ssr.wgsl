@@ -52,27 +52,32 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   var prevT = 0.0;
   var hit = false;
   var hitUv = vec2f(0.0);
-  for (var k = 0; k < 40; k++) {
+  for (var k = 0; k < 44; k++) {
     let q = world + r * t;
     let s = project(q);
     if (s.z <= 0.0 || any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0))) { break; }
     let sd = scene_depth_at(s.xy);
     let thick = 1.5 + s.z * 0.04;
-    if (s.z > sd && s.z - sd < thick) {
-      // Binary refine between prevT and t.
+    if (s.z > sd) {
+      // Behind the depth buffer: refine between prevT and t (long steps at
+      // range can jump well past a facade), then accept the crossing if
+      // it's close to the surface (not passing behind a foreground object).
       var a = prevT;
       var b = t;
-      for (var j = 0; j < 5; j++) {
+      for (var j = 0; j < 6; j++) {
         let m = (a + b) * 0.5;
         let sm = project(world + r * m);
         if (sm.z > scene_depth_at(sm.xy)) { b = m; } else { a = m; }
       }
-      hitUv = project(world + r * b).xy;
-      hit = true;
-      break;
+      let sb = project(world + r * b);
+      if (sb.z - scene_depth_at(sb.xy) < thick) {
+        hitUv = sb.xy;
+        hit = true;
+        break;
+      }
     }
     prevT = t;
-    t *= 1.18;
+    t *= 1.16;
   }
   var col = vec3f(0.0);
   var conf = 0.0;
@@ -85,6 +90,18 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   if (!hit && r.y > 0.0) {
     col = sky_color(r, frame.time) * 0.6;
     conf = smoothstep(0.0, 0.2, r.y) * 0.6;
+    // Where the ray escapes into open sky on screen, reflect the actual
+    // image there: the sky plus anything additive drawn over it (holograms,
+    // searchlight beams, flares), which have no depth to hit.
+    let far = project(world + r * 20000.0);
+    if (far.z > 0.0 && all(far.xy > vec2f(0.0)) && all(far.xy < vec2f(1.0))) {
+      let fd = textureLoad(depthTex, vec2i(far.xy * dims), 0);
+      if (fd <= 0.0) {
+        let edge = smoothstep(0.0, 0.08, min(min(far.x, 1.0 - far.x), min(far.y, 1.0 - far.y)));
+        col = mix(col, textureSampleLevel(litTex, linearSampler, far.xy, 0.0).rgb, edge);
+        conf = max(conf, edge * 0.9);
+      }
+    }
   }
   col = min(col, vec3f(40.0));
   return vec4f(col * conf * fres * strength, conf);

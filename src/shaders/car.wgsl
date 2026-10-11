@@ -182,7 +182,7 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let condensation = vec3f(0.05, 0.055, 0.065) * fog + behind * fog * 0.35;
   // A little extra sheen at grazing angles so the canopy reads as glass.
   let rim = smoothstep(0.55, 0.0, nv) * vec3f(0.05, 0.06, 0.08);
-  // Drops: darker refracting rim and a small specular glint.
+  // Drops: a magnified refracted view and a refracting rim.
   let cov = fx.w;
   if (cov > 0.05) {
     // A drop is a tiny lens: it shows a magnified, inverted view from
@@ -193,8 +193,8 @@ fn fs_glass(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     let ring = smoothstep(0.45, 0.9, length(dropN)) * cov;
     behind = mix(behind, lens * 1.3, cov) + ring * (vec3f(0.06, 0.06, 0.08) + lens * 0.6);
   }
-  let glint = pow(saturate(1.0 - length(dropN - vec2f(-0.35, 0.35)) * 1.6), 6.0) * cov;
-  let c = refl * (fres * 2.0 + 0.03) + condensation + rim + glint * vec3f(0.75, 0.8, 0.9);
+  // (No painted-on glint: drops only show what they refract.)
+  let c = refl * (fres * 2.0 + 0.03) + condensation + rim;
   // The glass samples what is behind it itself (refraction), so it simply
   // replaces the pixel.
   return vec4f(c + behind * tint * transmit + behind * fres * 0.0, 1.0);
