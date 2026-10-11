@@ -80,7 +80,13 @@ fn face_bays(W: f32, bay: f32) -> i32 {
 // (bay index or -1 in a corner pier, fraction across the bay) for u meters
 // from the face centre at base scale.
 fn bay_at(u: f32, n: i32, bay: f32) -> vec2f {
-  if (n >= ROUND_FACE) { return vec2f(floor(u / bay), fract(u / bay)); }
+  if (n >= ROUND_FACE) {
+    // Round faces have no piers; index from an offset so bays are never
+    // negative (negative means "corner pier" to the callers, which would
+    // blank every window on cylinders). 4096 keeps fract() precise.
+    let x = u / bay + 4096.0;
+    return vec2f(floor(x), fract(x));
+  }
   let x = u / bay + f32(n) * 0.5;
   if (x < 0.0 || x >= f32(n)) { return vec2f(-1.0, fract(x)); }
   return vec2f(floor(x), fract(x));

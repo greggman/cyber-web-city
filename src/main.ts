@@ -7,6 +7,7 @@
 //   size=WxH      fixed canvas size in CSS px, centred (video capture)
 //   cam=chase|pov|skyline|map camera mode (skyline: establishing shot; map: top-down)
 //   cam=facade&n=K[&d=D]  inspect a building face (optionally of district D)
+//   cam=round&n=K  inspect a round tower (cylinder, hex, oct; tallest first)
 //   paused=1      freeze time (deterministic screenshots)
 //   anim=S        animation time S with the camera at t (flicker tests)
 //   hud=1         show stats
@@ -411,6 +412,7 @@ async function main() {
     camParam === 'holo' ||
     camParam === 'roof' ||
     camParam === 'facade' ||
+    camParam === 'round' ||
     camParam === 'horizon' ||
     camParam === 'water'
       ? camParam
@@ -419,6 +421,7 @@ async function main() {
   let renderBlocked = false;
   let roofList: Segment[] | undefined;
   let facadeList: typeof city.slots | undefined;
+  let roundList: Segment[] | undefined;
   let waterList: Segment[] | undefined;
   let horizonEye: [number, number, number] | undefined;
   let time = Number(params.get('t') ?? 0);
@@ -541,6 +544,7 @@ async function main() {
         await buildWorld(g);
         roofList = undefined;
         facadeList = undefined;
+        roundList = undefined;
         waterList = undefined;
         horizonEye = undefined;
         settings.fogColor = cityTheme.fogLow;
@@ -824,6 +828,28 @@ async function main() {
         t,
       );
       camera.fovY = (55 * Math.PI) / 180;
+    } else if (inspect === 'round') {
+      // A round tower (cylinder / hex / oct, tallest first) from ~40 m.
+      roundList ??= (() => {
+        const out: Segment[] = [];
+        for (let i = 0; i < city.segments.count; i++) {
+          const g = city.segments.get(i);
+          if (g.shape >= 2 && g.shape <= 4 && g.sy > 40 && g.sx > 20) {
+            out.push(g);
+          }
+        }
+        return out.sort((a, b) => b.sy - a.sy);
+      })();
+      const g = roundList[inspectN % Math.max(1, roundList.length)];
+      if (g) {
+        const y = g.y + Math.min(g.sy * 0.5, 80);
+        const r = g.sx * 0.5 + 40;
+        camera.camToWorld = lookAtCamera(
+          [g.x + r * 0.8, y + 8, g.z + r * 0.6],
+          [g.x, y, g.z],
+        );
+        camera.fovY = (55 * Math.PI) / 180;
+      }
     } else if (inspect === 'roof') {
       roofList ??= exposedRoofs(city.segments);
       const g = roofList[inspectN % roofList.length];

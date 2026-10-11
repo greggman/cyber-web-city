@@ -60,6 +60,13 @@ fn vs_main(v: VIn) -> VOut {
   o.normal = x.normal;
   let tp = mix(1.0, s.taper, v.pos.y);
   o.facade = vec2f((v.facade.x * s.size.x + v.facade.y * s.size.z) * tp, x.world.y);
+  if (s.shape >= 2u && s.shape <= 4u) {
+    // Round shapes: stretch the facade a little so the circumference holds
+    // a whole number of bays (no odd window column at the seam).
+    let circ = PI * 0.5 * (s.size.x + s.size.z);
+    let bay = seg_bay(s);
+    o.facade.x *= max(round(circ / bay), 1.0) * bay / circ;
+  }
   o.capUv = v.facade * s.size.xz;
   var faceW = 0.0;
   if (s.shape <= 1u && abs(v.normal.y) < 0.5) {
