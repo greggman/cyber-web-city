@@ -50,7 +50,7 @@ in the browser. Page zoom and text selection are disabled. Keyboard shortcuts:
 | C | Cycle camera: chase, cockpit, skyline |
 | F (or the steering wheel button) | Fly the car yourself. It keeps cruising forward: A / D or ← / → steer, W / S or ↑ / ↓ climb and descend, E / Q faster and slower (touch: on-screen stick to steer and climb, + / − for speed). Buildings push you away softly. F again, or 30 s without input, hands back: the car flies itself to a new tour starting just ahead |
 | T (or the globe button) | Next city theme (reloads into a new city of that theme) |
-| Drag / pinch / wheel | Orbit and zoom around the car; the auto camera takes over 6 s after the last input |
+| Drag / pinch / wheel | Orbit and zoom around the car (from inside the car, dragging looks around instead); the auto camera takes over 6 s after the last input |
 | 1–5 | Pick a chase framing (classic, low, high wide, side, front three-quarter) |
 | 0 | Cycle framings automatically |
 | Space | Pause |

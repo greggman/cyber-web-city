@@ -356,6 +356,12 @@ async function main() {
   let wasOrbit = false;
   // Was the camera in the cockpit last frame (orbit starts outside then).
   let wasInside = false;
+  // A drag that starts inside the car looks around from the driver's seat
+  // instead of orbiting; afterwards the view eases back to the director's.
+  let lookMode = false;
+  let wasActive = false;
+  let lookReleased = -Infinity;
+  let lastLook: [number, number] = [0, -0.12];
   let lastOrbit: {eye: Vec3; target: Vec3} | null = null;
   (
     window as unknown as {__debug: Record<string, unknown>}
@@ -665,7 +671,14 @@ async function main() {
       pose.position;
     renderer.carToWorld = pose.matrix;
     renderer.cameraMode = ui.camera;
-    const orbitOn = orbit.active && ui.camera !== CameraMode.Map;
+    if (orbit.active && !wasActive) {
+      lookMode = wasInside;
+      [orbit.lookYaw, orbit.lookPitch] = lastLook;
+    }
+    if (!orbit.active && wasActive && lookMode) lookReleased = time;
+    wasActive = orbit.active;
+    const looking = orbit.active && lookMode && ui.camera !== CameraMode.Map;
+    const orbitOn = orbit.active && !lookMode && ui.camera !== CameraMode.Map;
     // The auto director goes inside the car now and then (chase mode,
     // automatic framings only).
     const inside =
@@ -676,9 +689,21 @@ async function main() {
         ? insideAt(time)
         : -1;
     const inCockpit =
-      !orbitOn && (ui.camera === CameraMode.Cockpit || inside >= 0);
+      !orbitOn && (ui.camera === CameraMode.Cockpit || inside >= 0 || looking);
+    // Driver's view direction: the user's while looking around, easing
+    // back to the director's for a second after.
+    const cabinLook = (auto: [number, number]): [number, number] => {
+      if (looking) return [orbit.lookYaw, orbit.lookPitch];
+      const t = Math.min(1, (time - lookReleased) / 1.2);
+      const k = t * t * (3 - 2 * t);
+      return [
+        orbit.lookYaw + (auto[0] - orbit.lookYaw) * k,
+        orbit.lookPitch + (auto[1] - orbit.lookPitch) * k,
+      ];
+    };
     // Driver's eye view, looking (yaw, pitch) away from straight ahead.
     const cockpitCam = (yaw: number, pitch: number) => {
+      lastLook = [yaw, pitch];
       const m = pose.matrix;
       const eye = transformPoint(m, carEntry.driverEye);
       const cp = Math.cos(pitch);
@@ -850,9 +875,10 @@ async function main() {
       lastOrbit = o;
       camera.camToWorld = lookAtCamera(o.eye, o.target);
       camera.fovY = (orbit.fov * Math.PI) / 180;
+    } else if (looking) {
+      cockpitCam(...cabinLook(lastLook));
     } else if (inside >= 0) {
-      const [yaw, pitch] = lookAround(inside, time);
-      cockpitCam(yaw, pitch);
+      cockpitCam(...cabinLook(lookAround(inside, time)));
     } else if (ui.camera === CameraMode.Skyline) {
       // Establishing shot: slowly orbit high above the car's area.
       const a = time * 0.02;
@@ -868,7 +894,7 @@ async function main() {
       camera.fovY = (chase.fov * Math.PI) / 180;
     } else {
       // Cockpit: the driver's eye, looking slightly down over the dash.
-      cockpitCam(Math.sin(time * 0.6) * 0.03, -0.12);
+      cockpitCam(...cabinLook([Math.sin(time * 0.6) * 0.03, -0.12]));
     }
     if (!orbitOn) wasInside = inCockpit;
     const cl = carLights(pose.matrix, time);

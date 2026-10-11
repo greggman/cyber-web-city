@@ -70,6 +70,42 @@ await withPage('index.html?t=40', async page => {
   const after = await page.evaluate(() => window.__debug.audioRunning());
   check(!before && after, `sound starts on touch (before ${before}, after ${after})`);
 });
+// Inside the car, dragging looks around from the driver's seat (no jump to
+// the outside orbit), then eases back.
+await withPage('index.html?t=40&mute=1&cam=pov', async page => {
+  await page.waitForFunction(() => window.__debug?.orbitActive, {timeout: 60000});
+  await sleep(800);
+  const view = async () => {
+    await page.evaluate(() => (window.__debug.trace = []));
+    await sleep(150);
+    return page.evaluate(() => {
+      const m = window.__debug.trace.at(-1);
+      const c = window.__debug.cameraPos();
+      const p = window.__debug.carPos;
+      const car = window.__debug.pose(window.__stats.time).forward;
+      return {fwd: [-m[8], -m[9], -m[10]], car, fromCar: Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2])};
+    });
+  };
+  const angle = (a, b) => (Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) * 180) / Math.PI;
+  const v0 = await view();
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  for (let k = 1; k <= 10; k++) {
+    await page.mouse.move(640 - k * 25, 360);
+    await sleep(30);
+  }
+  const v1 = await view();
+  await page.mouse.up();
+  check(
+    v1.fromCar < 3 && angle(v0.fwd, v1.fwd) > 30,
+    `dragging inside the car looks around (turned ${angle(v0.fwd, v1.fwd).toFixed(0)} deg, ` +
+      `camera ${v1.fromCar.toFixed(1)} m from the car)`,
+  );
+  await sleep(8000);
+  const v2 = await view();
+  const back = Math.abs(angle(v2.fwd, v2.car) - angle(v0.fwd, v0.car));
+  check(v2.fromCar < 3 && back < 4, `...and eases back afterwards (${back.toFixed(1)} deg from where it was)`);
+});
 // Dragging orbits the car; 6 s after the last input the auto camera
 // takes over again.
 await withPage('index.html?t=40&mute=1', async page => {

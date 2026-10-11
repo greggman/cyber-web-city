@@ -1,6 +1,7 @@
 // User orbit camera: drag (mouse or one finger) orbits the car, wheel or
 // pinch zooms. Six seconds after the last input the auto director takes
-// over again.
+// over again. The same drags also turn a look direction (lookYaw/lookPitch)
+// used instead when the camera is inside the car.
 import type {Vec3} from '../math/vec';
 
 const IDLE_MS = 6000;
@@ -21,6 +22,9 @@ export class OrbitControl {
   /** Field of view at takeover (deg), eased to the orbit's own. */
   private fov0 = 55;
   fov = 55;
+  /** Look direction from the driver's seat (rad; + is right / up). */
+  lookYaw = 0;
+  lookPitch = 0;
 
   constructor(el: HTMLElement) {
     el.addEventListener('pointerdown', e => {
@@ -41,6 +45,12 @@ export class OrbitControl {
       if (this.pointers.size === 1) {
         this.yaw -= dx * 0.006;
         this.pitch = Math.max(-0.35, Math.min(1.35, this.pitch + dy * 0.004));
+        // Looking around grabs the view, like Street View.
+        this.lookYaw = Math.max(-2.6, Math.min(2.6, this.lookYaw - dx * 0.004));
+        this.lookPitch = Math.max(
+          -0.8,
+          Math.min(0.8, this.lookPitch + dy * 0.004),
+        );
       } else if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
