@@ -41,9 +41,59 @@ test('buildings softly repel the user-flown car', () => {
   drive.enter(start);
   let minDist = Infinity;
   for (let i = 0; i < 1200; i++) {
-    const p = drive.update(1 / 60, {throttle: 1, steer: 0, climb: 0}, start);
+    const p = drive.update(1 / 60, {steer: 0, climb: 0, speed: 1}, start);
     const r = drive.repel(p.position[0], p.position[1], p.position[2]);
     minDist = Math.min(minDist, r.dist);
   }
+  assert.ok(minDist > -0.5, `got ${minDist.toFixed(2)} m inside the building`);
+});
+
+// Handing back: the car flies itself to the new tour's start round a
+// building in the way, never through it, then hands over.
+test('the car flies itself round buildings to a new tour', () => {
+  const segs = new SegmentList();
+  segs.push({
+    x: 0,
+    y: 0,
+    z: -200,
+    rotY: 0.3,
+    sx: 80,
+    sy: 400,
+    sz: 80,
+    taper: 1,
+    twist: 0,
+    shape: Shape.Box,
+    style: Style.GlassOffice,
+    seed: 1,
+    colorA: 0,
+    colorB: 0,
+    flags: 0,
+    floorH: 4,
+  });
+  const drive = new DriveControl();
+  drive.repel = makeRepelField(segs);
+  const start = {
+    position: [5, 150, 0] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+    up: [0, 1, 0] as [number, number, number],
+    right: [1, 0, 0] as [number, number, number],
+    speed: 30,
+    matrix: mat4(),
+  };
+  drive.enter(start);
+  let arrived = false;
+  drive.onRejoin = () => (arrived = true);
+  // The tour starts behind the building.
+  const goal: [number, number, number] = [0, 180, -420];
+  drive.exit(p =>
+    Math.hypot(p[0] - goal[0], p[2] - goal[2]) < 20 ? null : goal,
+  );
+  let minDist = Infinity;
+  for (let i = 0; i < 60 * 25 && !arrived; i++) {
+    const p = drive.update(1 / 60, {steer: 0, climb: 0, speed: 0}, start);
+    const r = drive.repel(p.position[0], p.position[1], p.position[2]);
+    minDist = Math.min(minDist, r.dist);
+  }
+  assert.ok(arrived, 'never arrived');
   assert.ok(minDist > -0.5, `got ${minDist.toFixed(2)} m inside the building`);
 });

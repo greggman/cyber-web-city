@@ -243,34 +243,55 @@ await withPage('index.html?t=40', async (page, ctx) => {
   check(playing, 'music keeps playing across theme switches');
   check(ctx.errors.length === 0, `no WebGPU errors while switching (${ctx.errors.slice(0, 2).join(' | ')})`);
 });
-// F hands the car to the user; it flies, stays out of buildings, and F
-// gives it back.
+// F hands the car to the user; it cruises on by itself, steers and climbs,
+// stays out of buildings, and F gives it back: it flies itself (through
+// open air, no jumps) to a new tour nearby.
 await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   const pos = () => page.evaluate(() => window.__debug.carPos);
   await page.keyboard.press('f');
   const p0 = await pos();
-  await page.keyboard.down('w');
   await page.keyboard.down('d');
   await sleep(1200);
   await page.keyboard.up('d');
-  await sleep(4000);
+  await page.keyboard.down('w');
+  await sleep(1500);
   await page.keyboard.up('w');
+  await sleep(3000);
   const p1 = await pos();
   const moved = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
   const route = await page.evaluate(() => window.__debug.pose(window.__stats.time).position);
   const off = Math.hypot(p1[0] - route[0], p1[2] - route[2]);
-  const clear = await page.evaluate(p => window.__debug.isClear(p[0], p[2], 1, p[1] - 1, p[1] + 1), p1);
+  const clearAt = p => page.evaluate(p => window.__debug.isClear(p[0], p[2], 1, p[1] - 1, p[1] + 1), p);
+  const clear = await clearAt(p1);
   const on = await page.evaluate(() => document.getElementById('ui-drive-btn').classList.contains('on'));
-  check(on && moved > 150 && off > 30, `F takes control and the car flies (moved ${moved.toFixed(0)} m, ${off.toFixed(0)} m off the route)`);
+  check(
+    on && moved > 150 && off > 30 && p1[1] > p0[1] + 10,
+    `F takes control; the car cruises, steers and climbs (moved ${moved.toFixed(0)} m, ` +
+      `${off.toFixed(0)} m off the route, climbed ${(p1[1] - p0[1]).toFixed(0)} m)`,
+  );
   check(clear, `the user-flown car isn't inside a building (${p1.map(v => v.toFixed(0)).join(',')})`);
   await page.keyboard.press('f');
-  await sleep(4000);
-  const p2 = await pos();
-  const route2 = await page.evaluate(() => window.__debug.pose(window.__stats.time).position);
-  check(Math.hypot(p2[0] - route2[0], p2[2] - route2[2]) < 1, 'F again eases back onto the autopilot route');
+  // Follow it back: never inside a building, no jumps, on a tour in the end.
+  let prev = await pos();
+  let inside = 0;
+  let maxStep = 0;
+  let onTour = 0;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 35000 && onTour < 8) {
+    await sleep(250);
+    const p = await pos();
+    const r = await page.evaluate(() => window.__debug.pose(window.__stats.time).position);
+    if (!(await clearAt(p))) inside++;
+    maxStep = Math.max(maxStep, Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]));
+    onTour = Math.hypot(p[0] - r[0], p[2] - r[2]) < 1 ? onTour + 1 : 0;
+    prev = p;
+  }
+  const secs = ((Date.now() - t0) / 1000).toFixed(0);
+  check(onTour >= 8, `F again: the autopilot takes over on a new tour (${secs} s)`);
+  check(inside === 0 && maxStep < 30, `...getting there without entering buildings or jumping (inside ${inside}, max step ${maxStep.toFixed(1)} m)`);
   check(ctx.errors.length === 0, 'no errors while flying');
 });
-// On a phone the wheel shows a touch stick; pushing it up flies forward.
+// On a phone the wheel shows a touch stick; pushing it up climbs.
 await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   await page.setViewport({width: 390, height: 844, isMobile: true, hasTouch: true});
   await page.waitForFunction(() => window.__ready && document.getElementById('ui-drive-btn'), {timeout: 120000});
@@ -294,8 +315,8 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   await sleep(3000);
   await touch('touchEnd');
   const p1 = await page.evaluate(() => window.__debug.carPos);
-  const moved = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
-  check(shown && moved > 80, `touch stick flies the car on a phone (stick shown ${shown}, moved ${moved.toFixed(0)} m)`);
+  const climbed = p1[1] - p0[1];
+  check(shown && climbed > 20, `touch stick flies the car on a phone (stick shown ${shown}, climbed ${climbed.toFixed(0)} m)`);
   check(ctx.errors.length === 0, 'no errors flying by touch');
 });
 process.exit(failed ? 1 : 0);

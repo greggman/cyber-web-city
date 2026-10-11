@@ -1,10 +1,11 @@
-// Input for the user-flown car: keyboard (WASD / arrows, E/Q to climb and
-// descend) and, on touch screens, a virtual stick (steer + throttle) with
-// climb/descend buttons. Shown only while driving.
+// Input for the user-flown car, which keeps flying forward on its own:
+// keyboard (A/D or left/right to steer, W/S or up/down to climb and descend,
+// E/Q to fly faster or slower) and, on touch screens, a virtual stick
+// (steer + climb) with faster/slower buttons. Shown only while driving.
 import type {DriveInput} from '../camera/drive';
 
 const CSS = `
-#ui-drive-stick, #ui-drive-climb {
+#ui-drive-stick, #ui-drive-speed {
   position: fixed; bottom: 24px; z-index: 10; touch-action: none;
   user-select: none; -webkit-user-select: none;
 }
@@ -18,18 +19,18 @@ const CSS = `
   background: rgba(120, 255, 255, 0.25); border: 1px solid #6ff;
   pointer-events: none;
 }
-#ui-drive-climb { right: 24px; display: flex; flex-direction: column; gap: 14px; }
-#ui-drive-climb button {
+#ui-drive-speed { right: 24px; display: flex; flex-direction: column; gap: 14px; }
+#ui-drive-speed button {
   width: 58px; height: 58px; border-radius: 50%; font: 22px ui-monospace, monospace;
   color: #8ff; background: rgba(8, 6, 18, 0.45); border: 1px solid rgba(120, 255, 255, 0.35);
 }
-#ui-drive-climb button.down { border-color: #6ff; color: #cff; }
+#ui-drive-speed button.down { border-color: #6ff; color: #cff; }
 `;
 
 export class DriveInputs {
   private keys = new Set<string>();
   private stick = {x: 0, y: 0};
-  private climbTouch = 0;
+  private speedTouch = 0;
   private touchUi: HTMLElement[] = [];
   private visible = false;
 
@@ -85,31 +86,31 @@ export class DriveInputs {
     stick.addEventListener('pointerup', release);
     stick.addEventListener('pointercancel', release);
 
-    const climb = document.createElement('div');
-    climb.id = 'ui-drive-climb';
+    const speed = document.createElement('div');
+    speed.id = 'ui-drive-speed';
     for (const [label, dir] of [
-      ['▲', 1],
-      ['▼', -1],
+      ['+', 1],
+      ['−', -1],
     ] as const) {
       const b = document.createElement('button');
       b.textContent = label;
-      b.setAttribute('aria-label', dir > 0 ? 'Climb' : 'Descend');
+      b.setAttribute('aria-label', dir > 0 ? 'Faster' : 'Slower');
       const on = (e: PointerEvent) => {
         e.stopPropagation();
         b.setPointerCapture(e.pointerId);
         b.classList.add('down');
-        this.climbTouch = dir;
+        this.speedTouch = dir;
       };
       const off = () => {
         b.classList.remove('down');
-        this.climbTouch = 0;
+        this.speedTouch = 0;
       };
       b.addEventListener('pointerdown', on);
       b.addEventListener('pointerup', off);
       b.addEventListener('pointercancel', off);
-      climb.appendChild(b);
+      speed.appendChild(b);
     }
-    this.touchUi = [stick, climb];
+    this.touchUi = [stick, speed];
     for (const el of this.touchUi) {
       el.hidden = true;
       document.body.appendChild(el);
@@ -125,15 +126,15 @@ export class DriveInputs {
 
   read(): DriveInput {
     const k = (...names: string[]) => names.some(n => this.keys.has(n));
-    let throttle = (k('w', 'arrowup') ? 1 : 0) - (k('s', 'arrowdown') ? 1 : 0);
     let steer = (k('d', 'arrowright') ? 1 : 0) - (k('a', 'arrowleft') ? 1 : 0);
-    let climb = (k('e', 'pageup') ? 1 : 0) - (k('q', 'pagedown') ? 1 : 0);
+    let climb = (k('w', 'arrowup') ? 1 : 0) - (k('s', 'arrowdown') ? 1 : 0);
+    let speed = (k('e', 'pageup') ? 1 : 0) - (k('q', 'pagedown') ? 1 : 0);
     if (this.visible) {
-      throttle += -this.stick.y;
       steer += this.stick.x;
-      climb += this.climbTouch;
+      climb += -this.stick.y;
+      speed += this.speedTouch;
     }
     const c = (v: number) => Math.max(-1, Math.min(1, v));
-    return {throttle: c(throttle), steer: c(steer), climb: c(climb)};
+    return {steer: c(steer), climb: c(climb), speed: c(speed)};
   }
 }

@@ -14,7 +14,7 @@
 //   quality=low|high
 import {makeRepelField} from './city/inside';
 import {DriveInputs} from './ui/driveInput';
-import {DriveControl} from './camera/drive';
+import {DriveControl, type Guide} from './camera/drive';
 import {hashCombine} from './math/random';
 import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
@@ -25,7 +25,13 @@ import {Camera} from './camera/camera';
 import {makeClearanceTest} from './city/generate';
 import {unwarp} from './city/warp';
 import {AdSystem, SCREEN_LIGHT_SLOT, SCREEN_LIGHT_SLOTS} from './render/ads';
-import {FlightPath, ChaseCamera, insideAt, lookAround} from './camera/flight';
+import {
+  FlightPath,
+  ChaseCamera,
+  insideAt,
+  lookAround,
+  tourStartNear,
+} from './camera/flight';
 import {OrbitControl} from './camera/orbit';
 import {
   lookAtCamera,
@@ -184,13 +190,34 @@ async function main() {
   // The user can take the controls (steering wheel button / F).
   const drive = new DriveControl();
   const driveInputs = new DriveInputs();
-  let lastAutoPose: ReturnType<FlightPath['pose']> | null = null;
+  let lastPose: ReturnType<FlightPath['pose']> | null = null;
+  // The autopilot's tour and when it began (a new one starts near the car
+  // whenever the user hands back).
+  let tourStart = 0;
+  let tours = 0;
+
+  /** A new tour starting just ahead of the car; returns the way there. */
+  function planTour(): Guide {
+    const p = lastPose!;
+    flight = new FlightPath(
+      hashCombine(seed, ++tours),
+      city.obstacles,
+      tourStartNear(p.position, p.forward),
+      60,
+    );
+    const guide = approach(flight);
+    drive.retarget(guide);
+    return guide;
+  }
 
   async function buildWorld(gen: GeneratedCity) {
     city = toCity(gen);
     signs = gen.signs;
     genMs = gen.genMs;
     flight = new FlightPath(seed, city.obstacles);
+    tourStart = 0;
+    // On the way to a tour in the old city: plan one in the new city.
+    if (drive.rejoining) planTour();
     adData = gen.ads;
     await renderer.initScene({
       segments: city.segments,
@@ -204,9 +231,9 @@ async function main() {
     (window as unknown as {__debug: unknown}).__debug = {
       ...dbg,
       holograms: adData.holograms,
-      pose: (t: number) => flight.pose(t),
+      pose: (t: number) => flight.pose(t - tourStart),
       unwarp,
-      track: (t: number) => flight.trackPoint(t),
+      track: (t: number) => flight.trackPoint(t - tourStart),
       isClear: makeClearanceTest(city.segments),
       duration: flight.duration,
     };
@@ -528,24 +555,30 @@ async function main() {
   controls.onThemeClick = () => nextTheme();
   const setDriving = (on: boolean) => {
     if (on === drive.active) return;
-    if (on && lastAutoPose) {
-      drive.enter(lastAutoPose);
+    if (on && lastPose) {
+      drive.enter(lastPose);
       controls.showToast(
         matchMedia('(pointer: coarse)').matches
-          ? 'Stick to fly, ▲▼ to climb'
-          : 'WASD / arrows to fly, E / Q to climb, F for autopilot',
+          ? 'Stick to steer and climb, + / − for speed'
+          : 'A / D to steer, W / S to climb, E / Q for speed, F for autopilot',
       );
     } else {
-      drive.exit();
-      controls.showToast('Autopilot');
+      handBack();
     }
     controls.setDriving(drive.active);
     driveInputs.setVisible(drive.active);
   };
-  drive.onAutoExit = () => {
-    controls.setDriving(false);
-    driveInputs.setVisible(false);
+  drive.onAutoExit = () => setDriving(false);
+  // Hand back: plan a new tour from the avenue intersection ahead of the car
+  // and let the car fly itself there (keeping to open air) before the
+  // autopilot takes over, rather than gliding back to the old route through
+  // whatever's in the way.
+  const handBack = () => {
+    drive.exit(planTour());
     controls.showToast('Autopilot');
+  };
+  drive.onRejoin = () => {
+    tourStart = time;
   };
   controls.onDriveClick = () => setDriving(!drive.active);
   controls.onSoundClick = () => {
@@ -622,9 +655,12 @@ async function main() {
     }
     const dt = ui.paused ? 0 : realDt * ui.timeScale;
     time += dt;
-    const autoPose = flight.pose(time);
-    lastAutoPose = autoPose;
-    const pose = drive.update(dt, driveInputs.read(), autoPose);
+    const pose = drive.update(
+      dt,
+      driveInputs.read(),
+      flight.pose(time - tourStart),
+    );
+    lastPose = pose;
     (window as unknown as {__debug: Record<string, unknown>}).__debug.carPos =
       pose.position;
     renderer.carToWorld = pose.matrix;
@@ -942,4 +978,26 @@ function exposedRoofs(segs: SegmentList): Segment[] {
     out.push(g);
   }
   return out;
+}
+
+/**
+ * Leads a car to the start of a tour: onto the line running into the start
+ * along its first leg, then along it. Done when close enough to blend.
+ */
+function approach(route: FlightPath): Guide {
+  const S = route.pointAt(0);
+  const t = route.tangentAt(1);
+  const l = Math.hypot(t[0], t[2]) || 1;
+  const T = [t[0] / l, t[2] / l];
+  return p => {
+    const dx = p[0] - S[0];
+    const dz = p[2] - S[2];
+    const s = dx * T[0] + dz * T[1];
+    const lat = Math.abs(dx * T[1] - dz * T[0]);
+    if (s > -25 && s < 30 && lat < 20 && Math.abs(p[1] - S[1]) < 25) {
+      return null;
+    }
+    const along = Math.min(0, s + 70);
+    return [S[0] + T[0] * along, S[1], S[2] + T[1] * along];
+  };
 }

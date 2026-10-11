@@ -17,7 +17,7 @@ import {
   type Vec3,
 } from '../math/vec';
 import {CITY_RADIUS_SUPERS, SUPER} from '../city/layout';
-import {warp, warp3} from '../city/warp';
+import {unwarp, warp, warp3} from '../city/warp';
 import type {Obstacle} from '../city/generate';
 
 const CRUISE = 38; // m/s
@@ -41,6 +41,38 @@ export interface CarPose {
   matrix: Mat4;
 }
 
+/** Where a tour begins: an avenue intersection (grid units of SUPER). */
+export interface TourStart {
+  a: number;
+  b: number;
+  dir: [number, number];
+  alt: number;
+}
+
+/**
+ * A tour starting near a world position and heading: the next avenue
+ * intersection ahead on the nearest avenue running that way, so the car can
+ * fly along open avenue to reach it.
+ */
+export function tourStartNear(pos: Vec3, forward: Vec3): TourStart {
+  const [u, v] = unwarp(pos[0], pos[2]);
+  const limit = CITY_RADIUS_SUPERS - 3;
+  const clampI = (x: number) => Math.max(-limit, Math.min(limit, x));
+  const alongX = Math.abs(forward[0]) > Math.abs(forward[2]);
+  const sgn = Math.sign(alongX ? forward[0] : forward[2]) || 1;
+  const along = (alongX ? u : v) / SUPER;
+  const across = Math.round((alongX ? v : u) / SUPER);
+  // At least ~120 m ahead so there's room to line up.
+  const ahead = clampI(Math.ceil(sgn * along + 0.4) * sgn);
+  const dir: [number, number] = alongX ? [sgn, 0] : [0, sgn];
+  return {
+    a: alongX ? ahead : clampI(across),
+    b: alongX ? clampI(across) : ahead,
+    dir,
+    alt: Math.max(110, Math.min(330, pos[1])),
+  };
+}
+
 export class FlightPath {
   private samples: Vec3[] = []; // dense, ~1 m spacing
   private cum: number[] = [];
@@ -50,12 +82,21 @@ export class FlightPath {
   /** Avenue intersections the route passes through, in order. */
   readonly intersections: [number, number][] = [];
 
-  constructor(seed: number, obstacles: Obstacle[]) {
+  /**
+   * A tour from avenue intersection (a, b) heading along grid direction
+   * dir at altitude alt (by default from the city centre heading north).
+   */
+  constructor(
+    seed: number,
+    obstacles: Obstacle[],
+    start: TourStart = {a: 0, b: 0, dir: [0, -1], alt: 220},
+    legs = 160,
+  ) {
     const rng = new Rng(seed, 777);
     const limit = CITY_RADIUS_SUPERS - 3;
-    let a = 0;
-    let b = 0;
-    let dir: [number, number] = [0, -1];
+    let a = start.a;
+    let b = start.b;
+    let dir: [number, number] = [...start.dir];
     // Legs along the avenue grid; geometry is built afterwards.
     const legList: {
       start: [number, number];
@@ -65,8 +106,7 @@ export class FlightPath {
       alt1: number;
       side: number;
     }[] = [];
-    let alt = 220;
-    const legs = 160;
+    let alt = start.alt;
     for (let leg = 0; leg < legs; leg++) {
       let n = rng.int(1, 5);
       // Keep within bounds.
