@@ -49,9 +49,9 @@ export const tuning = {
   /** rad/s at full lock */
   turnRate: 0.85,
   /** s for the turn rate to follow the wheel */
-  turnLag: 0.35,
+  turnLag: 0.02,
   /** s for the old turn to die away when counter-steering */
-  reverseLag: 0.08,
+  reverseLag: 0.01,
   /** s from centre to full lock */
   wheelIn: 1.2,
   /** s back to centre when released */

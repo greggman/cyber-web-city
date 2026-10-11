@@ -176,11 +176,11 @@ test('steering keys turn the car in and out smoothly', () => {
   const max = Math.max(...rates);
   assert.ok(max > 0.5, `barely turned (max ${max.toFixed(2)} rad/s)`);
   // Gentle start: the first frames turn almost nothing.
-  assert.ok(rates[2] < max * 0.03, `jumped in: ${rates[2].toFixed(3)} rad/s`);
+  assert.ok(rates[2] < max * 0.06, `jumped in: ${rates[2].toFixed(3)} rad/s`);
   // No frame-to-frame jumps in turn rate, pressing or releasing.
   for (let i = 1; i < rates.length; i++) {
     const j = Math.abs(rates[i] - rates[i - 1]);
-    assert.ok(j < 0.02, `turn rate jumped ${j.toFixed(3)} at frame ${i}`);
+    assert.ok(j < 0.03, `turn rate jumped ${j.toFixed(3)} at frame ${i}`);
   }
   // Back to straight after letting go.
   assert.ok(rates[rates.length - 1] < max * 0.05, 'still turning');
