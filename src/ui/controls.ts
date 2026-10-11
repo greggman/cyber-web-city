@@ -396,10 +396,12 @@ export class Controls {
     this.showToast(`${CAMERA_NAMES[this.state.camera]} camera`);
   }
 
-  showToast(text: string) {
+  /** Shows a toast; `sticky` keeps it up until the next showToast. */
+  showToast(text: string, sticky = false) {
     this.toast.textContent = text;
     this.toast.classList.add('show');
     clearTimeout(this.toastTimer);
+    if (sticky) return;
     this.toastTimer = window.setTimeout(
       () => this.toast.classList.remove('show'),
       1400,

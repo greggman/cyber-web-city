@@ -216,8 +216,20 @@ await withPage('index.html?t=40', async (page, ctx) => {
   const nav = [];
   page.on('framenavigated', () => nav.push(1));
   const a = await theme();
+  // Sample the toast every 100 ms until the switch lands.
+  await page.evaluate(() => {
+    window.__toastLog = [];
+    window.__toastTimer = setInterval(() => {
+      const el = document.getElementById('ui-toast');
+      window.__toastLog.push(el.classList.contains('show') ? el.textContent : '');
+    }, 100);
+  });
   await page.click('#ui-theme-btn');
   await page.waitForFunction(() => /sodium/.test(document.getElementById('ui-city-link').href), {timeout: 120000});
+  const tl = await page.evaluate(() => (clearInterval(window.__toastTimer), window.__toastLog));
+  const first = tl.findIndex(x => /Building/.test(x));
+  const gaps = tl.slice(first).filter(x => x === '').length;
+  check(first >= 0 && gaps === 0, `'Building…' stays up until the switch (${tl.length} samples, ${gaps} blank)`);
   const b = await theme();
   await page.keyboard.press('t');
   await page.waitForFunction(() => /theme=ash/.test(document.getElementById('ui-city-link').href), {timeout: 120000});

@@ -487,7 +487,8 @@ async function main() {
     const next = THEMES[(THEMES.indexOf(cityTheme) + 1) % THEMES.length];
     const nextSeed =
       hashCombine(userSeed, THEMES.indexOf(next) + 1) & 0x7fffffff;
-    controls.showToast(`Building ${next.label}…`);
+    // Stays up until the new city is on screen.
+    controls.showToast(`Building ${next.label}…`, true);
     void generate(nextSeed, next.name, () => {})
       .then(async g => {
         renderBlocked = true;
@@ -503,12 +504,15 @@ async function main() {
         apply('rain');
         apply('haze');
         showCityLink();
-        controls.showToast(cityTheme.label);
       })
       .catch(e => showError(String(e)))
       .finally(() => {
         renderBlocked = false;
         switching = false;
+        // Replace the message once the new city's first frame is drawn.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => controls.showToast(cityTheme.label)),
+        );
       });
   };
   controls.onThemeClick = () => nextTheme();
