@@ -104,7 +104,8 @@ fn light_color(kind: u32, h: f32, tint: vec3f) -> vec3f {
 // Interior mapping: ray-cast into a fake room behind the window.
 // f: position within the room's window plane (0..1), room: size in meters
 // (width, height, depth), v: view direction in tangent space (z into room).
-fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u32) -> vec3f {
+// h1: height of one floor's window (rooms can be double height).
+fn interior(f: vec2f, room: vec3f, h1: f32, v_in: vec3f, seed: u32, light: vec3f, kind: u32) -> vec3f {
   let v = vec3f(v_in.xy, max(v_in.z, 0.05));
   let p = vec3f(f * room.xy, 0.0);
   let tx = select(-p.x / v.x, (room.x - p.x) / v.x, v.x > 0.0);
@@ -123,9 +124,10 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
     c = mix(c, vec3f(0.15, 0.12, 0.1), shelf * 0.8);
   } else if (t == abs(ty)) {
     if (v.y > 0.0) {
-      // Ceiling with a light panel.
+      // Ceiling with a row of light panels, about one per 3.5 m.
       let q = h.xz / room.xz;
-      let panel = step(abs(q.x - 0.5), 0.2) * step(abs(q.y - 0.4), 0.15);
+      let qx = fract(q.x * max(1.0, round(room.x / 3.5)));
+      let panel = step(abs(qx - 0.5), 0.2) * step(abs(q.y - 0.4), 0.15);
       c = vec3f(0.6) + panel * 1.6;
     } else {
       // Floor.
@@ -140,13 +142,15 @@ fn interior(f: vec2f, room: vec3f, v_in: vec3f, seed: u32, light: vec3f, kind: u
   let zMid = room.z * (0.35 + 0.3 * u2f_rot(hs, 7u));
   let tm = zMid / v.z;
   if (tm < t && u2f_rot(hs, 11u) < 0.55) {
-    let q = (p.xy + v.xy * tm) / room.xy;
-    let px = fract(q.x * (1.0 + floor(u2f_rot(hs, 13u) * 2.0)));
+    // In meters, so furniture and people keep their size in wide and
+    // double-height rooms.
+    let m = p.xy + v.xy * tm;
+    let px = fract(m.x / (3.0 / (1.0 + floor(u2f_rot(hs, 13u) * 2.0))));
     // A desk/sofa band plus occasionally a standing figure.
-    let desk = step(q.y, 0.28) * step(0.1, px) * step(px, 0.85);
-    let fx = u2f_rot(hs, 17u);
-    let body = step(abs(q.x - fx), 0.06) * step(q.y, 0.55);
-    let head = step(length((q - vec2f(fx, 0.62)) * vec2f(1.0, room.y / room.x)), 0.05);
+    let desk = step(m.y, 0.28 * h1) * step(0.1, px) * step(px, 0.85);
+    let fx = u2f_rot(hs, 17u) * room.x;
+    let body = step(abs(m.x - fx), 0.2) * step(m.y, 0.55 * h1);
+    let head = step(length(m - vec2f(fx, 0.62 * h1)), 0.15);
     let person = (body + head) * step(0.6, u2f_rot(hs, 19u));
     c = mix(c, vec3f(0.02), saturate(desk + person) * 0.9);
   }
@@ -242,6 +246,18 @@ fn recess_for(kind: u32) -> f32 {
   }
 }
 
+// Is there a wall at bay boundary b (between bays b-1 and b) on this floor
+// pair? Always at face edges, where the bay type changes (narrow windows,
+// service bays, cores) and every 6 bays (so rooms stay findable).
+fn room_wall(seed: u32, b: i32, pair: u32, p: f32, nB: i32) -> bool {
+  if (nB < ROUND_FACE) {
+    if (b <= 0 || b >= nB) { return true; }
+    if (bay_class(g_seg, b - 1, nB) != bay_class(g_seg, b, nB)) { return true; }
+  }
+  if (b % 6 == 0) { return true; }
+  return u2f(hash3_u(seed ^ 0x1b873593u, u32(b), pair)) < p;
+}
+
 fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<function, Surface>) -> f32 {
   var ws = ws_in;
   // Columns come from the shared bay grid (segment.wgsl), so the kit placed
@@ -275,9 +291,31 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     let on = 0.7 + 0.3 * u2f(landing);
     (*sf).emissive += vec3f(0.55, 0.8, 0.65) * 0.035 * slot * blocks * on;
   }
-  let roomId = floor(id.x / ws.roomCells);
-  let floorId = u_of(id.y);
-  let hRoom = hash3_u(c.seed, u_of(roomId), floorId);
+  // Rooms: walls between bays are hashed (per floor pair), so a room spans
+  // 1-6 windows, roomCells on average; some offices are double height and
+  // the windows of both floors look into the same room.
+  let bi = i32(id.x);
+  let pair = u_of(id.y * 0.5);
+  let pWall = 1.0 / max(ws.roomCells, 1.0);
+  var roomLo = bi;
+  for (var k = 0; k < 6; k++) {
+    if (room_wall(c.seed, roomLo, pair, pWall, nB)) { break; }
+    roomLo -= 1;
+  }
+  var roomHi = bi + 1;
+  for (var k = 0; k < 6; k++) {
+    if (room_wall(c.seed, roomHi, pair, pWall, nB)) { break; }
+    roomHi += 1;
+  }
+  let nCells = f32(roomHi - roomLo);
+  let pDouble = select(0.0, 0.12, kind == ST_GLASS) + select(0.0, 0.06, kind == ST_METAL);
+  let tall = ws.floorH < 6.0 && u2f(hash3_u(c.seed ^ 0x7f4a7c15u, u32(roomLo), pair)) < pDouble;
+  let floorBase = select(u_of(id.y), pair * 2u, tall);
+  let yOff = id.y - f32(floorBase);
+  let floorsN = select(1.0, 2.0, tall);
+  let roomId = f32(roomLo);
+  let floorId = floorBase;
+  let hRoom = hash3_u(c.seed, u32(roomLo), floorBase);
   // Floors/zones tend to be lit together (offices) with per-room variation.
   let zone = hash31(c.seed ^ 0x5bd1e995u, u_of(roomId / 4.0), floorId / 3u);
   var lit = step(u2f(hRoom), ws.litFrac * frame.windowsLit * (0.4 + 1.2 * zone));
@@ -294,8 +332,9 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
   }
   let det = detail(vec2f(ws.cellW, ws.floorH), c.fw);
   let lc = light_color(kind, u2f_rot(hRoom, 4u), tint) * ws.brightness * 0.6 * (0.1 + 1.3 * pow(u2f_rot(hRoom, 9u), 2.5));
-  // Panes of one room differ a little (blinds angle, lamps, furniture).
-  let pane = 0.5 + 0.8 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), floorId);
+  // Panes of one room differ only a little (blinds angle, glass), so a
+  // room reads as one lit space across its windows.
+  let pane = 0.85 + 0.3 * hash31(c.seed ^ 0x68e31da4u, u_of(id.x), u_of(id.y));
   var em = vec3f(0.0);
   var reveal = 0.0;
   // Light spilling out of a lit window onto the wall/sill around it.
@@ -359,10 +398,14 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
       em = lc * lit * 0.12 * (0.4 + 0.6 * saturate(depth / D));
       hit = lp + v.xy * ts;
     }
+    // Position on the room's window plane: across all its windows, and up
+    // through both floors of a double-height room.
+    let winH = ws.winY1 - ws.winY0;
     let fr = vec2f(
-      (fract(id.x / ws.roomCells) + clamp(hit.x / ws.cellW, 0.0, 1.0) / ws.roomCells),
-      (hit.y / ws.floorH - ws.winY0) / (ws.winY1 - ws.winY0));
-    var inner = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, lc, kind);
+      (f32(bi - roomLo) + clamp(hit.x / ws.cellW, 0.0, 1.0)) / nCells,
+      (yOff + hit.y / ws.floorH - ws.winY0) / (floorsN - 1.0 + winH));
+    let roomSize = vec3f(ws.cellW * nCells, ws.floorH * (floorsN - 1.0 + winH), ws.roomDepth * (1.0 + 0.1 * (nCells - 1.0)));
+    var inner = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), roomSize, ws.floorH * winH, c.viewT, hRoom, lc, kind);
     // Blinds / curtains on the upper part of the window.
     let hb = u2f_rot(hRoom, 21u);
     if (hb < ws.blinds) {
@@ -380,7 +423,7 @@ fn window_facade(c: Ctx, ws_in: WinStyle, kind: u32, tint: vec3f, sf: ptr<functi
     if (reveal == 0.0) {
       // Unlit rooms aren't black holes: the city glow and the street below
       // faintly light the ceiling and furniture.
-      let dimRoom = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), vec3f(ws.cellW * ws.roomCells, ws.floorH * (ws.winY1 - ws.winY0), ws.roomDepth), c.viewT, hRoom, vec3f(0.05, 0.04, 0.06) * frame.cityGlow * select(1.0, 0.35, kind == ST_GLASS), kind);
+      let dimRoom = interior(clamp(fr, vec2f(0.0), vec2f(1.0)), roomSize, ws.floorH * winH, c.viewT, hRoom, vec3f(0.05, 0.04, 0.06) * frame.cityGlow * select(1.0, 0.35, kind == ST_GLASS), kind);
       em = mix(dimRoom, inner * pane, lit);
     }
     // Unlit windows: occasional TV flicker.
@@ -557,7 +600,7 @@ fn shopfront(c: Ctx, tint: vec3f, accent: vec3f, sf: ptr<function, Surface>) {
     // Glass with mullions; the shop inside is an interior-mapped room.
     let mull = (1.0 - aa_box(fract(sx * 3.0), 0.03, 0.97, c.fw.x * 3.0 / bayW)) * det;
     let fr = vec2f(sx, saturate((y - 0.3) / (glassTop - 0.3)));
-    let inner = interior(fr, vec3f(bayW, glassTop - 0.3, 6.0), c.viewT, hs, shopCol * (1.0 + 1.4 * u2f_rot(hs, 9u)), ST_PODIUM);
+    let inner = interior(fr, vec3f(bayW, glassTop - 0.3, 6.0), glassTop - 0.3, c.viewT, hs, shopCol * (1.0 + 1.4 * u2f_rot(hs, 9u)), ST_PODIUM);
     em = mix(inner, vec3f(0.0), mull) * glass;
     (*sf).albedo = mix(vec3f(0.1), mix(vec3f(0.02), vec3f(0.25), mull), glass);
     (*sf).roughness = mix(0.6, 0.05, glass);
