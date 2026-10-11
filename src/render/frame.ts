@@ -37,6 +37,8 @@ export interface FrameParams {
   debugView: number;
   quality: number;
   cityGlow: number;
+  /** Frames the view has been perfectly still (TAA converges then). */
+  stillFrames: number;
   /** Active searchlight beams / flare stacks (loop bounds in the composite). */
   beamCount: number;
   flareCount: number;
@@ -124,6 +126,7 @@ export class FrameUniforms {
     this.u32[184] = p.debugView;
     this.u32[185] = p.quality;
     f[186] = p.cityGlow;
+    f[187] = p.stillFrames;
     const th = theme();
     f.set(th.fogHigh, 188);
     f[191] = th.windowsLit;

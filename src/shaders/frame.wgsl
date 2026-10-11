@@ -16,7 +16,9 @@ struct Frame {
   tanHalfFov: vec2f, dt: f32, cameraMode: u32,
   carToWorld: mat4x4f,
   prevCarToWorld: mat4x4f,
-  debugView: u32, quality: u32, cityGlow: f32, _pad0: f32,
+  debugView: u32, quality: u32, cityGlow: f32,
+  // Frames the view has been perfectly still (paused, camera unmoved).
+  stillFrames: f32,
   // City theme (src/city/theme.ts).
   fogHigh: vec3f, windowsLit: f32,
   skyHorizon: vec3f, weather: u32,   // 0 rain, 1 snow, 2 ash, 3 dust, 4 none

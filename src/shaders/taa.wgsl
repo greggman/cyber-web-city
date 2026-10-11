@@ -101,6 +101,13 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   if (mx > 1.0) { clipped = center + off / mx; }
   let speed = length(vel * res);
   var alpha = mix(0.08, 0.25, saturate(speed / 30.0));
+  if (frame.stillFrames > 0.0) {
+    // Nothing moves: average the jittered frames (no clipping, which kept
+    // pulling small bright details toward the latest jitter position, so a
+    // paused image shimmered) and converge to a stable supersampled image.
+    clipped = hy;
+    alpha = max(1.0 / (frame.stillFrames + 1.0), 1.0 / 64.0);
+  }
   if (offscreen || frame.frameIndex == 0u) { alpha = 1.0; }
   let curY = rgb_to_ycocg(tm(cur));
   let outY = mix(clipped, curY, alpha);

@@ -113,6 +113,9 @@ export class Renderer {
   private tonemapKey = '';
   private targetsVersion = -1;
   private frameIndex = 0;
+  /** Still-view detection for TAA (see stillFrames). */
+  private stillFrames = 0;
+  private lastView = {time: NaN, w: 0, h: 0, cam: new Float32Array(16)};
   carToWorld: Mat4 = mat4();
   cameraMode = 0;
   /** Extra opaque/transparent drawers registered by other systems. */
@@ -376,6 +379,17 @@ export class Renderer {
       this.rebuildScreenBindGroups();
     }
     const prevViewProj = this.frame.viewProjNoJitter;
+    // Is the view exactly as last frame (time frozen, camera unmoved)? Then
+    // TAA accumulates instead of chasing the jitter (paused shimmer).
+    const lv = this.lastView;
+    const cam = camera.camToWorld;
+    let still = time === lv.time && width === lv.w && height === lv.h && s.taa;
+    for (let k = 0; still && k < 16; k++) still = cam[k] === lv.cam[k];
+    this.stillFrames = still ? this.stillFrames + 1 : 0;
+    lv.time = time;
+    lv.w = width;
+    lv.h = height;
+    lv.cam.set(cam);
     this.frame.update({
       time,
       dt,
@@ -395,6 +409,7 @@ export class Renderer {
       debugView: s.debugView,
       quality: s.quality,
       cityGlow: s.cityGlow,
+      stillFrames: this.stillFrames,
       beamCount: this.volume.beamCount,
       flareCount: Math.min(16, this.flareSources.length),
     });

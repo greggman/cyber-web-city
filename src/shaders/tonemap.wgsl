@@ -58,7 +58,9 @@ fn fs(i: FsOut) -> @location(0) vec4f {
   // Grade in display space.
   o = grade(o, uv);
   // Film grain.
-  let n = hash31(u32(i.pos.x), u32(i.pos.y), frame.frameIndex) - 0.5;
+  // New grain 24 times a second of scene time (like film), so it holds
+  // still when paused instead of crawling over the frozen image.
+  let n = hash31(u32(i.pos.x), u32(i.pos.y), u32(frame.time * 24.0)) - 0.5;
   o += n * 0.025;
   return vec4f(saturate3(o), 1.0);
 }
