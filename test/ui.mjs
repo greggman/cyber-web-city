@@ -279,6 +279,13 @@ await withPage('index.html?t=40', async (page, ctx) => {
   check(playing, 'music keeps playing across theme switches');
   check(ctx.errors.length === 0, `no WebGPU errors while switching (${ctx.errors.slice(0, 2).join(' | ')})`);
 });
+// The screen is kept on (Screen Wake Lock) once the page has been tapped.
+await withPage('index.html?t=40&mute=1', async page => {
+  await page.mouse.click(640, 360);
+  await sleep(800);
+  const on = await page.evaluate(() => window.__debug.screenOn());
+  check(on, 'screen kept on after a tap (wake lock)');
+});
 // Settings lists the cities; picking one switches to it in place, and the
 // globe button then carries on from there.
 await withPage('index.html?t=40&mute=1', async (page, ctx) => {

@@ -18,6 +18,7 @@ import {makeRepelField} from './city/inside';
 import {DriveInputs} from './ui/driveInput';
 import {DriveControl, tuning, type Guide} from './camera/drive';
 import {showTuning} from './ui/tuning';
+import {keepScreenOn} from './ui/wakeLock';
 import {hashCombine} from './math/random';
 import {THEMES, setTheme, themeForSeed} from './city/theme';
 import {SegFlags, SegmentList, type Segment} from './city/segments';
@@ -191,6 +192,8 @@ async function main() {
   const trafficMesh = buildModelMesh(carEntry.build(), 3);
 
   // The user can take the controls (steering wheel button / F).
+  // Don't let phones (or laptops) sleep while the demo plays.
+  const screenOn = keepScreenOn();
   const drive = new DriveControl();
   // ?tune=1: live sliders for the handling feel.
   if (params.get('tune') === '1') showTuning(tuning);
@@ -371,6 +374,8 @@ async function main() {
   (
     window as unknown as {__debug: Record<string, unknown>}
   ).__debug.orbitActive = () => orbit.active;
+  (window as unknown as {__debug: Record<string, unknown>}).__debug.screenOn =
+    screenOn;
   (window as unknown as {__debug: Record<string, unknown>}).__debug.cameraPos =
     () => camera.position;
   if (params.get('shot') !== null) chase.fixedShot = Number(params.get('shot'));
