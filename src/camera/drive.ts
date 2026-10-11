@@ -37,8 +37,14 @@ const ACCEL = 28; // m/s^2, towards the cruise speed
 const TOP_SPEED = 80; // m/s
 const SPEED_RATE = 25; // m/s per second of holding faster/slower
 const LATERAL_DRAG = 1.1; // sideways slip dies away (a little drift)
-const TURN_RATE = 1.1; // rad/s at full steer
-const TURN_LAG = 0.35; // s for the turn rate to follow the stick
+const TURN_RATE = 0.85; // rad/s at full lock
+const TURN_LAG = 0.35; // s for the turn rate to follow the wheel
+// Keys (on/off) drive a virtual wheel and lift lever that move at a steady
+// rate: s from centre to full, and back to centre when released.
+const WHEEL_IN = 1.2;
+const WHEEL_OUT = 0.7;
+const LIFT_IN = 0.8;
+const LIFT_OUT = 0.6;
 const BANK_LAG = 0.45; // s
 const CLIMB_LAG = 0.6; // s
 const CLIMB_SPEED = 22; // m/s
@@ -58,6 +64,9 @@ export class DriveControl {
   private pitch = 0;
   /** Current turn rate (rad/s, + is left), easing after the input. */
   private turn = 0;
+  /** Virtual steering wheel and lift lever, in [-1, 1]. */
+  private wheel = 0;
+  private lift = 0;
   private idle = 0;
   /** Cruise speed (m/s) the car holds along its heading. */
   private cruise = 0;
@@ -88,6 +97,8 @@ export class DriveControl {
     this.pitch = 0;
     this.bank = 0;
     this.turn = 0;
+    this.wheel = 0;
+    this.lift = 0;
   }
 
   /**
@@ -191,11 +202,15 @@ export class DriveControl {
   /** One physics step at a cruise speed. */
   private step(dt: number, input: DriveInput, cruise: number): CarPose {
     dt = Math.min(dt, 0.05);
+    // Steer and climb move the wheel and lever toward the input steadily,
+    // so a key press turns in gently instead of jumping.
+    this.wheel = ramp(this.wheel, input.steer, dt, WHEEL_IN, WHEEL_OUT);
+    this.lift = ramp(this.lift, input.climb, dt, LIFT_IN, LIFT_OUT);
     // Heading.
     const speed = Math.hypot(this.vel[0], this.vel[2]);
     // The turn rate follows the stick with a little lag, like a body with
     // momentum, so turns roll in and out instead of starting dead.
-    const turnT = -input.steer * TURN_RATE * Math.min(1, 0.35 + speed / 40);
+    const turnT = -this.wheel * TURN_RATE * Math.min(1, 0.35 + speed / 40);
     this.turn += (turnT - this.turn) * (1 - Math.exp(-dt / TURN_LAG));
     this.yaw += this.turn * dt;
     const f: Vec3 = [-Math.sin(this.yaw), 0, -Math.cos(this.yaw)];
@@ -207,7 +222,7 @@ export class DriveControl {
     v = add(v, scale(f, Math.max(-ACCEL * dt, Math.min(ACCEL * dt, dv))));
     v = sub(v, scale(r, dot(v, r) * Math.min(1, LATERAL_DRAG * dt)));
     // Climb towards a target vertical speed; hover when released.
-    const vyT = input.climb * CLIMB_SPEED;
+    const vyT = this.lift * CLIMB_SPEED;
     v[1] += (vyT - v[1]) * (1 - Math.exp(-dt / CLIMB_LAG));
     // Soft walls: buildings push away, and motion into a close wall is
     // damped so the car slides along it instead of stopping dead.
@@ -273,6 +288,22 @@ export class DriveControl {
       matrix: fromBasis(right, up2, scale(fwd, -1), [...this.pos]),
     };
   }
+}
+
+/**
+ * Moves v toward target at a steady rate: `inT` seconds for a full swing
+ * away from centre, `outT` back toward it (releasing or reversing).
+ */
+function ramp(
+  v: number,
+  target: number,
+  dt: number,
+  inT: number,
+  outT: number,
+): number {
+  const outward = Math.abs(target) > Math.abs(v) && target * v >= 0;
+  const step = dt / (outward ? inT : outT);
+  return v + Math.max(-step, Math.min(step, target - v));
 }
 
 function smooth(t: number) {

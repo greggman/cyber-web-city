@@ -305,8 +305,9 @@ await withPage('index.html?t=40&mute=1', async (page, ctx) => {
 await withPage('index.html?t=40&mute=1', async (page, ctx) => {
   const pos = () => page.evaluate(() => window.__debug.carPos);
   const p0 = await pos();
+  // (The wheel turns in over about a second, so hold the turn a while.)
   await page.keyboard.down('d');
-  await sleep(1200);
+  await sleep(2500);
   await page.keyboard.up('d');
   await page.keyboard.down('w');
   await sleep(1500);

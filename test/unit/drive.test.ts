@@ -110,10 +110,10 @@ test('the user-flown car banks into turns', () => {
     speed: 40,
     matrix: mat4(),
   };
-  drive.enter(start);
   for (const steer of [1, -1]) {
+    drive.enter(start);
     let p = start;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 180; i++) {
       p = drive.update(1 / 60, {steer, climb: 0, speed: 0}, start);
     }
     // Horizontal right of the heading.
@@ -142,4 +142,46 @@ test('the user-flown car cannot fly into the ground', () => {
     minY = Math.min(minY, p.position[1]);
   }
   assert.ok(minY > 9, `got down to ${minY.toFixed(2)} m`);
+});
+
+// Steering keys are on/off; the car must still turn in and out smoothly
+// (a virtual wheel): no jump in turn rate when a key goes down or up.
+test('steering keys turn the car in and out smoothly', () => {
+  const drive = new DriveControl();
+  const start = {
+    position: [0, 150, 0] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+    up: [0, 1, 0] as [number, number, number],
+    right: [1, 0, 0] as [number, number, number],
+    speed: 38,
+    matrix: mat4(),
+  };
+  drive.enter(start);
+  const dt = 1 / 60;
+  const yaws: number[] = [];
+  for (let i = 0; i < 60 * 6; i++) {
+    // Hold right for 3 s, then let go.
+    const steer = i < 180 ? 1 : 0;
+    const p = drive.update(dt, {steer, climb: 0, speed: 0}, start);
+    yaws.push(Math.atan2(p.forward[0], p.forward[2]));
+  }
+  const rates: number[] = [];
+  for (let i = 1; i < yaws.length; i++) {
+    const d = Math.atan2(
+      Math.sin(yaws[i] - yaws[i - 1]),
+      Math.cos(yaws[i] - yaws[i - 1]),
+    );
+    rates.push(Math.abs(d) / dt);
+  }
+  const max = Math.max(...rates);
+  assert.ok(max > 0.5, `barely turned (max ${max.toFixed(2)} rad/s)`);
+  // Gentle start: the first frames turn almost nothing.
+  assert.ok(rates[2] < max * 0.03, `jumped in: ${rates[2].toFixed(3)} rad/s`);
+  // No frame-to-frame jumps in turn rate, pressing or releasing.
+  for (let i = 1; i < rates.length; i++) {
+    const j = Math.abs(rates[i] - rates[i - 1]);
+    assert.ok(j < 0.02, `turn rate jumped ${j.toFixed(3)} at frame ${i}`);
+  }
+  // Back to straight after letting go.
+  assert.ok(rates[rates.length - 1] < max * 0.05, 'still turning');
 });
