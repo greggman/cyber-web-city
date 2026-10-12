@@ -413,6 +413,8 @@ const SHOTS: Shot[] = [
   {back: 2, side: 9, up: 1.2, lookAhead: 2, fov: 50}, // side tracking
   {back: -12, side: 4, up: 2.0, lookAhead: -2, fov: 48}, // front three-quarter, looking back
 ];
+/** The rear chase while the user flies (a game-style follow camera). */
+const DRIVE_SHOT: Shot = {back: 12, side: 0, up: 3.2, lookAhead: 12, fov: 60};
 const SHOT_LEN = 22;
 const SHOT_BLEND = 4;
 
@@ -484,6 +486,11 @@ export class ChaseCamera {
   private lastTime = -1;
   /** Force one framing (keys 1-5); undefined cycles automatically. */
   fixedShot: number | undefined = undefined;
+  /**
+   * The user is flying: a steady game-style rear chase (no director
+   * framings, no wander, quick to swing in behind) so steering is easy.
+   */
+  driving = false;
   fov = 55;
 
   /** Resume following from a given eye/target (e.g. after a user orbit),
@@ -504,7 +511,8 @@ export class ChaseCamera {
     time: number,
     dt: number,
   ): {eye: Vec3; target: Vec3; up: Vec3} {
-    const shot = shotAt(time, this.fixedShot);
+    const game = this.driving && this.fixedShot === undefined;
+    const shot = game ? DRIVE_SHOT : shotAt(time, this.fixedShot);
     this.fov = shot.fov;
     // Like a chase car rather than a camera on a rod: it turns after the
     // car (swinging wide through turns, showing the car's flank) and
@@ -517,19 +525,22 @@ export class ChaseCamera {
         Math.sin(carYaw - this.yaw),
         Math.cos(carYaw - this.yaw),
       );
-      this.yaw += d * (1 - Math.exp(-dt / 0.9));
+      this.yaw += d * (1 - Math.exp(-dt / (game ? 0.35 : 0.9)));
     }
     const fwd: Vec3 = [Math.sin(this.yaw), 0, Math.cos(this.yaw)];
     const right: Vec3 = [-fwd[2], 0, fwd[0]];
-    const reach = 1.5 + Math.abs(shot.back) * 0.3;
+    // (No drift in the game chase: it stays put behind the car.)
+    const drift = game ? 0 : 1;
+    const reach = (1.5 + Math.abs(shot.back) * 0.3) * drift;
     const wander = (a: number, b: number, c: number) =>
-      0.65 * Math.sin(time * a + c) + 0.35 * Math.sin(time * b + c * 2.3);
+      drift *
+      (0.65 * Math.sin(time * a + c) + 0.35 * Math.sin(time * b + c * 2.3));
     const side = shot.side + reach * wander(0.21, 0.57, 1);
     const rise =
       shot.up + (0.3 + Math.abs(shot.back) * 0.05) * wander(0.29, 0.71, 2);
     const backD =
       shot.back + Math.abs(shot.back) * 0.15 * wander(0.16, 0.43, 3);
-    const sway = Math.sin(time * 0.07) * 0.08;
+    const sway = Math.sin(time * 0.07) * 0.08 * drift;
     const back = rotateAround(scale(fwd, -1), [0, 1, 0], sway);
     const desiredEye = add(
       add(add(pose.position, scale(back, backD)), scale(right, side)),

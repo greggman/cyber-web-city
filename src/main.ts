@@ -940,6 +940,8 @@ async function main() {
       );
       camera.fovY = (50 * Math.PI) / 180;
     } else if (ui.camera === CameraMode.Chase) {
+      // Flying it yourself: a steady rear chase instead of the director.
+      chase.driving = drive.active;
       const c = chase.update(pose, time, dt);
       camera.camToWorld = lookAtCamera(c.eye, c.target, c.up);
       camera.fovY = (chase.fov * Math.PI) / 180;

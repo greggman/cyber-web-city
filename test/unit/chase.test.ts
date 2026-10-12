@@ -56,3 +56,21 @@ test('chase camera offset is independent of frame timing', () => {
     }
   }
 });
+
+// While the user flies, the camera is a steady rear chase, whatever the
+// director would be showing (here its side-tracking framing).
+test('flying yourself gives a rear chase camera', () => {
+  const cam = new ChaseCamera();
+  cam.driving = true;
+  const t0 = 3 * 22 + 2; // the director's side shot
+  let c = cam.update(poseAt(t0), t0, 1 / 60);
+  for (let i = 1; i <= 300; i++) {
+    const t = t0 + i / 60;
+    c = cam.update(poseAt(t), t, 1 / 60);
+  }
+  const p = poseAt(t0 + 5).position;
+  const rel = [c.eye[0] - p[0], c.eye[1] - p[1], c.eye[2] - p[2]];
+  // Car heads -z: behind is +z.
+  assert.ok(rel[2] > 8, `not behind the car (${rel.map(v => v.toFixed(1))})`);
+  assert.ok(Math.abs(rel[0]) < 1, `off to the side (${rel[0].toFixed(2)} m)`);
+});
